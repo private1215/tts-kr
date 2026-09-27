@@ -1,0 +1,31 @@
+[Unit]
+Description=Qwen3-TTS Web Service
+# 关键：/mnt/tts 在 fstab 里是 nofail，若服务先于挂载启动，
+# 会把模型和音频写到根分区（系统盘）。显式声明挂载依赖，保证挂载完成后才启动。
+RequiresMountsFor=/mnt/tts
+After=network-online.target mnt-tts.mount
+Wants=network-online.target
+# tailscale 先起来，避免重启后几分钟内 tailscale IP 访问不通
+After=tailscaled.service
+Wants=tailscaled.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/mnt/tts/projects/qwen3-tts/app
+Environment=PATH=/mnt/tts/projects/qwen3-tts/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONUNBUFFERED=1
+# PyTorch 缓存分配器调优：服务长期不重启时 reserved 会碎片化累积，
+# 实测 service.log 里出现过 "2.15 GiB reserved but unallocated" 导致的假性 OOM。
+# expandable_segments：创建可动态扩展的内存段，从根源减少碎片（PyTorch 官方首推）
+# garbage_collection_threshold=0.8：占用率达 80% 时主动回收空闲块
+# 注意：不要与 max_split_size_mb 同时设置，两者在官方文档中被标记为互斥。
+Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,garbage_collection_threshold:0.8
+ExecStart=/mnt/tts/projects/qwen3-tts/venv/bin/python -u server.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/mnt/tts/projects/qwen3-tts/service.log
+StandardError=append:/mnt/tts/projects/qwen3-tts/service.log
+
+[Install]
+WantedBy=multi-user.target

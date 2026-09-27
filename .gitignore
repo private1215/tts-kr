@@ -1,0 +1,37 @@
+# 环境 /  secrets
+.workbuddy/
+.env
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 运行时数据（含账号密码哈希与用户文案原文，禁止入库）
+data/
+output/
+tmp/
+
+# 模型权重（9.1G，由 download 脚本拉取，不入库）
+models/
+
+# 服务端 .bak 备份
+*.bak.*
+*.bak
+
+# 日志
+*.log
+
+# 音频产物
+*.wav
+*.mp3
+*.flac
+
+# OS / 编辑器
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qwen3-TTS 语音生成</title>
+<style>
+:root{
+  --bg:#0D0F13; --bg2:#11141A;
+  --panel:#151920; --panel2:#1B2029; --panel3:#212734;
+  --line:#232935; --line2:#2D3543;
+  --txt:#EAEDF2; --txt2:#B7BFCB; --dim:#79828F;
+  --accent:#5B9FFF; --accent-h:#82B6FF; --accent-soft:rgba(91,159,255,.12);
+  --ok:#3FB98A; --warn:#E5A23C; --err:#EC6C6C;
+  --r:14px; --r-sm:9px; --r-xs:7px;
+  --shadow:0 1px 2px rgba(0,0,0,.28), 0 8px 28px rgba(0,0,0,.16);
+  --shadow-lg:0 24px 64px rgba(0,0,0,.55);
+  --ease:cubic-bezier(.22,.61,.36,1);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;color:var(--txt);
+  background:var(--bg);
+  background-image:
+    radial-gradient(1100px 520px at 12% -8%, #1A2130 0%, transparent 62%),
+    radial-gradient(900px 480px at 92% 4%, #171E2B 0%, transparent 58%);
+  background-attachment:fixed;
+  font:14px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI Variable","Segoe UI","Microsoft YaHei",
+       "Malgun Gothic","Hiragino Sans",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:rgba(91,159,255,.28)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#232B38;border-radius:6px;border:2px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:#313B4C}
+
+.wrap{max-width:1180px;margin:0 auto;padding:28px 24px 48px}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;margin-bottom:22px;flex-wrap:wrap}
+.head-left{display:flex;align-items:center;gap:13px}
+.logo{width:38px;height:38px;border-radius:11px;flex:none;display:grid;place-items:center;
+  background:linear-gradient(145deg,var(--accent-h),var(--accent) 55%,#3F7FD6);
+  box-shadow:0 4px 14px rgba(91,159,255,.34), inset 0 1px 0 rgba(255,255,255,.28)}
+.logo svg{width:20px;height:20px;display:block}
+h1{font-size:19px;font-weight:600;margin:0;letter-spacing:-.015em}
+.sub{color:var(--dim);font-size:12.5px;margin-top:2px}
+.head-right{display:flex;gap:9px;align-items:center;flex:none}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.card{background:linear-gradient(180deg,var(--panel) 0%,#131720 100%);
+  border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin-bottom:16px;
+  box-shadow:var(--shadow)}
+.card h2{font-size:11px;font-weight:600;margin:0 0 14px;color:var(--dim);
+  text-transform:uppercase;letter-spacing:.09em}
+label{display:block;font-size:11.5px;font-weight:500;color:var(--txt2);margin:12px 0 5px;letter-spacing:.01em}
+textarea,input,select{width:100%;background:var(--panel2);border:1px solid var(--line2);color:var(--txt);
+  border-radius:var(--r-sm);padding:9px 12px;font:14px/1.55 inherit;outline:none;
+  transition:border-color .16s var(--ease), box-shadow .16s var(--ease), background .16s var(--ease)}
+textarea{min-height:170px;resize:vertical;line-height:1.72}
+textarea#instruct{min-height:52px}
+input::placeholder,textarea::placeholder{color:#5E6672}
+textarea:hover,input:hover,select:hover{border-color:#38414F}
+textarea:focus,input:focus,select:focus{border-color:var(--accent);background:#1D2330;
+  box-shadow:0 0 0 3px var(--accent-soft)}
+select{appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%2379828F' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;cursor:pointer}
+select option{background:var(--panel2);color:var(--txt)}
+button{background:var(--panel2);border:1px solid var(--line2);color:var(--txt);border-radius:var(--r-sm);
+  padding:9px 17px;font:14px/1 inherit;font-weight:500;cursor:pointer;
+  transition:all .16s var(--ease)}
+button:hover{border-color:#414B5C;background:var(--panel3)}
+button:active{transform:translateY(.5px)}
+button.primary{background:linear-gradient(180deg,var(--accent-h),var(--accent) 60%,#4C90F0);
+  border-color:transparent;color:#071019;font-weight:600;
+  box-shadow:0 3px 12px rgba(91,159,255,.30), inset 0 1px 0 rgba(255,255,255,.25)}
+button.primary:hover{box-shadow:0 5px 18px rgba(91,159,255,.42);filter:none;background:linear-gradient(180deg,#93C0FF,var(--accent) 60%,#4C90F0)}
+button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+button.danger{color:var(--err)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+.tabs{display:flex;gap:4px;margin-bottom:14px;background:var(--panel2);padding:4px;
+  border-radius:11px;border:1px solid var(--line)}
+.tab{padding:7px 15px;border-radius:8px;border:none;cursor:pointer;color:var(--dim);
+  font-size:13px;font-weight:500;background:transparent;transition:all .16s var(--ease)}
+.tab:hover{color:var(--txt2)}
+.tab.on{background:var(--panel3);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}
+.chip{font-size:12px;padding:5px 11px;border:1px solid var(--line2);border-radius:20px;
+  cursor:pointer;color:var(--txt2);background:var(--panel2);transition:all .16s var(--ease)}
+.chip:hover{border-color:var(--accent);color:var(--txt);background:rgba(91,159,255,.10)}
+.hint{font-size:12px;color:var(--dim);margin-top:7px;line-height:1.55}
+
+.job{border:1px solid var(--line);border-radius:12px;padding:13px 15px;margin-bottom:10px;
+  background:linear-gradient(180deg,var(--panel2) 0%,#171C25 100%);
+  transition:border-color .16s var(--ease), transform .16s var(--ease)}
+.job:hover{border-color:var(--line2)}
+.job .top{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.job .pv{color:var(--dim);font-size:12px;margin-top:4px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;line-height:1.5}
+.job .pv.open{white-space:pre-wrap;overflow:visible;text-overflow:clip;
+  max-height:190px;overflow-y:auto;color:var(--txt2);background:#12161E;
+  border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin-top:7px}
+.pvtog{color:var(--accent);cursor:pointer;font-size:12px;margin-left:6px;user-select:none;white-space:nowrap}
+.pvtog:hover{text-decoration:underline}
+.job .ttl{font-size:14px;font-weight:600;margin:5px 0 2px;letter-spacing:-.005em}
+.badge{font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid var(--line2);
+  color:var(--dim);font-weight:500;letter-spacing:.02em}
+.badge.running{color:var(--accent);border-color:rgba(91,159,255,.5);background:rgba(91,159,255,.10)}
+.badge.done{color:var(--ok);border-color:rgba(63,185,138,.45);background:rgba(63,185,138,.10)}
+.badge.error{color:var(--err);border-color:rgba(236,108,108,.45);background:rgba(236,108,108,.10)}
+.badge.queued{color:var(--warn);border-color:rgba(229,162,60,.45);background:rgba(229,162,60,.10)}
+.bar{height:5px;background:#1E242F;border-radius:4px;margin-top:9px;overflow:hidden}
+.bar>i{display:block;height:100%;width:0;transition:width .5s var(--ease);
+  background:linear-gradient(90deg,var(--accent),var(--accent-h));
+  box-shadow:0 0 8px rgba(91,159,255,.5)}
+audio{width:100%;margin-top:9px;height:36px;border-radius:8px}
+.stat{font-size:12px;color:var(--dim);margin-top:6px}
+.empty{color:var(--dim);font-size:13px;padding:20px 0;text-align:center}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+
+.menuwrap{position:relative;flex:none}
+.menubtn{display:flex;align-items:center;gap:7px;padding:7px 13px;font-size:13px;
+  border-radius:10px;white-space:nowrap;background:var(--panel2);border:1px solid var(--line2)}
+.menubtn:hover{background:var(--panel3)}
+.menubtn .gl{width:15px;height:15px;flex:none;opacity:.9}
+.menu{display:none;position:absolute;right:0;top:calc(100% + 7px);z-index:50;min-width:172px;
+  background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:6px;
+  box-shadow:var(--shadow-lg)}
+.menu.open{display:block;animation:pop .16s var(--ease)}
+@keyframes pop{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+.mi{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;cursor:pointer;
+  font-size:13px;color:var(--txt2);transition:background .12s var(--ease)}
+.mi:hover{background:var(--panel3);color:var(--txt)}
+.mi.on{color:var(--accent);font-weight:600}
+.mi .tick{margin-left:auto;font-size:12px;opacity:.9}
+.mi.sep{border-top:1px solid var(--line);margin-top:5px;padding-top:10px}
+.role{font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--line2);color:var(--dim);font-weight:500}
+.role.admin{color:var(--accent);border-color:rgba(91,159,255,.5);background:rgba(91,159,255,.10)}
+
+.mask{position:fixed;inset:0;background:rgba(7,9,13,.80);backdrop-filter:blur(3px);
+  z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line2);
+  border-radius:18px;width:100%;max-width:440px;padding:24px 26px;box-shadow:var(--shadow-lg)}
+.modal.wide{max-width:700px}
+.modal h3{margin:0 0 4px;font-size:16px;font-weight:600;letter-spacing:-.01em}
+.modal .msub{color:var(--dim);font-size:12.5px;margin-bottom:18px}
+.modal .acts{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:9px 9px;border-bottom:1px solid var(--line);color:var(--txt2)}
+th{font-weight:600;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.07em}
+td button{padding:4px 11px;font-size:12px}
+.mini{background:transparent;border:1px solid var(--line2);border-radius:7px;padding:4px 9px;
+  font-size:12px;cursor:pointer;color:var(--dim);transition:all .16s var(--ease)}
+.mini:hover{border-color:var(--accent);color:var(--txt);background:rgba(91,159,255,.08)}
+.mini.danger:hover{border-color:var(--err);color:var(--err);background:rgba(236,108,108,.08)}
+.loginbox{width:100%;max-width:372px}
+.loginbox .brand{font-size:18px;font-weight:600;margin-bottom:3px;letter-spacing:-.01em}
+.loginbox .bsub{color:var(--dim);font-size:12.5px;margin-bottom:22px}
+.err{color:var(--err);font-size:12px;min-height:18px;margin-top:8px}
+.scopes{display:flex;gap:5px;margin-left:auto;background:var(--panel2);padding:3px;
+  border-radius:9px;border:1px solid var(--line)}
+.scopes .tab{padding:5px 12px;font-size:12px}
+.hide{display:none !important}
+details.adv{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+details.adv summary{cursor:pointer;font-size:12px;color:var(--dim);outline:none;font-weight:500}
+details.adv summary:hover{color:var(--txt2)}
+.filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.filters input,.filters select{width:auto;flex:1;min-width:120px;padding:7px 10px;font-size:13px}
+.pager{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;
+  padding-top:12px;border-top:1px solid var(--line);font-size:13px;color:var(--dim)}
+.pager .pinfo{margin-right:auto}
+.pager .pbtns{display:flex;gap:5px}
+.pager .pbtns button{min-width:34px;text-align:center;padding:5px 10px}
+.pager .psize{display:flex;align-items:center;gap:6px}
+.pager .psize select{width:auto;padding:5px 8px;font-size:13px}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--panel3);
+  border:1px solid var(--line2);border-radius:11px;padding:11px 20px;font-size:13px;z-index:200;
+  box-shadow:var(--shadow-lg);animation:pop .18s var(--ease)}
+</style>
+</head>
+<body>
+
+<div class="mask" id="loginMask" style="display:none">
+  <div class="modal loginbox">
+    <div class="brand" data-i18n="loginTitle">登录</div>
+    <div class="bsub" data-i18n="loginSub">Qwen3-TTS 语音生成平台</div>
+    <label data-i18n="username">账号</label>
+    <input id="luser" autocomplete="username" value="admin">
+    <label data-i18n="password">密码</label>
+    <input id="lpwd" type="password" autocomplete="current-password">
+    <div class="err" id="lerr"></div>
+    <div class="acts">
+      <button class="primary" id="lbtn" data-i18n="loginBtn">登录</button>
+    </div>
+    <div class="hint" data-i18n="loginHint">默认管理员：admin / aaaa1234（首次登录后请及时修改密码）</div>
+  </div>
+</div>
+
+<div class="mask" id="pwMask" style="display:none">
+  <div class="modal">
+    <h3 data-i18n="changePw">修改密码</h3>
+    <div class="msub" id="pwWho"></div>
+    <label data-i18n="oldPwd">当前密码</label>
+    <input id="pwOld" type="password" autocomplete="current-password">
+    <label data-i18n="newPwd">新密码</label>
+    <input id="pwNew" type="password" autocomplete="new-password">
+    <label data-i18n="confirmPwd">确认新密码</label>
+    <input id="pwNew2" type="password" autocomplete="new-password">
+    <div class="err" id="pwErr"></div>
+    <div class="acts">
+      <button id="pwCancel" data-i18n="cancel">取消</button>
+      <button class="primary" id="pwSave" data-i18n="save">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="umMask" style="display:none">
+  <div class="modal wide">
+    <h3 data-i18n="userMgmt">员工账号管理</h3>
+    <div class="msub" data-i18n="userMgmtSub">创建员工账号，员工只能看到自己生成的任务。</div>
+    <table>
+      <thead><tr>
+        <th data-i18n="thUser">账号</th><th data-i18n="thRole">角色</th>
+        <th data-i18n="thToday">今日</th><th data-i18n="thJobs">累计</th>
+        <th data-i18n="thLogin">最近登录</th><th></th>
+      </tr></thead>
+      <tbody id="userRows"></tbody>
+    </table>
+    <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
+      <h3 style="font-size:14px;margin:0 0 10px" data-i18n="addUser">新增账号</h3>
+      <div class="split">
+        <div><label data-i18n="username">账号</label><input id="nuName" autocomplete="off"></div>
+        <div><label data-i18n="password">密码</label><input id="nuPwd" type="password" autocomplete="new-password"></div>
+      </div>
+      <label data-i18n="roleLabel">角色</label>
+      <select id="nuRole"><option value="user" data-i18n="roleUser">员工</option><option value="admin" data-i18n="roleAdmin">管理员</option></select>
+      <div class="err" id="nuErr"></div>
+      <div class="acts">
+        <button id="umClose" data-i18n="close">关闭</button>
+        <button class="primary" id="nuCreate" data-i18n="create">创建</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="rpMask" style="display:none">
+  <div class="modal wide">
+    <h3 data-i18n="report">产出明细</h3>
+    <div class="msub" data-i18n="reportSub">按人 / 按日统计已完成的语音产出，可导出 CSV 用 Excel 打开。</div>
+    <div class="row" style="margin-bottom:14px">
+      <div>
+        <label data-i18n="reportDays">统计范围</label>
+        <select id="rpDays" style="width:auto">
+          <option value="7">7 天</option>
+          <option value="30" selected>30 天</option>
+          <option value="90">90 天</option>
+          <option value="0">全部</option>
+        </select>
+      </div>
+      <button class="mini" id="rpExport" data-i18n="exportCsv" style="margin-top:18px">导出 CSV</button>
+    </div>
+    <div id="rpTable"><span class="hint" data-i18n="loading">加载中...</span></div>
+    <div class="acts">
+      <button id="rpClose" data-i18n="close">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="head">
+    <div>
+      <h1 data-i18n="title">Qwen3-TTS 语音生成</h1>
+      <div class="sub" data-i18n="subtitle">Qwen3-TTS-12Hz-1.7B · RTX 3060 · 任务排队串行推理</div>
+    </div>
+    <div class="head-right">
+      <div class="menuwrap">
+        <button class="menubtn" id="langBtn">
+          <svg class="gl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+            <circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 2.6 15.4 0 18M12 3c-2.6 2.6-2.6 15.4 0 18"/>
+          </svg>
+          <span id="langLabel">简体中文</span><span style="opacity:.55;font-size:11px">▾</span>
+        </button>
+        <div class="menu" id="langMenu"></div>
+      </div>
+      <div class="menuwrap">
+        <button class="menubtn" id="userBtn">
+          <span id="userName">-</span><span class="role" id="userRole">-</span><span style="opacity:.55;font-size:11px">▾</span>
+        </button>
+        <div class="menu" id="userMenu">
+          <div class="mi" id="miPw" data-i18n="changePw">修改密码</div>
+          <div class="mi hide" id="miUsers" data-i18n="userMgmt">员工账号管理</div>
+          <div class="mi sep" id="miOut" data-i18n="logout">退出登录</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2 data-i18n="script">文案</h2>
+        <label data-i18n="jobTitle">语音标题</label>
+        <input id="title" data-i18n-ph="titlePh">
+        <label data-i18n="scriptText">正文</label>
+        <textarea id="text" data-i18n-ph="scriptPh"></textarea>
+        <div class="hint" id="count">0</div>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n="voice">声音</h2>
+        <div class="tabs">
+          <div class="tab on" data-mode="custom" data-i18n="presetVoice">预设音色</div>
+          <div class="tab" data-mode="clone" data-i18n="cloneVoice">录入音色克隆</div>
+        </div>
+
+        <div id="pane-custom">
+          <label data-i18n="timbre">音色</label>
+          <select id="speaker"></select>
+          <div class="hint" data-i18n="spkAllHint">全部 9 个内置音色都支持所有输出语言，可自由搭配；推荐组只是该语言下最自然的选择。</div>
+          <label data-i18n="instructLabel">语气指令（点下方标签可添加，多行会自动轮换）</label>
+          <textarea id="instruct"></textarea>
+          <div class="chips" id="chips"></div>
+          <div class="row" style="margin-top:8px">
+            <button class="mini" id="insClear" data-i18n="clearInstruct">清空指令</button>
+          </div>
+          <div class="hint" data-i18n="instructHint">长语音强烈建议填 2-4 行（换行分隔）：系统会按段轮换使用，避免通篇一个语气一个语速——这是长音频 AI 味最主要的来源。留空则自动用中性朗读指令。</div>
+        </div>
+
+        <div id="pane-clone" style="display:none">
+          <label data-i18n="savedVoices">已录入音色</label>
+          <select id="voice"></select>
+          <div class="hint" data-i18n="cloneNoInstruct">克隆模式不支持语气指令，语气由参考音频本身的情绪决定。</div>
+        </div>
+
+        <label data-i18n="language">语言</label>
+        <select id="language"></select>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2 data-i18n="params">生成</h2>
+        <div class="row" style="margin-top:2px">
+          <button class="primary" id="submit" data-i18n="submit">提交生成</button>
+          <button id="clear" data-i18n="clear">清空</button>
+        </div>
+        <details class="adv">
+          <summary data-i18n="advanced">高级设置（分段 / 批量）</summary>
+          <div class="split" style="margin-top:10px">
+            <div><label data-i18n="segChars">分段字数</label><input id="maxChars" type="number" value="110" min="60" max="400"></div>
+            <div><label data-i18n="batchSize">批量大小</label><input id="batchSize" type="number" value="16" min="1" max="20"></div>
+          </div>
+          <div class="hint" data-i18n="paramHint">实测最优：分段 110 字 + 批量 16，RTF 约 0.27，显存峰值约 10G。批量再大会 OOM。</div>
+        </details>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n="enroll">录入声音（声音克隆用）</h2>
+        <div class="row">
+          <input id="vname" data-i18n-ph="vnamePh" style="flex:1">
+        </div>
+        <label style="margin-top:10px" data-i18n="refAudio">参考音频（3–10 秒干净人声，无背景噪音）</label>
+        <input id="vfile" type="file" accept="audio/*">
+        <label data-i18n="refText">参考音频对应的文字（可选，能提升克隆准确度）</label>
+        <input id="vtext" data-i18n-ph="refTextPh">
+        <div class="row" style="margin-top:12px">
+          <button id="vupload" data-i18n="upload">上传录入</button>
+        </div>
+        <div class="hint" id="vmsg"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="margin-bottom:10px">
+      <h2 style="margin:0" data-i18n="queue">任务队列</h2>
+      <div class="scopes hide" id="scopeBox">
+        <div class="tab on" data-scope="mine" data-i18n="scopeMine">我的</div>
+        <div class="tab" data-scope="all" data-i18n="scopeAll">全部</div>
+      </div>
+    </div>
+    <div class="stat" style="margin:0 0 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span id="statsLine"></span>
+      <button class="mini" id="btnReport" data-i18n="report">产出明细</button>
+    </div>
+    <div class="filters">
+      <input id="q" data-i18n-ph="searchPh">
+      <select id="fOwner" class="hide"></select>
+      <select id="fStatus">
+        <option value="" data-i18n="allStatus">全部状态</option>
+        <option value="running" data-i18n="stRunning">生成中</option>
+        <option value="queued" data-i18n="stQueued">排队中</option>
+        <option value="done" data-i18n="stDone">已完成</option>
+        <option value="error" data-i18n="stError">失败</option>
+      </select>
+    </div>
+    <div id="jobs"><div class="empty" data-i18n="noJobs">暂无任务</div></div>
+    <div class="pager hide" id="pager"></div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+const I18N = {
+  zh: {
+    _name:'简体中文',
+    title:'Qwen3-TTS 语音生成', subtitle:'Qwen3-TTS-12Hz-1.7B · RTX 3060 · 任务排队串行推理',
+    loginTitle:'登录', loginSub:'Qwen3-TTS 语音生成平台', username:'账号', password:'密码',
+    loginBtn:'登录', loginHint:'默认管理员：admin / aaaa1234（首次登录后请及时修改密码）',
+    loginErr:'账号或密码错误', netErr:'网络错误',
+    changePw:'修改密码', oldPwd:'当前密码', newPwd:'新密码', confirmPwd:'确认新密码',
+    pwMismatch:'两次输入的新密码不一致', pwShort:'密码至少 6 位', pwOk:'密码已修改，请重新登录',
+    logout:'退出登录', userMgmt:'员工账号管理', userMgmtSub:'创建员工账号，员工只能看到自己生成的任务。',
+    report:'产出明细', reportSub:'按人 / 按日统计已完成的语音产出，可导出 CSV 用 Excel 打开。',
+    reportDays:'统计范围', exportCsv:'导出 CSV',
+    thToday2:'今日条数', thTotal:'累计条数', thAudio:'音频时长', thGpu:'GPU 耗时',
+    thDate:'日期', thSum:'当日合计', reportEmpty:'暂无已完成任务', reportFail:'统计加载失败',
+    pagerTotal:(n)=>`共 ${n} 条`, pagerPage:(p,t)=>`第 ${p}/${t} 页`,
+    prevPage:'上一页', nextPage:'下一页', perPage:'每页',
+    addUser:'新增账号', roleLabel:'角色', roleAdmin:'管理员', roleUser:'员工', create:'创建',
+    thUser:'账号', thRole:'角色', thToday:'今日', thJobs:'累计', thLogin:'最近登录', thAct:'操作',
+    resetPw:'重置密码', deleteUser:'删除', confirmDel:(n)=>`确定删除账号「${n}」？`, cannotDelSelf:'不能删除自己',
+    newPwdPrompt:(n)=>`为「${n}」设置新密码`, delDone:'已删除', resetDone:'密码已重置', created:(n)=>`账号 ${n} 已创建`,
+    save:'保存', cancel:'取消', close:'关闭',
+    script:'文案', jobTitle:'语音标题', titlePh:'给这条语音起个名字，便于日后检索',
+    scriptText:'正文', scriptPh:'粘贴要合成的文案。长文本会自动按句读切段、逐段生成再做韵律拼接。',
+    voice:'声音', presetVoice:'预设音色', cloneVoice:'录入音色克隆',
+    timbre:'音色',
+    spkGroupRec:(l)=>`推荐 · ${l} 母语`, spkGroupOther:'其他音色（同样支持，带母语口音）',
+    spkAllHint:'全部 9 个内置音色都支持所有输出语言，可自由搭配；推荐组只是该语言下最自然的选择。',
+    instructLabel:'语气指令（点下方标签可添加，多行会自动轮换）',
+    instructPh:'例：平静温暖的语气，慢速讲述',
+    instructHint:'长语音强烈建议填 2-4 行（换行分隔）：系统会按段轮换使用，避免通篇一个语气一个语速——这是长音频 AI 味最主要的来源。留空则自动用中性朗读指令。',
+    clearInstruct:'清空指令',
+    savedVoices:'已录入音色', cloneNoInstruct:'克隆模式不支持语气指令，语气由参考音频本身的情绪决定。',
+    language:'语言', params:'生成', segChars:'分段字数', batchSize:'批量大小',
+    advanced:'高级设置（分段 / 批量）',
+    paramHint:'实测最优：分段 110 字 + 批量 16，RTF 约 0.27，显存峰值约 10G。批量再大会 OOM。',
+    submit:'提交生成', clear:'清空', enroll:'录入声音（声音克隆用）',
+    vnamePh:'音色名称，例：韩语女声-知妍', refAudio:'参考音频（3–10 秒干净人声，无背景噪音）',
+    refText:'参考音频对应的文字（可选，能提升克隆准确度）', refTextPh:'参考音频里说的话',
+    upload:'上传录入', queue:'任务队列', noJobs:'暂无任务', scopeMine:'我的', scopeAll:'全部',
+    searchPh:'搜索标题或内容…', allStatus:'全部状态', allOwner:'全部成员',
+    stRunning:'生成中', stQueued:'排队中', stDone:'已完成', stError:'失败',
+    countFmt:(n,seg)=>`${n} 字 · 约 ${seg} 段`,
+    needText:'请先粘贴文案', needVoice:'请先在右侧录入一个音色',
+    needName:'请填写音色名称并选择音频', uploading:'上传中...',
+    enrolled:(n,d)=>`已录入：${n}（${d}s）`, fail:'失败：', submitFail:'提交失败: ',
+    st:{queued:'排队中',running:'生成中',done:'已完成',error:'失败'},
+    modeLabel:(j)=> j.mode==='clone' ? '克隆: '+j.voice : '音色: '+j.speaker,
+    statFmt:s=>`分段 ${s.segments} · 音频 ${s.audio_seconds}s · 耗时 ${s.gen_seconds}s · RTF ${s.rtf}`,
+    progFmt:(d,t)=>`${d}/${t} 段`, dlWav:'下载 WAV', dlMp3:'下载 MP3',
+    expand:'展开全文', collapse:'收起', almostDone:'即将完成', preparing:'准备中',
+    stagePreparing:'正在分段', stageGenerating:'正在生成', stageMerging:'正在拼接', stageEncoding:'正在转码',
+    batchFmt:(n,m)=>`第 ${n}/${m} 批`, pctFmt:(p)=>`${p}%`, elapsedFmt:(s)=>`已用 ${s}`,
+    etaFmt:(s)=>`预计还需 ${s}`, queueAhead:(n)=> n>0?`排队中 · 前面还有 ${n} 个任务`:'排队中，即将开始',
+    statsFmt:(td,n,h)=>`今日 ${td} 条 · 累计 ${n} 条 · 累计音频 ${h} 小时`,
+    by:(o)=>`由 ${o} 生成`, untitled:'未命名',
+    delJob:'删除', retry:'重试', confirmDelJob:(t)=>`删除「${t}」？音频文件会一起删掉`, noRetry:'原文案已丢失，无法重试',
+    draftSaved:'草稿已恢复', draftCleared:'草稿已清空',
+    emptyOpt:'（尚未录入）', noInstructPreset:'该语言暂无预设，可直接手动输入',
+    l10n:{auto:'自动检测',chinese:'中文',english:'英语',french:'法语',german:'德语',italian:'意大利语',
+          japanese:'日语',korean:'韩语',portuguese:'葡萄牙语',russian:'俄语',spanish:'西班牙语'},
+    spk:{aiden:'English · 男声 · 阳光',dylan:'Chinese · 男声 · 北京腔',eric:'Chinese · 男声 · 四川口音',
+         ono_anna:'Japanese · 女声 · 可爱',ryan:'English · 男声 · 节奏感强',serena:'Chinese · 女声 · 温暖',
+         sohee:'Korean · 女声 · 温暖',uncle_fu:'Chinese · 男声 · 沉稳',vivian:'Chinese · 女声 · 明亮'}
+  },
+  en: {
+    _name:'English',
+    title:'Qwen3-TTS Studio', subtitle:'Qwen3-TTS-12Hz-1.7B · RTX 3060 · Queued serial inference',
+    loginTitle:'Sign in', loginSub:'Qwen3-TTS speech platform', username:'Username', password:'Password',
+    loginBtn:'Sign in', loginHint:'Default admin: admin / aaaa1234 — please change it after first login',
+    loginErr:'Wrong username or password', netErr:'Network error',
+    changePw:'Change password', oldPwd:'Current password', newPwd:'New password', confirmPwd:'Confirm new password',
+    pwMismatch:'New passwords do not match', pwShort:'Password must be at least 6 characters',
+    pwOk:'Password updated, please sign in again',
+    logout:'Sign out', userMgmt:'User accounts', userMgmtSub:'Create staff accounts — they only see their own jobs.',
+    report:'Production report', reportSub:'Output by person / by day; exportable to CSV for Excel.',
+    reportDays:'Range', exportCsv:'Export CSV',
+    thToday2:'Today', thTotal:'Total', thAudio:'Audio', thGpu:'GPU time',
+    thDate:'Date', thSum:'Day total', reportEmpty:'No completed jobs yet', reportFail:'Failed to load stats',
+    pagerTotal:(n)=>`${n} total`, pagerPage:(p,t)=>`page ${p}/${t}`,
+    prevPage:'Prev', nextPage:'Next', perPage:'Per page',
+    addUser:'Add account', roleLabel:'Role', roleAdmin:'Admin', roleUser:'Staff', create:'Create',
+    thUser:'User', thRole:'Role', thToday:'Today', thJobs:'Total', thLogin:'Last login', thAct:'Actions',
+    resetPw:'Reset password', deleteUser:'Delete', confirmDel:(n)=>`Delete account "${n}"?`, cannotDelSelf:'You cannot delete yourself',
+    newPwdPrompt:(n)=>`New password for "${n}"`, delDone:'Deleted', resetDone:'Password reset', created:(n)=>`Account ${n} created`,
+    save:'Save', cancel:'Cancel', close:'Close',
+    script:'Script', jobTitle:'Title', titlePh:'Name this clip so you can find it later',
+    scriptText:'Body', scriptPh:'Paste your script. Long text is split by sentence, generated per segment, then joined with prosody.',
+    voice:'Voice', presetVoice:'Preset voice', cloneVoice:'Cloned voice',
+    spkGroupRec:(l)=>`Recommended · native ${l}`, spkGroupOther:'Other voices (also supported, native accent)',
+    spkAllHint:'All 9 built-in voices support every output language and can be freely combined; the recommended group is simply the most natural choice for the current language.',
+    timbre:'Speaker', instructLabel:'Style instructions (click chips to add; multiple lines rotate)',
+    instructPh:'e.g. Calm and warm tone, speaking slowly',
+    instructHint:'For long audio, enter 2-4 lines (one per line): they rotate across segments so the whole piece never sits on one tone and one speed — the biggest source of AI-sounding long-form narration.',
+    clearInstruct:'Clear',
+    savedVoices:'Enrolled voices', cloneNoInstruct:'Voice clone does not support style instructions — emotion comes from the reference audio.',
+    language:'Language', params:'Generate', segChars:'Chars per segment', batchSize:'Batch size',
+    advanced:'Advanced (segment / batch)',
+    paramHint:'Measured optimum: 110 chars + batch 16, RTF ≈ 0.27, peak VRAM ≈ 10G. Larger batches will OOM.',
+    submit:'Generate', clear:'Clear', enroll:'Enroll a voice (for cloning)',
+    vnamePh:'Voice name, e.g. Korean female — Jiyeon', refAudio:'Reference audio (3–10s clean speech, no background noise)',
+    refText:'Transcript of the reference audio (optional, improves accuracy)', refTextPh:'What is said in the reference audio',
+    upload:'Enroll', queue:'Job queue', noJobs:'No jobs yet', scopeMine:'Mine', scopeAll:'All',
+    searchPh:'Search title or text…', allStatus:'All status', allOwner:'All members',
+    stRunning:'running', stQueued:'queued', stDone:'done', stError:'error',
+    countFmt:(n,seg)=>`${n} chars · ~${seg} segments`,
+    needText:'Please paste a script first', needVoice:'Please enroll a voice on the right first',
+    needName:'Please enter a voice name and choose an audio file', uploading:'Uploading...',
+    enrolled:(n,d)=>`Enrolled: ${n} (${d}s)`, fail:'Failed: ', submitFail:'Submit failed: ',
+    st:{queued:'queued',running:'running',done:'done',error:'error'},
+    modeLabel:(j)=> j.mode==='clone' ? 'clone: '+j.voice : 'voice: '+j.speaker,
+    statFmt:s=>`${s.segments} segments · audio ${s.audio_seconds}s · took ${s.gen_seconds}s · RTF ${s.rtf}`,
+    progFmt:(d,t)=>`${d}/${t} segments`, dlWav:'Download WAV', dlMp3:'Download MP3',
+    expand:'Expand', collapse:'Collapse', almostDone:'almost done', preparing:'preparing',
+    stagePreparing:'Splitting', stageGenerating:'Generating', stageMerging:'Joining', stageEncoding:'Encoding',
+    batchFmt:(n,m)=>`batch ${n}/${m}`, pctFmt:(p)=>`${p}%`, elapsedFmt:(s)=>`${s} elapsed`,
+    etaFmt:(s)=>`~${s} left`, queueAhead:(n)=> n>0?`queued · ${n} ahead`:'queued, starting soon',
+    statsFmt:(td,n,h)=>`Today ${td} · total ${n} · ${h}h audio`,
+    by:(o)=>`by ${o}`, untitled:'Untitled',
+    delJob:'Delete', retry:'Retry', confirmDelJob:(t)=>`Delete "${t}"? Audio files go too`, noRetry:'Original script lost, cannot retry',
+    draftSaved:'Draft restored', draftCleared:'Draft cleared',
+    emptyOpt:'(none enrolled)', noInstructPreset:'No presets for this language — type one manually',
+    l10n:{auto:'Auto detect',chinese:'Chinese',english:'English',french:'French',german:'German',italian:'Italian',
+          japanese:'Japanese',korean:'Korean',portuguese:'Portuguese',russian:'Russian',spanish:'Spanish'},
+    spk:{aiden:'English · male · bright',dylan:'Chinese · male · Beijing accent',eric:'Chinese · male · Sichuan accent',
+         ono_anna:'Japanese · female · cute',ryan:'English · male · rhythmic',serena:'Chinese · female · warm',
+         sohee:'Korean · female · warm',uncle_fu:'Chinese · male · deep & steady',vivian:'Chinese · female · bright'}
+  },
+  ko: {
+    _name:'한국어',
+    title:'Qwen3-TTS 음성 생성', subtitle:'Qwen3-TTS-12Hz-1.7B · RTX 3060 · 대기열 순차 추론',
+    loginTitle:'로그인', loginSub:'Qwen3-TTS 음성 생성 플랫폼', username:'아이디', password:'비밀번호',
+    loginBtn:'로그인', loginHint:'기본 관리자: admin / aaaa1234 (첫 로그인 후 비밀번호를 변경하세요)',
+    loginErr:'아이디 또는 비밀번호가 잘못되었습니다', netErr:'네트워크 오류',
+    changePw:'비밀번호 변경', oldPwd:'현재 비밀번호', newPwd:'새 비밀번호', confirmPwd:'새 비밀번호 확인',
+    pwMismatch:'새 비밀번호가 일치하지 않습니다', pwShort:'비밀번호는 6자 이상이어야 합니다',
+    pwOk:'비밀번호가 변경되었습니다. 다시 로그인해 주세요',
+    logout:'로그아웃', userMgmt:'직원 계정 관리', userMgmtSub:'직원 계정을 만듭니다. 직원은 본인이 만든 작업만 볼 수 있습니다.',
+    report:'생산 통계', reportSub:'사람별 / 날짜별 완료된 음성 산출량. CSV로 내보내 Excel에서 열 수 있습니다.',
+    reportDays:'기간', exportCsv:'CSV 내보내기',
+    thToday2:'오늘', thTotal:'누적', thAudio:'오디오', thGpu:'GPU 시간',
+    thDate:'날짜', thSum:'일별 합계', reportEmpty:'완료된 작업이 없습니다', reportFail:'통계 불러오기 실패',
+    pagerTotal:(n)=>`총 ${n}건`, pagerPage:(p,t)=>`${p}/${t} 페이지`,
+    prevPage:'이전', nextPage:'다음', perPage:'페이지당',
+    addUser:'계정 추가', roleLabel:'권한', roleAdmin:'관리자', roleUser:'직원', create:'생성',
+    thUser:'아이디', thRole:'권한', thToday:'오늘', thJobs:'누적', thLogin:'최근 로그인', thAct:'관리',
+    resetPw:'비밀번호 초기화', deleteUser:'삭제', confirmDel:(n)=>`계정 "${n}"을(를) 삭제할까요?`, cannotDelSelf:'본인 계정은 삭제할 수 없습니다',
+    newPwdPrompt:(n)=>`"${n}"의 새 비밀번호`, delDone:'삭제되었습니다', resetDone:'비밀번호가 초기화되었습니다', created:(n)=>`계정 ${n} 생성 완료`,
+    save:'저장', cancel:'취소', close:'닫기',
+    script:'원고', jobTitle:'음성 제목', titlePh:'나중에 찾기 쉽게 제목을 붙여 주세요',
+    scriptText:'본문', scriptPh:'원고를 붙여넣으세요. 긴 텍스트는 문장 단위로 나누어 생성한 뒤 리듬을 보정해 이어붙입니다.',
+    voice:'음성', presetVoice:'기본 음색', cloneVoice:'녹음 음성 클론',
+    spkGroupRec:(l)=>`추천 · ${l} 원어민`, spkGroupOther:'기타 음색 (지원됨, 원어 억양 있음)',
+    spkAllHint:'내장 음색 9종 모두 모든 출력 언어를 지원하며 자유롭게 조합할 수 있습니다. 추천 그룹은 해당 언어에서 가장 자연스러운 선택입니다.',
+    timbre:'음색', instructLabel:'톤 지시문 (아래 태그를 누르면 추가, 여러 줄은 자동 순환)',
+    instructPh:'예: 차분하고 따뜻한 톤으로 천천히',
+    instructHint:'긴 음성은 2-4줄(줄바꿈 구분)을 권장합니다: 구간마다 번갈아 적용되어 전체가 한 가지 톤과 속도로 흘러가지 않습니다. 비워두면 중성 낭독 지시가 자동 적용됩니다.',
+    clearInstruct:'지우기',
+    savedVoices:'등록된 음성', cloneNoInstruct:'음성 클론은 톤 지시문을 지원하지 않습니다. 톤은 참고 음성의 감정으로 결정됩니다.',
+    language:'언어', params:'생성', segChars:'분할 글자 수', batchSize:'배치 크기',
+    advanced:'고급 설정 (분할 / 배치)',
+    paramHint:'실측 최적값: 분할 110자 + 배치 16, RTF 약 0.27, VRAM 최대 약 10G. 배치를 더 키우면 OOM이 발생합니다.',
+    submit:'생성 요청', clear:'지우기', enroll:'음성 등록 (클론용)',
+    vnamePh:'음성 이름, 예: 한국어 여성-지연', refAudio:'참고 음성 (3~10초, 잡음 없는 깨끗한 목소리)',
+    refText:'참고 음성의 대사 (선택, 정확도 향상)', refTextPh:'참고 음성에 담긴 말',
+    upload:'등록하기', queue:'작업 대기열', noJobs:'작업이 없습니다', scopeMine:'내 작업', scopeAll:'전체',
+    searchPh:'제목이나 내용 검색…', allStatus:'전체 상태', allOwner:'전체 멤버',
+    stRunning:'생성중', stQueued:'대기중', stDone:'완료', stError:'실패',
+    countFmt:(n,seg)=>`${n}자 · 약 ${seg}개 구간`,
+    needText:'원고를 먼저 붙여넣어 주세요', needVoice:'오른쪽에서 음성을 먼저 등록해 주세요',
+    needName:'음성 이름과 오디오 파일을 선택해 주세요', uploading:'업로드 중...',
+    enrolled:(n,d)=>`등록 완료: ${n} (${d}초)`, fail:'실패: ', submitFail:'요청 실패: ',
+    st:{queued:'대기중',running:'생성중',done:'완료',error:'실패'},
+    modeLabel:(j)=> j.mode==='clone' ? '클론: '+j.voice : '음색: '+j.speaker,
+    statFmt:s=>`구간 ${s.segments} · 오디오 ${s.audio_seconds}초 · 소요 ${s.gen_seconds}초 · RTF ${s.rtf}`,
+    progFmt:(d,t)=>`${d}/${t} 구간`, dlWav:'WAV 다운로드', dlMp3:'MP3 다운로드',
+    expand:'전체 보기', collapse:'접기', almostDone:'곧 완료', preparing:'준비 중',
+    stagePreparing:'분할 중', stageGenerating:'생성 중', stageMerging:'연결 중', stageEncoding:'인코딩 중',
+    batchFmt:(n,m)=>`${n}/${m} 배치`, pctFmt:(p)=>`${p}%`, elapsedFmt:(s)=>`${s} 경과`,
+    etaFmt:(s)=>`약 ${s} 남음`, queueAhead:(n)=> n>0?`대기중 · 앞에 ${n}개`:'대기중, 곧 시작',
+    statsFmt:(td,n,h)=>`오늘 ${td}건 · 누적 ${n}건 · 누적 오디오 ${h}시간`,
+    by:(o)=>`${o} 생성`, untitled:'제목 없음',
+    delJob:'삭제', retry:'재시도', confirmDelJob:(t)=>`"${t}"을(를) 삭제할까요? 음성 파일도 함께 삭제됩니다`, noRetry:'원고가 없어 재시도할 수 없습니다',
+    draftSaved:'임시 저장된 원고를 불러왔습니다', draftCleared:'임시 저장이 비워졌습니다',
+    emptyOpt:'(등록된 음성 없음)', noInstructPreset:'이 언어의 프리셋이 없습니다. 직접 입력하세요',
+    l10n:{auto:'자동 감지',chinese:'중국어',english:'영어',french:'프랑스어',german:'독일어',italian:'이탈리아어',
+          japanese:'일본어',korean:'한국어',portuguese:'포르투갈어',russian:'러시아어',spanish:'스페인어'},
+    spk:{aiden:'English · 남성 · 밝은',dylan:'Chinese · 남성 · 북경 억양',eric:'Chinese · 남성 · 사천 억양',
+         ono_anna:'Japanese · 여성 · 귀여운',ryan:'English · 남성 · 리듬감',serena:'Chinese · 여성 · 따뜻한',
+         sohee:'Korean · 여성 · 따뜻한',uncle_fu:'Chinese · 남성 · 차분한',vivian:'Chinese · 여성 · 밝은'}
+  },
+  ja: {
+    _name:'日本語',
+    title:'Qwen3-TTS 音声生成', subtitle:'Qwen3-TTS-12Hz-1.7B · RTX 3060 · キュー順次推論',
+    loginTitle:'ログイン', loginSub:'Qwen3-TTS 音声生成プラットフォーム', username:'ユーザー名', password:'パスワード',
+    loginBtn:'ログイン', loginHint:'初期管理者: admin / aaaa1234（初回ログイン後にパスワードを変更してください）',
+    loginErr:'ユーザー名またはパスワードが違います', netErr:'通信エラー',
+    changePw:'パスワード変更', oldPwd:'現在のパスワード', newPwd:'新しいパスワード', confirmPwd:'新しいパスワード（確認）',
+    pwMismatch:'新しいパスワードが一致しません', pwShort:'パスワードは6文字以上で入力してください',
+    pwOk:'パスワードを変更しました。再ログインしてください',
+    logout:'ログアウト', userMgmt:'スタッフアカウント', userMgmtSub:'スタッフは自分が生成したジョブのみ閲覧できます。',
+    report:'生産レポート', reportSub:'担当者別 / 日別の完了済み音声。CSV出力してExcelで開けます。',
+    reportDays:'期間', exportCsv:'CSV エクスポート',
+    thToday2:'今日', thTotal:'累計', thAudio:'音声時間', thGpu:'GPU 時間',
+    thDate:'日付', thSum:'1日の合計', reportEmpty:'完了したジョブはありません', reportFail:'統計の読み込みに失敗',
+    pagerTotal:(n)=>`全 ${n} 件`, pagerPage:(p,t)=>`${p}/${t} ページ`,
+    prevPage:'前へ', nextPage:'次へ', perPage:'表示件数',
+    addUser:'アカウント追加', roleLabel:'権限', roleAdmin:'管理者', roleUser:'スタッフ', create:'作成',
+    thUser:'ユーザー', thRole:'権限', thToday:'本日', thJobs:'累計', thLogin:'最終ログイン', thAct:'操作',
+    resetPw:'パスワード再設定', deleteUser:'削除', confirmDel:(n)=>`アカウント「${n}」を削除しますか？`, cannotDelSelf:'自分自身は削除できません',
+    newPwdPrompt:(n)=>`「${n}」の新しいパスワード`, delDone:'削除しました', resetDone:'パスワードを再設定しました', created:(n)=>`アカウント ${n} を作成しました`,
+    save:'保存', cancel:'キャンセル', close:'閉じる',
+    script:'原稿', jobTitle:'タイトル', titlePh:'後で探しやすいよう名前を付けてください',
+    scriptText:'本文', scriptPh:'原稿を貼り付けてください。長文は文ごとに分割して生成し、韻律を整えて連結します。',
+    voice:'音声', presetVoice:'プリセット音色', cloneVoice:'録音音色のクローン',
+    spkGroupRec:(l)=>`推奨 · ${l} 母語`, spkGroupOther:'その他の音色（対応、母語なまりあり）',
+    spkAllHint:'内蔵音色9種はすべての出力言語に対応し、自由に組み合わせられます。推奨グループはその言語で最も自然な選択です。',
+    timbre:'音色', instructLabel:'スタイル指示（タップで追加、複数行は自動ローテーション）',
+    instructPh:'例：落ち着いた温かいトーンでゆっくりと',
+    instructHint:'長い音声には2〜4行（改行区切り）がおすすめです。区間ごとに交互に適用され、全体が同じトーン・同じ速度のままになりません。空欄なら中立的な朗読指示が自動適用されます。',
+    clearInstruct:'クリア',
+    savedVoices:'登録済みの音色', cloneNoInstruct:'ボイスクローンはスタイル指示に対応していません。感情は参照音声から引き継がれます。',
+    language:'言語', params:'生成', segChars:'分割文字数', batchSize:'バッチサイズ',
+    advanced:'詳細設定（分割 / バッチ）',
+    paramHint:'実測最適値：分割 110 文字 ＋ バッチ 16、RTF 約 0.27、VRAM 最大 約 10G。バッチを増やすと OOM します。',
+    submit:'生成する', clear:'クリア', enroll:'音色を登録（クローン用）',
+    vnamePh:'音色名、例：韓国語女性-ジヨン', refAudio:'参照音声（3〜10秒、ノイズのないクリアな音声）',
+    refText:'参照音声の書き起こし（任意、精度が上がります）', refTextPh:'参照音声で話している内容',
+    upload:'登録', queue:'ジョブキュー', noJobs:'ジョブはありません', scopeMine:'自分の', scopeAll:'すべて',
+    searchPh:'タイトル・本文を検索…', allStatus:'すべての状態', allOwner:'全メンバー',
+    stRunning:'生成中', stQueued:'待機中', stDone:'完了', stError:'失敗',
+    countFmt:(n,seg)=>`${n}文字 · 約${seg}セグメント`,
+    needText:'先に原稿を貼り付けてください', needVoice:'先に右側で音色を登録してください',
+    needName:'音色名と音声ファイルを指定してください', uploading:'アップロード中...',
+    enrolled:(n,d)=>`登録完了: ${n}（${d}秒）`, fail:'失敗: ', submitFail:'送信失敗: ',
+    st:{queued:'待機中',running:'生成中',done:'完了',error:'失敗'},
+    modeLabel:(j)=> j.mode==='clone' ? 'クローン: '+j.voice : '音色: '+j.speaker,
+    statFmt:s=>`セグメント ${s.segments} · 音声 ${s.audio_seconds}秒 · 処理 ${s.gen_seconds}秒 · RTF ${s.rtf}`,
+    progFmt:(d,t)=>`${d}/${t} セグメント`, dlWav:'WAV をダウンロード', dlMp3:'MP3 をダウンロード',
+    expand:'全文を表示', collapse:'折りたたむ', almostDone:'まもなく完了', preparing:'準備中',
+    stagePreparing:'分割中', stageGenerating:'生成中', stageMerging:'結合中', stageEncoding:'エンコード中',
+    batchFmt:(n,m)=>`${n}/${m} バッチ`, pctFmt:(p)=>`${p}%`, elapsedFmt:(s)=>`経過 ${s}`,
+    etaFmt:(s)=>`残り 約 ${s}`, queueAhead:(n)=> n>0?`待機中 · 前に ${n} 件`:'待機中、まもなく開始',
+    statsFmt:(td,n,h)=>`本日 ${td}件 · 累計 ${n}件 · 音声 ${h}時間`,
+    by:(o)=>`${o} が生成`, untitled:'無題',
+    delJob:'削除', retry:'再試行', confirmDelJob:(t)=>`「${t}」を削除しますか？音声ファイルも削除されます`, noRetry:'原稿が残っていないため再試行できません',
+    draftSaved:'下書きを復元しました', draftCleared:'下書きをクリアしました',
+    emptyOpt:'（未登録）', noInstructPreset:'この言語のプリセットはありません。手入力してください',
+    l10n:{auto:'自動判定',chinese:'中国語',english:'英語',french:'フランス語',german:'ドイツ語',italian:'イタリア語',
+          japanese:'日本語',korean:'韓国語',portuguese:'ポルトガル語',russian:'ロシア語',spanish:'スペイン語'},
+    spk:{aiden:'English · 男性 · 明るい',dylan:'Chinese · 男性 · 北京なまり',eric:'Chinese · 男性 · 四川なまり',
+         ono_anna:'Japanese · 女性 · 可愛い',ryan:'English · 男性 · リズム感',serena:'Chinese · 女性 · 温かい',
+         sohee:'Korean · 女性 · 温かい',uncle_fu:'Chinese · 男性 · 落ち着いた',vivian:'Chinese · 女性 · 明るい'}
+  }
+};
+
+const UI2OUT = {zh:'chinese', en:'english', ko:'korean', ja:'japanese'};
+const SPK_LANG = {aiden:'english', dylan:'chinese', eric:'chinese', ono_anna:'japanese',
+                  ryan:'english', serena:'chinese', sohee:'korean', uncle_fu:'chinese', vivian:'chinese'};
+const LANG_SPK = {auto:'sohee', chinese:'serena', english:'aiden', japanese:'ono_anna', korean:'sohee',
+                  french:'serena', german:'uncle_fu', italian:'vivian', portuguese:'ryan',
+                  russian:'dylan', spanish:'aiden'};
+
+const INSTRUCTS = {
+  korean:['차분하고 따뜻한 톤으로 천천히','밝고 활기찬 톤으로 또박또박','낮은 목소리로 조용히 이야기하듯',
+    '뉴스 앵커처럼 또렷하고 전문적으로','친구에게 설명하듯 편안하게','약간 상기된 톤으로 빠르게','감동적인 분위기로 천천히 또박또박'],
+  chinese:['平静温暖的语气，慢速讲述','明快有活力的语气，吐字清晰','低声安静地，像在讲一个故事',
+    '像新闻主播一样清晰专业','像对朋友解释一样轻松自然','略带兴奋，语速稍快','富有感染力，缓慢而清晰'],
+  english:['Calm and warm tone, speaking slowly','Bright and cheerful, clearly articulated',
+    'Low voice, as if telling a story quietly','Clear and professional, like a news anchor',
+    'Relaxed, as if explaining to a friend','Slightly excited, a bit faster','Emotional and moving, slow and clear'],
+  japanese:['落ち着いた温かいトーンでゆっくりと','明るく元気に、はっきりと','低い声で静かに語りかけるように',
+    'ニュースキャスターのように明瞭で専門的に','友達に説明するようにリラックスして','少し高揚した口調でやや速めに','感動的な雰囲気でゆっくりはっきりと'],
+  spanish:['Tono tranquilo y cálido, hablando despacio','Alegre y enérgico, articulando con claridad',
+    'Voz baja, como contando una historia en silencio','Claro y profesional, como un presentador',
+    'Relajado, como explicándoselo a un amigo','Ligeramente emocionado, un poco más rápido','Emotivo, lento y claro'],
+  french:['Ton calme et chaleureux, en parlant lentement','Vif et enjoué, bien articulé',
+    'Voix basse, comme en racontant une histoire','Clair et professionnel, comme un présentateur',
+    'Détendu, comme en l\'expliquant à un ami','Légèrement enthousiaste, un peu plus rapide','Émouvant, lent et clair'],
+  german:['Ruhiger, warmer Ton, langsam gesprochen','Hell und lebhaft, deutlich artikuliert',
+    'Leise Stimme, wie beim Erzählen','Klar und professionell wie ein Nachrichtensprecher',
+    'Entspannt, als würde man es einem Freund erklären','Etwas aufgeregt, etwas schneller','Emotional, langsam und klar'],
+  italian:['Tono calmo e caloroso, parlando lentamente','Brillante e vivace, ben articolato',
+    'Voce bassa, come raccontando una storia','Chiaro e professionale come un presentatore',
+    'Rilassato, come spiegandolo a un amico','Leggermente emozionato, un po\' più veloce','Emotivo, lento e chiaro'],
+  portuguese:['Tom calmo e acolhedor, falando devagar','Alegre e vibrante, bem articulado',
+    'Voz baixa, como quem conta uma história','Claro e profissional como um apresentador',
+    'Relaxado, como explicando a um amigo','Um pouco empolgado, mais rápido','Emocionante, lento e claro'],
+  russian:['Спокойный тёплый тон, говорить медленно','Яркий и энергичный, чёткая дикция',
+    'Тихий голос, словно рассказываешь историю','Чётко и профессионально, как ведущий новостей',
+    'Расслабленно, как объясняя другу','Немного взволнованно, чуть быстрее','Проникновенно, медленно и чётко']
+};
+const INSTRUCT_PH = {
+  korean:'예: 차분하고 따뜻한 톤으로 천천히 이야기하듯이', chinese:'例：平静温暖的语气，慢速讲述',
+  english:'e.g. Calm and warm tone, speaking slowly', japanese:'例：落ち着いた温かいトーンでゆっくりと',
+  spanish:'ej: Tono tranquilo y cálido, hablando despacio', french:'ex. : Ton calme et chaleureux, en parlant lentement',
+  german:'z. B. Ruhiger, warmer Ton, langsam gesprochen', italian:'es: Tono calmo e caloroso, parlando lentamente',
+  portuguese:'ex: Tom calmo e acolhedor, falando devagar', russian:'напр.: Спокойный тёплый тон, говорить медленно', auto:''
+};
+
+/* ---------- 全局状态 ---------- */
+let mode = 'custom';
+/* 语言优先级：手动选择(localStorage) > 浏览器系统语言 > 中文 */
+function detectLang(){
+  const langs = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ''])
+    .map(x => String(x || '').toLowerCase());
+  for(const l of langs){
+    if(l.startsWith('zh')) return 'zh';
+    if(l.startsWith('ko')) return 'ko';
+    if(l.startsWith('ja')) return 'ja';
+    if(l.startsWith('en')) return 'en';
+  }
+  return 'zh';
+}
+let UI = localStorage.getItem('tts_ui_lang');
+if(!UI || !I18N[UI]) UI = detectLang();
+let userSwitched = false;
+let outLangTouched = false;
+let spkTouched = false;          /* 用户手动挑过音色后，不再随语言自动切换 */
+let ME = null;
+let META = {languages:[], speakers:[], voices:[]};
+let scope = 'mine';
+/* 历史记录分页：默认每页 10 条 */
+let page = 1, pageSize = +(localStorage.getItem('tts_page_size') || 10), pages = 1, totalJobs = 0;
+let USERS = [];
+const jobNodes = new Map();
+const DRAFT = 'tts_draft';
+
+const t = k => (I18N[UI][k] !== undefined ? I18N[UI][k] : k);
+const outLang = () => $('#language').value || UI2OUT[UI] || 'korean';
+const presetLang = () => { const l = outLang(); return l === 'auto' ? (UI2OUT[UI]||'korean') : l; };
+const esc = s => String(s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function fmtDur(s){
+  s = Math.max(0, Math.round(s || 0));
+  const m = Math.floor(s/60), ss = s%60;
+  return `${m}:${String(ss).padStart(2,'0')}`;
+}
+function toast(msg){
+  const d = document.createElement('div');
+  d.className = 'toast'; d.textContent = msg;
+  document.body.appendChild(d);
+  setTimeout(()=>d.remove(), 2200);
+}
+
+/* ---------- 请求 ---------- */
+async function api(url, opt){
+  const r = await fetch(url, opt);
+  if(r.status === 401){ ME = null; showLogin(t('loginErr')); throw new Error('401'); }
+  return r;
+}
+
+/* ---------- i18n ---------- */
+function applyStatic(){
+  $$('[data-i18n]').forEach(e => { if(I18N[UI][e.dataset.i18n] !== undefined) e.textContent = I18N[UI][e.dataset.i18n]; });
+  $$('[data-i18n-ph]').forEach(e => { if(I18N[UI][e.dataset.i18nPh] !== undefined) e.placeholder = I18N[UI][e.dataset.i18nPh]; });
+  document.title = t('title');
+  document.documentElement.lang = UI === 'zh' ? 'zh-CN' : UI;
+  $('#langLabel').textContent = I18N[UI]._name;
+  $('#langMenu').innerHTML = Object.keys(I18N)
+    .map(k=>`<div class="mi ${k===UI?'on':''}" data-lang="${k}">${I18N[k]._name}${k===UI?'<span class="tick">✓</span>':''}</div>`).join('');
+  $$('#langMenu .mi').forEach(it => it.onclick = () => setLang(it.dataset.lang));
+  if(ME){
+    $('#userRole').textContent = t(ME.role === 'admin' ? 'roleAdmin' : 'roleUser');
+    $('#miUsers').classList.toggle('hide', ME.role !== 'admin');
+  }
+}
+function setLang(k){
+  UI = k; localStorage.setItem('tts_ui_lang', k); userSwitched = true;
+  applyStatic(); renderLanguages(); renderSpeakers(); renderVoices(); renderCount();
+  syncSpeakerToLang(); resetJobs(); poll(); loadStats();
+}
+
+/* ---------- 下拉 ---------- */
+const spkName = s => I18N[UI].spk[s] ? `${s} — ${I18N[UI].spk[s]}` : s;
+const langName = l => I18N[UI].l10n[l] ? `${I18N[UI].l10n[l]}（${l}）` : l;
+const langShort = l => I18N[UI].l10n[l] || l;   /* 只要本地名，不带英文 id */
+
+/* 音色不做过滤：实测 9 个内置音色都支持全部 10 种语言。
+   只把当前输出语言的"母语/最佳音色"排在最前面，其余全部列出供自由选择。 */
+function speakersForLang(){
+  const all = META.speakers || [];
+  const lang = outLang();
+  const map = META.speaker_langs || SPK_LANG;
+  return {
+    rec:   all.filter(s => map[s] === lang),
+    other: all.filter(s => map[s] !== lang),
+  };
+}
+function renderSpeakers(){
+  const sp = $('#speaker');
+  const {rec, other} = speakersForLang();
+  const prev = sp.value;
+  const opt = s => `<option value="${s}">${esc(spkName(s))}</option>`;
+  let html = '';
+  if(rec.length)   html += `<optgroup label="${esc(t('spkGroupRec')(langShort(outLang())))}">${rec.map(opt).join('')}</optgroup>`;
+  if(other.length) html += `<optgroup label="${esc(t('spkGroupOther'))}">${other.map(opt).join('')}</optgroup>`;
+  if(!html) html = '<option value="sohee">sohee</option>';
+  sp.innerHTML = html;
+  const all = rec.concat(other);
+  if(prev && all.includes(prev)) sp.value = prev;      /* 尊重手动选择 */
+  else {
+    const def = (META.speaker_default||LANG_SPK)[outLang()];
+    const pick = (def && all.includes(def)) ? def : (rec[0] || all[0]);
+    if(pick) sp.value = pick;
+  }
+}
+/* 切输出语言时，只在用户没手动挑过音色的情况下切到推荐音色 */
+function syncSpeakerToLang(){
+  if(spkTouched) return;
+  const want = (META.speaker_default||LANG_SPK)[outLang()];
+  const all = META.speakers || [];
+  if(want && all.includes(want)) $('#speaker').value = want;
+}
+function renderLanguages(){
+  const lg = $('#language'), list = META.languages || ['korean'], prev = lg.value;
+  lg.innerHTML = list.length ? list.map(l=>`<option value="${l}">${langName(l)}</option>`).join('')
+                             : '<option value="korean">korean</option>';
+  /* 输出语言默认跟随界面语言；用户手动改过之后尊重手选 */
+  const target = outLangTouched ? (prev && list.includes(prev) ? prev : 'korean')
+                                : (UI2OUT[UI] || 'korean');
+  if(list.includes(target)) lg.value = target;
+  else { const k = list.find(l=>/korean/i.test(l)); if(k) lg.value = k; }
+  renderSpeakers();   /* 音色跟着输出语言走 */
+  renderChips();
+}
+function renderChips(){
+  const pl = presetLang(), arr = INSTRUCTS[pl] || [];
+  $('#chips').innerHTML = arr.length ? arr.map(x=>`<div class="chip">${esc(x)}</div>`).join('')
+                                     : `<span class="hint">${t('noInstructPreset')}</span>`;
+  $$('#chips .chip').forEach(c => c.onclick = () => addInstruct(c.textContent));
+  $('#instruct').placeholder = INSTRUCT_PH[outLang()] || INSTRUCT_PH[pl] || t('instructPh');
+}
+function addInstruct(v){
+  const ta = $('#instruct');
+  const lines = ta.value.split(/[\n|]+/).map(x=>x.trim()).filter(Boolean);
+  if(!lines.includes(v.trim())) lines.push(v.trim());
+  ta.value = lines.join('\n');
+}
+$('#insClear').onclick = ()=>{ $('#instruct').value=''; };
+function renderVoices(){
+  const v = $('#voice'), list = META.voices || [], prev = v.value;
+  v.innerHTML = list.length ? list.map(x=>`<option value="${x}">${esc(x)}</option>`).join('')
+                            : `<option value="">${t('emptyOpt')}</option>`;
+  if(prev && list.includes(prev)) v.value = prev;
+}
+function renderOwners(){
+  const sel = $('#fOwner'), cur = sel.value;
+  sel.innerHTML = `<option value="">${t('allOwner')}</option>` +
+    USERS.map(u=>`<option value="${esc(u.username)}">${esc(u.username)}</option>`).join('');
+  if(cur) sel.value = cur;
+}
+function renderCount(){
+  const n = $('#text').value.length;
+  const seg = Math.max(1, Math.ceil(n / (+$('#maxChars').value || 110)));
+  $('#count').textContent = t('countFmt')(n, seg);
+}
+async function loadMeta(){
+  try{ META = await (await api('/api/meta')).json(); }catch(e){ return; }
+  renderSpeakers(); renderLanguages(); renderVoices();
+}
+
+/* ---------- 登录 ---------- */
+function showLogin(err){
+  $('#loginMask').style.display = 'flex';
+  $('#lerr').textContent = err || '';
+  setTimeout(()=>$('#lpwd').focus(), 50);
+}
+$('#lbtn').onclick = login;
+$('#lpwd').onkeydown = e => { if(e.key === 'Enter') login(); };
+$('#luser').onkeydown = e => { if(e.key === 'Enter') $('#lpwd').focus(); };
+async function login(){
+  const fd = new FormData();
+  fd.append('username', $('#luser').value.trim());
+  fd.append('password', $('#lpwd').value);
+  $('#lerr').textContent = '';
+  try{
+    const r = await fetch('/api/login', {method:'POST', body:fd});
+    if(!r.ok){ $('#lerr').textContent = t('loginErr'); return; }
+    ME = await r.json();
+    $('#lpwd').value = '';
+    $('#loginMask').style.display = 'none';
+    $('#userName').textContent = ME.username;
+    $('#userRole').className = 'role' + (ME.role === 'admin' ? ' admin' : '');
+    $('#scopeBox').classList.toggle('hide', ME.role !== 'admin');
+    $('#fOwner').classList.toggle('hide', ME.role !== 'admin');
+    scope = ME.role === 'admin' ? 'all' : 'mine';
+    $$('#scopeBox .tab').forEach(x=>x.classList.toggle('on', x.dataset.scope === scope));
+    applyStatic(); loadMeta(); resetJobs(); poll(); loadStats(); loadUsersSilent();
+    restoreDraft();
+    if(ME.must_change) setTimeout(()=>openPw(true), 300);
+  }catch(e){ $('#lerr').textContent = t('netErr'); }
+}
+
+/* ---------- 用户菜单 ---------- */
+$('#userBtn').onclick = e => { e.stopPropagation(); $('#userMenu').classList.toggle('open'); $('#langMenu').classList.remove('open'); };
+$('#langBtn').onclick = e => { e.stopPropagation(); $('#langMenu').classList.toggle('open'); $('#userMenu').classList.remove('open'); };
+document.addEventListener('click', ()=>{ $('#userMenu').classList.remove('open'); $('#langMenu').classList.remove('open'); });
+$('#miPw').onclick = ()=> openPw(false);
+$('#miUsers').onclick = ()=> openUsers();
+$('#miOut').onclick = async () => { await fetch('/api/logout', {method:'POST'}); ME = null; location.reload(); };
+
+function openPw(force){
+  $('#pwWho').textContent = ME ? ME.username : '';
+  $('#pwOld').value = $('#pwNew').value = $('#pwNew2').value = '';
+  $('#pwErr').textContent = '';
+  $('#pwMask').style.display = 'flex';
+}
+$('#pwCancel').onclick = ()=>{ $('#pwMask').style.display='none'; };
+$('#pwSave').onclick = async ()=>{
+  const o = $('#pwOld').value, n = $('#pwNew').value, n2 = $('#pwNew2').value;
+  if(n !== n2){ $('#pwErr').textContent = t('pwMismatch'); return; }
+  if(n.length < 6){ $('#pwErr').textContent = t('pwShort'); return; }
+  const fd = new FormData(); fd.append('old_password', o); fd.append('new_password', n);
+  try{
+    const r = await api('/api/password', {method:'POST', body:fd});
+    if(!r.ok){ const j = await r.json().catch(()=>({detail:'error'})); $('#pwErr').textContent = j.detail || 'error'; return; }
+    alert(t('pwOk')); location.reload();
+  }catch(e){ if(e.message !== '401') $('#pwErr').textContent = t('netErr'); }
+};
+
+/* ---------- 员工管理 ---------- */
+async function loadUsersSilent(){
+  if(!ME || ME.role !== 'admin') return;
+  try{ USERS = await (await api('/api/users')).json(); renderOwners(); }catch(e){}
+}
+async function openUsers(){
+  $('#nuErr').textContent = '';
+  $('#umMask').style.display = 'flex';
+  loadUsers();
+}
+async function loadUsers(){
+  try{
+    USERS = await (await api('/api/users')).json();
+    renderOwners();
+    $('#userRows').innerHTML = USERS.map(u=>`<tr>
+      <td>${esc(u.username)}</td>
+      <td>${esc(t(u.role==='admin'?'roleAdmin':'roleUser'))}</td>
+      <td><b style="color:var(--accent)">${u.today||0}</b></td>
+      <td>${u.jobs||0}</td>
+      <td>${u.last_login ? new Date(u.last_login*1000).toLocaleString() : '-'}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="mini" data-reset="${esc(u.username)}">${t('resetPw')}</button>
+        <button class="mini danger" data-del="${esc(u.username)}">${t('deleteUser')}</button>
+      </td></tr>`).join('');
+    $$('#userRows [data-reset]').forEach(b=>b.onclick=()=>resetPw(b.dataset.reset));
+    $$('#userRows [data-del]').forEach(b=>b.onclick=()=>delUser(b.dataset.del));
+  }catch(e){}
+}
+async function resetPw(name){
+  const np = prompt(t('newPwdPrompt')(name));
+  if(!np) return;
+  if(np.length < 6){ alert(t('pwShort')); return; }
+  const fd = new FormData(); fd.append('new_password', np);
+  try{
+    const r = await api(`/api/users/${encodeURIComponent(name)}/password`, {method:'POST', body:fd});
+    if(!r.ok){ const j = await r.json().catch(()=>({detail:'error'})); alert(j.detail||'error'); return; }
+    toast(t('resetDone')); loadUsers();
+  }catch(e){}
+}
+async function delUser(name){
+  if(name === ME.username){ alert(t('cannotDelSelf')); return; }
+  if(!confirm(t('confirmDel')(name))) return;
+  try{
+    const r = await api(`/api/users/${encodeURIComponent(name)}`, {method:'DELETE'});
+    if(!r.ok){ const j = await r.json().catch(()=>({detail:'error'})); alert(j.detail||'error'); return; }
+    loadUsers();
+  }catch(e){}
+}
+$('#umClose').onclick = ()=>{ $('#umMask').style.display='none'; };
+
+/* ---------- 产出明细 ---------- */
+$('#btnReport').onclick = ()=>{ $('#rpMask').style.display='flex'; loadReport(); };
+$('#rpClose').onclick = ()=>{ $('#rpMask').style.display='none'; };
+$('#rpDays').onchange = loadReport;
+$('#rpExport').onclick = ()=>{
+  const d = +$('#rpDays').value || 0;
+  window.location.href = '/api/stats/export?days=' + d;
+};
+async function loadReport(){
+  const days = +$('#rpDays').value || 3650;
+  let d;
+  try{ d = await (await api('/api/stats?days=' + days)).json(); }
+  catch(e){ $('#rpTable').innerHTML = `<span class="hint">${esc(t('reportFail'))}</span>`; return; }
+  const users = Object.keys(d).sort();
+  if(!users.length || !users.some(u => (d[u].jobs||0) > 0)){
+    $('#rpTable').innerHTML = `<span class="hint">${esc(t('reportEmpty'))}</span>`; return;
+  }
+  /* 表 1：按人汇总 */
+  let h = `<table><thead><tr><th>${esc(t('thUser'))}</th><th>${esc(t('thToday2'))}</th>`
+        + `<th>${esc(t('thTotal'))}</th><th>${esc(t('thAudio'))}</th><th>${esc(t('thGpu'))}</th>`
+        + `</tr></thead><tbody>`;
+  for(const u of users){
+    const r = d[u];
+    h += `<tr><td>${esc(u)}</td><td>${r.today||0}</td><td>${r.jobs||0}</td>`
+      +  `<td>${fmtDur(r.audio_seconds)}</td><td>${fmtDur(r.gen_seconds)}</td></tr>`;
+  }
+  h += '</tbody></table>';
+  /* 表 2：按日 × 人 */
+  const byDate = {};
+  for(const u of users){
+    for(const [day, n] of Object.entries(d[u].by_day || {})){
+      byDate[day] = byDate[day] || {}; byDate[day][u] = n;
+    }
+  }
+  const dates = Object.keys(byDate).sort().reverse();
+  if(dates.length){
+    h += `<div style="height:18px"></div><table><thead><tr><th>${esc(t('thDate'))}</th>`;
+    for(const u of users) h += `<th>${esc(u)}</th>`;
+    h += `<th>${esc(t('thSum'))}</th></tr></thead><tbody>`;
+    for(const day of dates){
+      let sum = 0;
+      h += `<tr><td>${esc(day)}</td>`;
+      for(const u of users){ const n = byDate[day][u] || 0; sum += n; h += `<td>${n || '-'}</td>`; }
+      h += `<td>${sum}</td></tr>`;
+    }
+    h += '</tbody></table>';
+  }
+  $('#rpTable').innerHTML = h;
+}
+$('#nuCreate').onclick = async ()=>{
+  const name = $('#nuName').value.trim(), pwd = $('#nuPwd').value;
+  if(!name || pwd.length < 6){ $('#nuErr').textContent = pwd.length < 6 ? t('pwShort') : t('needName'); return; }
+  const fd = new FormData();
+  fd.append('username', name); fd.append('password', pwd); fd.append('role', $('#nuRole').value);
+  try{
+    const r = await api('/api/users', {method:'POST', body:fd});
+    if(!r.ok){ const j = await r.json().catch(()=>({detail:'error'})); $('#nuErr').textContent = j.detail||'error'; return; }
+    $('#nuErr').textContent = t('created')(name);
+    $('#nuName').value = ''; $('#nuPwd').value = '';
+    loadUsers();
+  }catch(e){}
+};
+
+/* ---------- 草稿 ---------- */
+let draftTimer = null;
+function saveDraft(){
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(()=>{
+    const title = $('#title').value, text = $('#text').value;
+    if(title || text) localStorage.setItem(DRAFT, JSON.stringify({title, text}));
+    else localStorage.removeItem(DRAFT);
+  }, 600);
+}
+function restoreDraft(){
+  try{
+    const d = JSON.parse(localStorage.getItem(DRAFT) || 'null');
+    if(d && (d.title || d.text)){
+      $('#title').value = d.title || ''; $('#text').value = d.text || '';
+      renderCount(); toast(t('draftSaved'));
+    }
+  }catch(e){}
+}
+
+/* ---------- 提交 ---------- */
+$$('.tab[data-mode]').forEach(tab=>{
+  tab.onclick = () => {
+    $$('.tab[data-mode]').forEach(x=>x.classList.remove('on'));
+    tab.classList.add('on');
+    mode = tab.dataset.mode;
+    $('#pane-custom').style.display = mode==='custom'?'':'none';
+    $('#pane-clone').style.display  = mode==='clone'?'':'none';
+  };
+});
+$$('#scopeBox .tab').forEach(tab=>{
+  tab.onclick = () => {
+    $$('#scopeBox .tab').forEach(x=>x.classList.remove('on'));
+    tab.classList.add('on'); scope = tab.dataset.scope;
+    page = 1; resetJobs(); poll(); loadStats();
+  };
+});
+$('#title').oninput = saveDraft;
+$('#text').oninput = () => { renderCount(); saveDraft(); };
+$('#maxChars').oninput = renderCount;
+$('#language').onchange = () => { outLangTouched = true; renderChips(); syncSpeakerToLang(); };
+$('#speaker').onchange = () => { spkTouched = true; };   /* 手动挑过就不再被语言切换覆盖 */
+$('#q').oninput = debounce(()=>{ page = 1; resetJobs(); poll(); }, 350);
+$('#fOwner').onchange = ()=>{ page = 1; resetJobs(); poll(); };
+$('#fStatus').onchange = ()=>{ page = 1; resetJobs(); poll(); };
+function debounce(fn, ms){ let x; return (...a)=>{ clearTimeout(x); x=setTimeout(()=>fn(...a), ms); }; }
+
+$('#submit').onclick = async () => {
+  const text = $('#text').value.trim();
+  if(!text){ alert(t('needText')); return; }
+  if(mode==='clone' && !$('#voice').value){ alert(t('needVoice')); return; }
+  const fd = new FormData();
+  fd.append('title', $('#title').value.trim());
+  fd.append('text', text);
+  fd.append('mode', mode);
+  fd.append('language', $('#language').value);
+  fd.append('speaker', $('#speaker').value);
+  fd.append('instruct', $('#instruct').value);
+  fd.append('voice', $('#voice').value);
+  fd.append('max_chars', $('#maxChars').value);
+  fd.append('batch_size', $('#batchSize').value);
+  $('#submit').disabled = true;
+  try{
+    await api('/api/jobs', {method:'POST', body:fd});
+    $('#title').value = ''; $('#text').value = '';
+    localStorage.removeItem(DRAFT);
+    renderCount(); page = 1; resetJobs(); poll(); loadStats();
+  }catch(e){ if(e.message !== '401') alert(t('submitFail')+e); }
+  $('#submit').disabled = false;
+};
+$('#clear').onclick = ()=>{ $('#text').value=''; $('#title').value=''; localStorage.removeItem(DRAFT); renderCount(); };
+
+$('#vupload').onclick = async () => {
+  const f = $('#vfile').files[0], name = $('#vname').value.trim();
+  if(!f || !name){ $('#vmsg').textContent = t('needName'); return; }
+  const fd = new FormData();
+  fd.append('name', name); fd.append('ref_text', $('#vtext').value); fd.append('file', f);
+  $('#vmsg').textContent = t('uploading');
+  try{
+    const r = await api('/api/voices', {method:'POST', body:fd});
+    if(!r.ok){ const j = await r.json().catch(()=>({detail:'error'})); throw new Error(j.detail||'error'); }
+    const j = await r.json();
+    $('#vmsg').textContent = t('enrolled')(j.name, j.dur);
+    loadMeta();
+  }catch(e){ if(e.message !== '401') $('#vmsg').textContent = t('fail')+e.message; }
+};
+
+/* ---------- 任务列表（增量更新，绝不重建 audio） ---------- */
+function jobSkeleton(){
+  return `<div class="top">
+      <div><span class="badge"></span><span class="own" style="font-size:12px;color:var(--dim);margin-left:8px"></span></div>
+      <div class="time" style="font-size:12px;color:var(--dim)"></div>
+    </div>
+    <div class="ttl"></div>
+    <div class="pv"></div>
+    <div class="dyn"></div>
+    <div class="media"></div>`;
+}
+/* 文案默认只显示摘要，点"展开全文"才拉取完整内容——长文案不会撑爆列表 */
+function renderPreview(el, j){
+  const pv = el.querySelector('.pv');
+  if(!pv) return;
+  const meta = ' · ' + t('modeLabel')(j);
+  const opened = pv.dataset.open === '1';
+  if(opened && pv.dataset.full != null){
+    pv.classList.add('open');
+    pv.innerHTML = esc(pv.dataset.full) + `<span class="pvtog">${t('collapse')}</span>`;
+  }else{
+    pv.classList.remove('open');
+    pv.innerHTML = esc(j.preview || '') + esc(meta) + `<span class="pvtog">${t('expand')}</span>`;
+  }
+  const tog = pv.querySelector('.pvtog');
+  if(!tog) return;
+  tog.onclick = async (ev)=>{
+    ev.stopPropagation();
+    if(pv.dataset.open === '1'){ pv.dataset.open = '0'; renderPreview(el, j); return; }
+    if(pv.dataset.full == null){
+      tog.textContent = '…';
+      try{
+        const r = await api('/api/jobs/' + j.id);
+        if(!r.ok) return;
+        const d = await r.json();
+        pv.dataset.full = d.text || d.preview || '';
+      }catch(e){ return; }
+    }
+    pv.dataset.open = '1';
+    renderPreview(el, j);
+  };
+}
+function updateJob(el, j){
+  el.dataset.jid = j.id;
+  const b = el.querySelector('.badge');
+  b.className = 'badge ' + j.status;
+  b.textContent = t('st')[j.status] || j.status;
+  el.querySelector('.own').textContent =
+    (ME && ME.role === 'admin' && scope === 'all' && j.owner) ? t('by')(j.owner) : '';
+  el.querySelector('.time').textContent = new Date(j.created_at*1000).toLocaleString();
+  el.querySelector('.ttl').textContent = j.title || t('untitled');
+  renderPreview(el, j);
+
+  let dyn = '';
+  const p = j.progress || {};
+  if(j.status === 'running'){
+    /* 段数少时批量一次跑完，段进度会一闪而过；用"已用时间/(已用+预计)"
+       补一条平滑曲线，保证进度条始终在动、等待时间始终可见。 */
+    const total = p.total || 0, done = p.done || 0;
+    const bs = j.batch_size || 16;
+    const totalBatch = total ? Math.ceil(total / bs) : 0;
+    const curBatch = total ? Math.min(Math.floor(done / bs) + 1, totalBatch) : 0;
+    const el2 = j.elapsed_seconds || 0, eta = j.eta_seconds;
+    let pct = total ? (done / total * 100) : 0;
+    if(eta > 0 && el2 > 0) pct = Math.max(pct, el2 / (el2 + eta) * 100);
+    pct = Math.max(0, Math.min(96, pct));
+    const stageKey = {preparing:'stagePreparing', generating:'stageGenerating',
+                      merging:'stageMerging', encoding:'stageEncoding'}[j.stage] || 'stageGenerating';
+    let etaTxt = '';
+    if(eta > 0) etaTxt = t('etaFmt')(fmtDur(eta));
+    else if(eta === 0) etaTxt = t('almostDone');
+    const line1 = [t(stageKey),
+                   totalBatch ? t('batchFmt')(curBatch, totalBatch) : '',
+                   total ? t('progFmt')(done, total) : '',
+                   t('pctFmt')(Math.round(pct))].filter(Boolean).join(' · ');
+    const line2 = [etaTxt, el2 > 0 ? t('elapsedFmt')(fmtDur(el2)) : ''].filter(Boolean).join(' · ');
+    dyn = `<div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div>
+           <div class="stat">${esc(line1)}</div>
+           ${line2 ? `<div class="stat">${esc(line2)}</div>` : ''}`;
+  } else if(j.status === 'queued'){
+    dyn = `<div class="stat">${t('queueAhead')(j.queue_ahead||0)}</div>`;
+  }
+  if(j.error) dyn += `<div class="stat" style="color:var(--err)">${esc(j.error)}</div>`;
+  const s = j.stats || {};
+  if(s.audio_seconds) dyn += `<div class="stat">${t('statFmt')(s)}</div>`;
+  el.querySelector('.dyn').innerHTML = dyn;
+
+  const m = el.querySelector('.media');
+  if(j.wav && m.dataset.jid !== j.id + (j.mp3||'')){
+    m.dataset.jid = j.id + (j.mp3||'');
+    const play = j.mp3 || j.wav;
+    m.innerHTML = `<audio controls preload="metadata" src="/api/download/${play}"></audio>
+      <div class="row" style="margin-top:6px">
+        <a href="/api/download/${j.wav}" download><button>${t('dlWav')}</button></a>
+        ${j.mp3?`<a href="/api/download/${j.mp3}" download><button>${t('dlMp3')}</button></a>`:''}
+        <button class="mini danger" data-deljob="${j.id}">${t('delJob')}</button>
+        ${j.status==='error'?`<button class="mini" data-retry="${j.id}">${t('retry')}</button>`:''}
+      </div>`;
+    const db = m.querySelector('[data-deljob]');
+    db.onclick = async ()=>{
+      if(!confirm(t('confirmDelJob')(j.title || t('untitled')))) return;
+      try{
+        const r = await api(`/api/jobs/${j.id}`, {method:'DELETE'});
+        if(!r.ok) return;
+        const n = jobNodes.get(j.id); if(n){ n.el.remove(); jobNodes.delete(j.id); }
+        loadStats();
+      }catch(e){}
+    };
+    const rb = m.querySelector('[data-retry]');
+    if(rb) rb.onclick = async ()=>{
+      try{
+        const r = await api(`/api/jobs/${j.id}/retry`, {method:'POST'});
+        if(!r.ok){ const d = await r.json().catch(()=>({detail:t('noRetry')})); toast(d.detail||t('noRetry')); return; }
+        resetJobs(); poll();
+      }catch(e){}
+    };
+  }
+}
+function resetJobs(){
+  jobNodes.clear();
+  $('#jobs').innerHTML = `<div class="empty">${t('noJobs')}</div>`;
+}
+function gotoPage(p){
+  page = Math.max(1, Math.min(p, pages));
+  resetJobs(); poll();
+}
+function renderPager(){
+  const el = $('#pager');
+  if(!totalJobs){ el.classList.add('hide'); el.innerHTML = ''; return; }
+  el.classList.remove('hide');
+  const SIZES = [10, 20, 50, 100, 300, 500, 1000];
+  if(!SIZES.includes(pageSize)) SIZES.push(pageSize);
+  SIZES.sort((a,b)=>a-b);
+  const opts = SIZES.map(n => `<option value="${n}"${n===pageSize?' selected':''}>${n}</option>`).join('');
+  el.innerHTML =
+    `<span class="pinfo">${esc(t('pagerTotal')(totalJobs))} · ${esc(t('pagerPage')(page, pages))}</span>` +
+    `<span class="pbtns">` +
+      `<button class="mini" id="pgFirst"${page<=1?' disabled':''}>«</button>` +
+      `<button class="mini" id="pgPrev"${page<=1?' disabled':''}>${esc(t('prevPage'))}</button>` +
+      `<button class="mini" id="pgNext"${page>=pages?' disabled':''}>${esc(t('nextPage'))}</button>` +
+      `<button class="mini" id="pgLast"${page>=pages?' disabled':''}>»</button>` +
+    `</span>` +
+    `<span class="psize">${esc(t('perPage'))}<select id="pgSize">${opts}</select></span>`;
+  $('#pgFirst').onclick = ()=>gotoPage(1);
+  $('#pgPrev').onclick  = ()=>gotoPage(page - 1);
+  $('#pgNext').onclick  = ()=>gotoPage(page + 1);
+  $('#pgLast').onclick  = ()=>gotoPage(pages);
+  $('#pgSize').onchange = ()=>{
+    pageSize = +$('#pgSize').value;
+    localStorage.setItem('tts_page_size', pageSize);
+    page = 1; resetJobs(); poll();
+  };
+}
+async function poll(){
+  if(!ME) return;
+  const q = encodeURIComponent($('#q').value.trim());
+  const owner = encodeURIComponent($('#fOwner').value || '');
+  const status = encodeURIComponent($('#fStatus').value || '');
+  try{
+    const d = await (await api(`/api/jobs?scope=${scope}&q=${q}&owner=${owner}&status=${status}`
+                               + `&page=${page}&page_size=${pageSize}`)).json();
+    const list = d.items || [];
+    totalJobs = d.total || 0;
+    pages = d.pages || 1;
+    if(page > pages) page = pages;      /* 删任务后可能越界 */
+    renderPager();
+    const box = $('#jobs');
+    if(!list.length){
+      if(!jobNodes.size){ box.innerHTML = `<div class="empty">${t('noJobs')}</div>`; }
+      else { for(const [id,n] of jobNodes){ n.el.remove(); jobNodes.delete(id); } box.innerHTML = `<div class="empty">${t('noJobs')}</div>`; }
+      return;
+    }
+    if(box.querySelector('.empty')) box.innerHTML = '';
+    list.forEach((j, idx) => {
+      let n = jobNodes.get(j.id);
+      if(!n){
+        n = {el: document.createElement('div')};
+        n.el.className = 'job';
+        n.el.innerHTML = jobSkeleton();
+        jobNodes.set(j.id, n);
+        let anchor = null;
+        for(let k = idx + 1; k < list.length; k++){
+          const nx = jobNodes.get(list[k].id);
+          if(nx){ anchor = nx.el; break; }
+        }
+        if(anchor) box.insertBefore(n.el, anchor); else box.appendChild(n.el);
+      }
+      updateJob(n.el, j);
+    });
+    const ids = new Set(list.map(j=>j.id));
+    for(const [id, n] of Array.from(jobNodes)){
+      if(!ids.has(id)){ n.el.remove(); jobNodes.delete(id); }
+    }
+  }catch(e){}
+}
+async function loadStats(){
+  if(!ME) return;
+  try{
+    const d = await (await api('/api/stats')).json();
+    let td = 0, n = 0, sec = 0;
+    for(const k in d){ td += d[k].today||0; n += d[k].jobs||0; sec += d[k].audio_seconds||0; }
+    $('#statsLine').textContent = t('statsFmt')(td, n, (sec/3600).toFixed(1));
+  }catch(e){}
+}
+
+/* ---------- 启动 ---------- */
+applyStatic();
+renderChips();
+renderCount();
+(function boot(){
+  fetch('/api/me').then(async r => {
+    if(r.status === 401){ showLogin(''); return; }
+    ME = await r.json();
+    $('#userName').textContent = ME.username;
+    $('#userRole').className = 'role' + (ME.role==='admin'?' admin':'');
+    $('#scopeBox').classList.toggle('hide', ME.role !== 'admin');
+    $('#fOwner').classList.toggle('hide', ME.role !== 'admin');
+    scope = ME.role === 'admin' ? 'all' : 'mine';
+    $$('#scopeBox .tab').forEach(x=>x.classList.toggle('on', x.dataset.scope===scope));
+    applyStatic(); loadMeta(); resetJobs(); poll(); loadStats(); loadUsersSilent();
+    restoreDraft();
+    if(ME.must_change) setTimeout(()=>openPw(true), 300);
+  }).catch(()=>showLogin(t('netErr')));
+})();
+setInterval(()=>{ if(ME) poll(); }, 3000);
+setInterval(()=>{ if(ME) loadStats(); }, 30000);
+</script>
+</body>
+</html>

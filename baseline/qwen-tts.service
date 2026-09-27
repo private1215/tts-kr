@@ -1,0 +1,25 @@
+[Unit]
+Description=Qwen3-TTS Web Service
+# 关键：/mnt/tts 在 fstab 里是 nofail，若服务先于挂载启动，
+# 会把模型和音频写到根分区（系统盘）。显式声明挂载依赖，保证挂载完成后才启动。
+RequiresMountsFor=/mnt/tts
+After=network-online.target mnt-tts.mount
+Wants=network-online.target
+# tailscale 先起来，避免重启后几分钟内 tailscale IP 访问不通
+After=tailscaled.service
+Wants=tailscaled.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/mnt/tts/projects/qwen3-tts/app
+Environment=PATH=/mnt/tts/projects/qwen3-tts/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/mnt/tts/projects/qwen3-tts/venv/bin/python -u server.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/mnt/tts/projects/qwen3-tts/service.log
+StandardError=append:/mnt/tts/projects/qwen3-tts/service.log
+
+[Install]
+WantedBy=multi-user.target
