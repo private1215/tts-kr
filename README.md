@@ -18,6 +18,7 @@
 ├── deploy/
 │   └── qwen-tts.service      # systemd 单元（对应 /etc/systemd/system/）
 ├── baseline/                 # 2026-09-27 修复前的原版，仅供 diff 对照
+│                             #   server.py / tts_engine.py / qwen-tts.service / index.html
 ├── docs/
 │   └── bench_result.json     # 本机 benchmark 结果，参数选型的实测依据
 ├── requirements.txt          # venv pip freeze（110 个包）

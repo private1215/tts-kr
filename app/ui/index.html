@@ -347,13 +347,13 @@ details.adv summary:hover{color:var(--txt2)}
           <button class="primary" id="submit" data-i18n="submit">提交生成</button>
           <button id="clear" data-i18n="clear">清空</button>
         </div>
-        <details class="adv">
+        <details class="adv" id="advBox">
           <summary data-i18n="advanced">高级设置（分段 / 批量）</summary>
           <div class="split" style="margin-top:10px">
-            <div><label data-i18n="segChars">分段字数</label><input id="maxChars" type="number" value="110" min="60" max="400"></div>
-            <div><label data-i18n="batchSize">批量大小</label><input id="batchSize" type="number" value="16" min="1" max="20"></div>
+            <div><label data-i18n="segChars">分段字数</label><input id="maxChars" type="number" value="60" min="60" max="400"></div>
+            <div><label data-i18n="batchSize">批量大小</label><input id="batchSize" type="number" value="8" min="1" max="20"></div>
           </div>
-          <div class="hint" data-i18n="paramHint">实测最优：分段 110 字 + 批量 16，RTF 约 0.27，显存峰值约 10G。批量再大会 OOM。</div>
+          <div class="hint" data-i18n="paramHint">保持默认即可：后端会按显存自动收敛到安全值（分段 ≤60、批量 ≤8）。调大不会更快，只会被自动压回。</div>
         </details>
       </div>
 
@@ -440,7 +440,7 @@ const I18N = {
     savedVoices:'已录入音色', cloneNoInstruct:'克隆模式不支持语气指令，语气由参考音频本身的情绪决定。',
     language:'语言', params:'生成', segChars:'分段字数', batchSize:'批量大小',
     advanced:'高级设置（分段 / 批量）',
-    paramHint:'实测最优：分段 110 字 + 批量 16，RTF 约 0.27，显存峰值约 10G。批量再大会 OOM。',
+    paramHint:'保持默认即可：后端会按显存自动收敛到安全值（分段 ≤60、批量 ≤8）。调大不会更快，只会被自动压回。',
     submit:'提交生成', clear:'清空', enroll:'录入声音（声音克隆用）',
     vnamePh:'音色名称，例：韩语女声-知妍', refAudio:'参考音频（3–10 秒干净人声，无背景噪音）',
     refText:'参考音频对应的文字（可选，能提升克隆准确度）', refTextPh:'参考音频里说的话',
@@ -503,7 +503,7 @@ const I18N = {
     savedVoices:'Enrolled voices', cloneNoInstruct:'Voice clone does not support style instructions — emotion comes from the reference audio.',
     language:'Language', params:'Generate', segChars:'Chars per segment', batchSize:'Batch size',
     advanced:'Advanced (segment / batch)',
-    paramHint:'Measured optimum: 110 chars + batch 16, RTF ≈ 0.27, peak VRAM ≈ 10G. Larger batches will OOM.',
+    paramHint:'Keep defaults: the backend auto-tunes a safe plan (seg ≤60, batch ≤8) from free VRAM. Larger values get clamped, not faster.',
     submit:'Generate', clear:'Clear', enroll:'Enroll a voice (for cloning)',
     vnamePh:'Voice name, e.g. Korean female — Jiyeon', refAudio:'Reference audio (3–10s clean speech, no background noise)',
     refText:'Transcript of the reference audio (optional, improves accuracy)', refTextPh:'What is said in the reference audio',
@@ -566,7 +566,7 @@ const I18N = {
     savedVoices:'등록된 음성', cloneNoInstruct:'음성 클론은 톤 지시문을 지원하지 않습니다. 톤은 참고 음성의 감정으로 결정됩니다.',
     language:'언어', params:'생성', segChars:'분할 글자 수', batchSize:'배치 크기',
     advanced:'고급 설정 (분할 / 배치)',
-    paramHint:'실측 최적값: 분할 110자 + 배치 16, RTF 약 0.27, VRAM 최대 약 10G. 배치를 더 키우면 OOM이 발생합니다.',
+    paramHint:'기본값 유지: 백엔드가 여유 VRAM에 따라 안전한 값(분할 ≤60, 배치 ≤8)으로 자동 조정합니다. 크게 해도 빨라지지 않습니다.',
     submit:'생성 요청', clear:'지우기', enroll:'음성 등록 (클론용)',
     vnamePh:'음성 이름, 예: 한국어 여성-지연', refAudio:'참고 음성 (3~10초, 잡음 없는 깨끗한 목소리)',
     refText:'참고 음성의 대사 (선택, 정확도 향상)', refTextPh:'참고 음성에 담긴 말',
@@ -629,7 +629,7 @@ const I18N = {
     savedVoices:'登録済みの音色', cloneNoInstruct:'ボイスクローンはスタイル指示に対応していません。感情は参照音声から引き継がれます。',
     language:'言語', params:'生成', segChars:'分割文字数', batchSize:'バッチサイズ',
     advanced:'詳細設定（分割 / バッチ）',
-    paramHint:'実測最適値：分割 110 文字 ＋ バッチ 16、RTF 約 0.27、VRAM 最大 約 10G。バッチを増やすと OOM します。',
+    paramHint:'既定値のまま：バックエンドが空き VRAM に応じて安全な値（分割 ≤60、バッチ ≤8）へ自動調整します。大きくしても速くなりません。',
     submit:'生成する', clear:'クリア', enroll:'音色を登録（クローン用）',
     vnamePh:'音色名、例：韓国語女性-ジヨン', refAudio:'参照音声（3〜10秒、ノイズのないクリアな音声）',
     refText:'参照音声の書き起こし（任意、精度が上がります）', refTextPh:'参照音声で話している内容',
@@ -890,6 +890,7 @@ async function login(){
     $('#userRole').className = 'role' + (ME.role === 'admin' ? ' admin' : '');
     $('#scopeBox').classList.toggle('hide', ME.role !== 'admin');
     $('#fOwner').classList.toggle('hide', ME.role !== 'admin');
+    $('#advBox').classList.toggle('hide', ME.role !== 'admin');
     scope = ME.role === 'admin' ? 'all' : 'mine';
     $$('#scopeBox .tab').forEach(x=>x.classList.toggle('on', x.dataset.scope === scope));
     applyStatic(); loadMeta(); resetJobs(); poll(); loadStats(); loadUsersSilent();
@@ -1137,18 +1138,36 @@ function jobSkeleton(){
     <div class="media"></div>`;
 }
 /* 文案默认只显示摘要，点"展开全文"才拉取完整内容——长文案不会撑爆列表 */
+/*  列表每 3 秒轮询刷新一次。textContent / innerHTML 赋值会销毁原有节点，
+    把用户正在拖选的文字选区一起弄丢，所以内容没变就一律不写 DOM。 */
+function setText(el, v){
+  if(!el) return;
+  v = (v == null ? '' : String(v));
+  if(el.textContent !== v) el.textContent = v;
+}
+/* 用户当前的选区是否落在这个元素内部 */
+function hasSelIn(el){
+  const s = window.getSelection && window.getSelection();
+  if(!s || s.isCollapsed || !s.anchorNode) return false;
+  return el.contains(s.anchorNode) || (s.focusNode && el.contains(s.focusNode));
+}
 function renderPreview(el, j){
   const pv = el.querySelector('.pv');
   if(!pv) return;
   const meta = ' · ' + t('modeLabel')(j);
   const opened = pv.dataset.open === '1';
+  let html;
   if(opened && pv.dataset.full != null){
     pv.classList.add('open');
-    pv.innerHTML = esc(pv.dataset.full) + `<span class="pvtog">${t('collapse')}</span>`;
+    html = esc(pv.dataset.full) + `<span class="pvtog">${t('collapse')}</span>`;
   }else{
     pv.classList.remove('open');
-    pv.innerHTML = esc(j.preview || '') + esc(meta) + `<span class="pvtog">${t('expand')}</span>`;
+    html = esc(j.preview || '') + esc(meta) + `<span class="pvtog">${t('expand')}</span>`;
   }
+  /* 内容没变、或用户正在这块里拖选取字，就跳过重建（下一轮轮询再补，最多晚 3 秒） */
+  if(pv.dataset.sig === html || hasSelIn(pv)) return;
+  pv.dataset.sig = html;
+  pv.innerHTML = html;
   const tog = pv.querySelector('.pvtog');
   if(!tog) return;
   tog.onclick = async (ev)=>{
@@ -1171,11 +1190,11 @@ function updateJob(el, j){
   el.dataset.jid = j.id;
   const b = el.querySelector('.badge');
   b.className = 'badge ' + j.status;
-  b.textContent = t('st')[j.status] || j.status;
-  el.querySelector('.own').textContent =
-    (ME && ME.role === 'admin' && scope === 'all' && j.owner) ? t('by')(j.owner) : '';
-  el.querySelector('.time').textContent = new Date(j.created_at*1000).toLocaleString();
-  el.querySelector('.ttl').textContent = j.title || t('untitled');
+  setText(b, t('st')[j.status] || j.status);
+  setText(el.querySelector('.own'),
+    (ME && ME.role === 'admin' && scope === 'all' && j.owner) ? t('by')(j.owner) : '');
+  setText(el.querySelector('.time'), new Date(j.created_at*1000).toLocaleString());
+  setText(el.querySelector('.ttl'), j.title || t('untitled'));
   renderPreview(el, j);
 
   let dyn = '';
@@ -1210,7 +1229,12 @@ function updateJob(el, j){
   if(j.error) dyn += `<div class="stat" style="color:var(--err)">${esc(j.error)}</div>`;
   const s = j.stats || {};
   if(s.audio_seconds) dyn += `<div class="stat">${t('statFmt')(s)}</div>`;
-  el.querySelector('.dyn').innerHTML = dyn;
+  const dynBox = el.querySelector('.dyn');
+  /* 同 .pv：内容未变或用户正在选字就不重写；状态真变了下一轮自然会补上 */
+  if(dynBox.dataset.sig !== dyn && !hasSelIn(dynBox)){
+    dynBox.dataset.sig = dyn;
+    dynBox.innerHTML = dyn;
+  }
 
   const m = el.querySelector('.media');
   if(j.wav && m.dataset.jid !== j.id + (j.mp3||'')){
@@ -1342,6 +1366,7 @@ renderCount();
     $('#userRole').className = 'role' + (ME.role==='admin'?' admin':'');
     $('#scopeBox').classList.toggle('hide', ME.role !== 'admin');
     $('#fOwner').classList.toggle('hide', ME.role !== 'admin');
+    $('#advBox').classList.toggle('hide', ME.role !== 'admin');
     scope = ME.role === 'admin' ? 'all' : 'mine';
     $$('#scopeBox .tab').forEach(x=>x.classList.toggle('on', x.dataset.scope===scope));
     applyStatic(); loadMeta(); resetJobs(); poll(); loadStats(); loadUsersSilent();
