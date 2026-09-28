@@ -155,7 +155,25 @@ sudo systemctl daemon-reload && sudo systemctl restart qwen-tts
 | `app/ui/index.html` | **不需要** —— 前端每次请求读盘，刷新浏览器即可 |
 | `deploy/qwen-tts.service` | 需要 `daemon-reload` + `restart` |
 
-重启会中断队列里进行中的任务；建议在任务间隙操作。
+### 重启不会弄丢任务（2026-09-28 起）
+
+旧行为：重启把 `running / queued` 一律标成 error「服务重启，任务中断」，
+几千字长文案白等，只能手动重试。
+
+现在改为**自动续跑**：启动时把被中断的任务重新入队，按提交时间排序接着跑。
+两个保护：
+
+- `resumed` 计数上限 `RESUME_MAX_TIMES=3`，防止"反复重启 → 反复重跑"打满队列
+- 原文丢失（`text` 为空）的任务无法续跑，判死并写明原因
+
+任务列表接口会返回 `resumed` 字段（>0 表示这条曾被中断后又接着跑）。
+
+即便如此，**重启仍建议在任务间隙做**：续跑是整任务重跑，已生成的部分不会复用，
+一次重启仍会浪费几分钟算力。重启前先看一眼有没有跑着的任务：
+
+```bash
+curl -s -u 方式登录后 GET /api/jobs?scope=all | grep -c '"status":"running"'
+```
 
 ### 换行符警告
 
@@ -203,20 +221,26 @@ env -u HTTPS_PROXY -u https_proxy -u HTTP_PROXY -u http_proxy \
 
 - [ ] FastAPI 裸奔 8000 端口，无 Nginx / HTTPS / 并发限制
 - [ ] 服务以 root 运行
-- [ ] `server.py:45` 硬编码了出厂管理员口令（`DEFAULT_PASSWORD`）。
-      现网 admin 已改过，但**新环境初始化仍会用出厂值**——部署后必须立即改
 - [ ] 数据用 JSON 文件持久化，未来建议迁到数据库
 - [ ] `service.log` 无轮转策略，前端轮询日志占比高，需按月切割
-- [ ] 备份文件堆积在服务端 `app/`（`*.bak.2026092x`、`*.bak2`），
-      确认稳定后应清理，否则易误传旧版覆盖新版
+- [x] ~~出厂管理员口令硬编码~~ **已修**（2026-09-28）：改为环境变量
+      `TTS_ADMIN_PASSWORD`，未设置则随机生成 12 位并打 WARNING 日志
+- [x] ~~服务端 `app/` 备份堆积~~ **已清**（2026-09-28）：7 个 `.bak*` 已删，
+      回滚请用本地 git 历史与 `baseline/`
 
 ### 功能
 
-- [ ] 删除音色只删成品 `voices/<名>.wav`，**不清理 `sources/` 里几十 MB 的原音频**。
-      现网已有孤儿文件：`sources/自动截取验证__full.wav`（29M，对应音色已删）、
-      `voices/요한 쿡_25s.wav`（手动裁剪产物，voices.json 无引用）
 - [ ] 参考音频无 ASR 校验：文字稿是否真的对应音频，只能靠录入时的语速告警（2.5~10 字/秒）
       间接判断。若后续发现克隆质量不稳，可考虑接 ASR 做强制对齐
 - [ ] 前端「分段字数 / 批量大小」输入框已收归管理员可见（`advBox`），
       但 `POST /api/jobs` 仍不校验 role——员工绕过 UI 调 API 仍可传参；
       后端 `plan_generation()` 会收敛到 60/8，不会 OOM，只是没彻底封堵
+- [x] ~~删除音色留下孤儿文件~~ **已修**（2026-09-28）：`DELETE /api/voices/{name}`
+      现在连 `sources/` 里的原音频一起删，并校验路径必须落在 `VOICE_DIR` 内
+- [x] ~~重启导致任务判死~~ **已修**（2026-09-28）：改为自动续跑，见上文
+
+### 数据侧遗留（需人工确认）
+
+- `voices/sources/요한 쿡_25s.wav`（2.2M）：手工裁剪产物，`voices.json` 无引用，
+  但**原 293 秒音频已随音色删除而丢失，这是唯一副本**。已归档到 `sources/` 而非删除——
+  确认不需要后可直接 `rm`。

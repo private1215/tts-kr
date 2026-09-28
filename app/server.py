@@ -42,7 +42,13 @@ os.makedirs(DATA_DIR, exist_ok=True)
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
 JOBS_FILE = os.path.join(DATA_DIR, "jobs.json")
 DEFAULT_ADMIN = "admin"
-DEFAULT_PASSWORD = "aaaa1234"
+# 出厂口令**不再硬编码**：所有部署共用同一个默认口令是致命问题（尤其仓库含源码）。
+# 新环境初始化时：
+#   1. 环境变量 TTS_ADMIN_PASSWORD 有值 → 用它（适合自动化部署）
+#   2. 没有 → 随机生成一个 12 位口令，打到服务日志里
+# 两种情况都会给账号打上 must_change，首次登录后强制修改。
+# 现网 users.json 已存在时，这段逻辑不会执行，不影响已有账号。
+DEFAULT_PASSWORD = os.environ.get("TTS_ADMIN_PASSWORD", "").strip()
 SESSION_TTL = 7 * 24 * 3600
 MIN_PW_LEN = 6
 
@@ -130,17 +136,22 @@ def save_json(path, data):
 
 users = load_json(USERS_FILE, None)
 if not isinstance(users, dict) or not users:
+    _init_pw = DEFAULT_PASSWORD or secrets.token_urlsafe(9)[:12]
+    _src = "环境变量 TTS_ADMIN_PASSWORD" if DEFAULT_PASSWORD else "随机生成"
     users = {
         DEFAULT_ADMIN: {
             "role": "admin",
-            "pwd": hash_pw(DEFAULT_PASSWORD),
+            "pwd": hash_pw(_init_pw),
             "created_at": time.time(),
             "last_login": None,
             "must_change": True,
         }
     }
     save_json(USERS_FILE, users)
-    log.info("已初始化默认管理员账号 admin / %s", DEFAULT_PASSWORD)
+    # 用 warning 级别：这是部署后必须处理的一件事，不该被 INFO 淹没
+    log.warning("已初始化默认管理员账号 admin / %s（口令来源：%s）。"
+                "请立即登录并修改密码；本行是随机口令的唯一记录，修改后即可丢弃日志。",
+                _init_pw, _src)
 
 
 def persist_jobs():
@@ -156,20 +167,49 @@ def persist_jobs():
     save_json(JOBS_FILE, slim)
 
 
+# ---------------------------------------------------------------------------
+# 服务重启时的任务恢复
+#
+# 旧行为：把 running/queued 一律标成 error「服务重启，任务中断」。
+# 问题是几千字的长文案要跑好几分钟（4750 字克隆约 6~7 分钟），一次重启就白等，
+# 用户还得手动点重试。现在改成启动后自动重新入队续跑。
+#
+# 两个保护：
+#   1. resumed 计数上限，防止「反复重启 → 反复重跑」打满队列
+#   2. 原文丢失（text 为空）的任务无法续跑，只能判死
+# ---------------------------------------------------------------------------
+RESUME_MAX_TIMES = 3        # 同一任务最多自动续跑几次
+PENDING_RESUME: list = []   # restore_jobs 收集，startup 时入队
+
+
 def restore_jobs():
     data = load_json(JOBS_FILE, {})
     for jid, j in data.items():
         if not j.get("id"):
             j["id"] = jid
-        # 中断的运行中任务标记为失败
         if j.get("status") in ("running", "queued"):
-            j["status"] = "error"
-            j["error"] = "服务重启，任务中断"
+            times = int(j.get("resumed") or 0)
+            if not (j.get("text") or "").strip():
+                j["status"] = "error"
+                j["error"] = "服务重启，任务中断且原文已丢失，无法自动续跑，请重新提交"
+            elif times >= RESUME_MAX_TIMES:
+                j["status"] = "error"
+                j["error"] = (f"服务重启中断，已自动续跑 {times} 次仍未完成。"
+                              f"请确认服务稳定后手动重试")
+            else:
+                j["status"] = "queued"
+                j["progress"] = {"done": 0, "total": 0}
+                j["started_at"] = None
+                j["finished_at"] = None
+                j.pop("error", None)
+                j.pop("stats", None)
+                j["resumed"] = times + 1
+                PENDING_RESUME.append(j)
         j.setdefault("owner", "admin")
         j.setdefault("title", "")
         jobs[jid] = j
     if jobs:
-        log.info("恢复历史任务 %d 条", len(jobs))
+        log.info("恢复历史任务 %d 条，其中 %d 条待续跑", len(jobs), len(PENDING_RESUME))
 
 
 restore_jobs()
@@ -380,6 +420,14 @@ async def startup():
         log.info("模型预热完成: %s", engine.variant)
     except Exception as e:
         log.error("模型预热失败: %s", e)
+    # 预热后再入队，避免和模型加载抢显存；按提交时间排序，先来的先跑
+    if PENDING_RESUME:
+        PENDING_RESUME.sort(key=lambda x: x.get("created_at") or 0)
+        for j in PENDING_RESUME:
+            await job_queue.put(j)
+        log.info("重启续跑：已重新入队 %d 个被中断的任务 %s",
+                 len(PENDING_RESUME), [j["id"] for j in PENDING_RESUME])
+        persist_jobs()
 
 
 # ============================ 认证 API ============================
@@ -725,6 +773,8 @@ async def list_jobs(request: Request, scope: str = "mine", q: str = "", owner: s
             "elapsed_seconds": (round(now - (j.get("started_at") or j.get("created_at", now)), 1)
                                 if j["status"] == "running" else None),
             "queue_ahead": ahead,
+            # 服务重启后自动续跑的次数，>0 说明这条任务曾被中断过又接着跑
+            "resumed": j.get("resumed", 0),
             "stats": j.get("stats"),
             "wav": j.get("wav"),
             "mp3": j.get("mp3"),
@@ -1016,16 +1066,34 @@ async def voice_audio(request: Request, name: str):
 
 @app.delete("/api/voices/{name}")
 async def delete_voice(request: Request, name: str):
+    """删除音色：成品片段 + sources/ 里的原音频一起清掉。
+
+    原音频动辄几十 MB，只删成品会留下孤儿文件（现网就堆积过），
+    而且音色名可以被复用，残留的原音频还会被下一次同名录入覆盖。
+    """
     require(request)
     if name not in voices:
         raise HTTPException(404, "音色不存在")
-    try:
-        os.remove(voices[name]["path"])
-    except OSError:
-        pass
+    v = voices[name]
+    # 原音频路径：优先用元数据里的，没有就按约定路径兜底（早期录入可能没写 src_path）
+    src = v.get("src_path") or os.path.join(VOICE_DIR, "sources", f"{name}__full.wav")
+    removed = []
+    for p in (v.get("path") or "", src):
+        # 白名单校验：只删 VOICE_DIR 内的文件，防路径穿越误删
+        if not p or not os.path.isfile(p):
+            continue
+        if os.path.realpath(p).startswith(os.path.realpath(VOICE_DIR) + os.sep):
+            try:
+                os.remove(p)
+                removed.append(os.path.basename(p))
+            except OSError as e:
+                log.warning("删除音色 %s 的文件失败 %s: %s", name, p, e)
+        else:
+            log.warning("拒绝删除 VOICE_DIR 之外的路径: %s", p)
     del voices[name]
     save_voices(voices)
-    return {"ok": True}
+    log.info("删除音色 %s，清理文件: %s", name, removed or "无")
+    return {"ok": True, "removed": removed}
 
 
 @app.get("/api/download/{fn}")
