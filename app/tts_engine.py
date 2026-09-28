@@ -864,6 +864,15 @@ class TTSEngine:
                     # 对已经是一整句的段切不开（实测 93 字真实韩语 -> 仍 1 段），
                     # 会让"二分"静默退化成"整段换种子"。
                     parts = split_for_retry(text, min_chars=min_chars)
+                    # 二分后若有一半过短，放弃二分，退回整段重掷。
+                    # 与 min_chars 的意图保持一致：min_chars 以下的片段
+                    # 语速估计本身就不可靠，模型对 3~5 字的输入也容易表现怪异；
+                    # 而实测这类二分救不回来——10 字的段 20 在 D/E 两组
+                    # （不同种子）分别残留 2.62 / 1.90 字/秒，二分没起过作用。
+                    if any(len(p) < min_chars for p in parts):
+                        log.info("段 %d 二分会产生过短片段 %s，改为整段重掷",
+                                 idx, [len(p) for p in parts])
+                        parts = [text]
                 else:
                     parts = [text]
                 try:
