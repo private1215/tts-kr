@@ -1,17 +1,31 @@
 # Qwen3-TTS 韩语语音生成平台
 
 内部 TTS 语音生成平台，主营韩语语音合成。FastAPI + Qwen3-TTS-12Hz-1.7B，
-单卡 RTX 3060 12GB 推理，团队 5 人日产 100~200 条韩语语音片段。
+单卡 RTX 3060 12GB 推理，**7 人团队日产 80 条**韩语语音片段（8 小时工作制）。
+
+> 本文档最后核对：2026-09-28（自动裁剪与音色列表上线后）。
+> 改动代码后请同步更新本文档与 `CHANGELOG.md`，避免后人按过时信息排查。
+
+## 文档索引
+
+| 文档 | 内容 |
+|---|---|
+| 本 README | 环境、部署、核心机制速览、同步方式、待办 |
+| `CHANGELOG.md` | 按次记录每次改动的背景 / 改动 / **实测验收数据** |
+| `docs/声音克隆机制与排障.md` | 克隆链路完整机制、参数表、已踩过的坑与判读方法 |
+| `docs/产能与排障分析报告-2026-09-27.md` | 7 人团队产能模型、排队论、错峰规范 |
+| `docs/bench_result.json` | batch 选型 benchmark 原始数据 |
 
 ## 目录结构
 
 ```
 .
 ├── app/                      # 服务端运行代码（对应 /mnt/tts/projects/qwen3-tts/app）
-│   ├── server.py             # FastAPI 路由 / 鉴权 / 任务队列 / 用户管理
-│   ├── tts_engine.py         # TTSEngine：模型管理、自适应批量、OOM 兜底
+│   ├── server.py             # FastAPI 路由 / 鉴权 / 任务队列 / 用户管理 / 音色录入
+│   ├── tts_engine.py         # TTSEngine：模型管理、自适应批量、克隆显存感知、OOM 兜底
+│   ├── voice_trim.py         # 参考音频自动裁剪 + 文字稿按有声时长对齐（2026-09-28 新增）
 │   ├── pipeline.py           # 韩语归一化、断句分段、静音拼接、语速增益
-│   ├── ui/index.html         # 单文件前端（无构建流程）
+│   ├── ui/index.html         # 单文件前端（无构建流程，含「已录入音色」面板）
 │   ├── bench.py  opt.py      # 性能基准 / 参数寻优脚本
 │   ├── sweep.py  realism.py  # 参数扫描 / 自然度评估脚本
 │   └── analyze.py            # 任务统计分析
@@ -20,7 +34,9 @@
 ├── baseline/                 # 2026-09-27 修复前的原版，仅供 diff 对照
 │                             #   server.py / tts_engine.py / qwen-tts.service / index.html
 ├── docs/
-│   └── bench_result.json     # 本机 benchmark 结果，参数选型的实测依据
+│   ├── bench_result.json     # 本机 benchmark 结果，参数选型的实测依据
+│   ├── 声音克隆机制与排障.md  # 克隆链路的机制、参数与排障手册
+│   └── 产能与排障分析报告-2026-09-27.md
 ├── requirements.txt          # venv pip freeze（110 个包）
 └── CHANGELOG.md
 ```
@@ -77,28 +93,98 @@ RTX 3060 干净显存下收敛到 **max_chars=60 / batch_size=8 / 单批 3648 to
 **这句很重要**：不要为了"更保守"去加大 `batch_size` 或减少分段数——
 二者都会抬高单批 token 预算，方向恰好相反。
 
+### 克隆模式额外一道：前缀 KV 显存感知
+
+克隆时每个样本都要背一份完整 prompt 前缀（`voice_clone_prompt=[prompt] * n`），
+**前缀长度按 batch 倍数放大 KV cache**。所以除了 token 预算，还要按显存再算一次上限：
+
+```
+KV 单价 = 2(K,V) × 28 层 × 8 KV头 × 128 维 × 2B = 0.109375 MiB/token
+前缀 KV 合计 = 单价 × prompt_tokens × batch_size
+batch 上限  = min(token 预算上限, 显存余量 × 0.40 ÷ 单样本前缀 KV)
+```
+
+用**显存**而不是 token 预算折算：前缀只做一次 prefill，不产生 decode 步和 vocoder 开销。
+按 token 折算会把 25 秒参考音频（完全安全）也从 batch 8 压到 4，白白损失吞吐。
+
+实测（free 7.45 GiB）：15s → batch 8；25.74s → batch 8；30s（上限）→ batch 8；
+329.33s 旧音频 → batch 5（旧版固定 8，必 OOM）。
+
+## 声音克隆：员工怎么用
+
+**员工只需要做两件事**：上传整段录音 + 粘贴这段录音的完整文字稿。
+不需要剪音频、不需要数秒数、不需要对时间轴。
+超过 30 秒的音频由服务端自动截取约 15 秒，并把文字稿按**累计有声时长**对齐截出对应片段。
+
+| 参数 | 值 | 位置 |
+|---|---|---|
+| 最短 / 建议 / 自动截取阈值 | 3s / 15s / >30s 触发 | `server.py` `REF_AUDIO_*` |
+| 硬上限（直接拒绝） | 900s（15 分钟） | `REF_AUDIO_HARD_MAX_SEC` |
+| 截取窗口范围 | 8~20 秒 | `voice_trim.py` `MIN/MAX_CLIP_SEC` |
+| 语速告警区间 | 2.5~10 字/秒 | `server.py` 录入时校验 |
+
+产物：成品片段 `voices/<名>.wav`（≤30s，直接用于克隆）+ 原音频留档
+`voices/sources/<名>__full.wav`（换策略时可重算，不用员工重传）。
+
+**两个硬约束**（详见 `docs/声音克隆机制与排障.md`）：
+
+1. `ref_text` **必填**。ICL 模式下留空会直接抛
+   `ref_text is required when x_vector_only_mode=False`（模型源码 `qwen3_tts_model.py:437`）。
+2. 文字稿必须**逐字对应**音频内容。比例法依赖这个前提；文字明显多于/少于音频
+   会让模型从 prompt 里学到错误的语速，表现为拖长音、重复、生成耗时暴涨。
+   录入时会给黄色告警，但代码纠正不了内容本身。
+
 ## 同步到服务端
 
 ```bash
 scp app/server.py      zheng@100.96.63.23:/mnt/tts/projects/qwen3-tts/app/
 scp app/tts_engine.py  zheng@100.96.63.23:/mnt/tts/projects/qwen3-tts/app/
+scp app/voice_trim.py  zheng@100.96.63.23:/mnt/tts/projects/qwen3-tts/app/
+scp app/ui/index.html  zheng@100.96.63.23:/mnt/tts/projects/qwen3-tts/app/ui/
 scp deploy/qwen-tts.service zheng@100.96.63.23:/tmp/
 ssh zheng@100.96.63.23
 sudo cp /tmp/qwen-tts.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl restart qwen-tts
 ```
 
+生效规则（**改错文件会白等**）：
+
+| 文件 | 是否需要重启服务 |
+|---|---|
+| `app/*.py` | **需要** `systemctl restart qwen-tts`（模型要重新加载，约 45 秒） |
+| `app/ui/index.html` | **不需要** —— 前端每次请求读盘，刷新浏览器即可 |
+| `deploy/qwen-tts.service` | 需要 `daemon-reload` + `restart` |
+
+重启会中断队列里进行中的任务；建议在任务间隙操作。
+
 ### 换行符警告
 
-`server.py` 是 **CRLF**，`tts_engine.py` 是 LF。切勿用编辑器整体转换格式——
-改动 `server.py` 时若丢失 `\r`，文件在服务端仍可运行，但会与已有版本产生整文件 diff，
+`server.py` 与 `ui/index.html` 是 **CRLF**，其余 `.py` 是 LF。切勿用编辑器整体转换格式——
+改动 CRLF 文件时若丢失 `\r`，文件在服务端仍可运行，但会与已有版本产生整文件 diff，
 后续排查会非常困难。建议用字节级补丁脚本而非交互式编辑。
+
+当前基线（2026-09-28）：`server.py` CRLF 1058、`ui/index.html` CRLF 1572、
+`tts_engine.py` / `voice_trim.py` / `pipeline.py` 裸 LF 0。
 
 ```bash
 # 校验
 python3 -c "d=open('app/server.py','rb').read(); \
 print('CRLF', d.count(b'\r\n'), 'bare LF', d.count(b'\n')-d.count(b'\r\n'))"
 ```
+
+### 推送 GitHub
+
+本机环境变量里的 `HTTPS_PROXY` 常常指向一个**没有进程监听**的端口（且端口每次开机都变），
+git 走代理必然 502。剥掉代理后直连即可：
+
+```bash
+env -u HTTPS_PROXY -u https_proxy -u HTTP_PROXY -u http_proxy \
+    -u ALL_PROXY -u all_proxy -u NO_PROXY -u no_proxy \
+    git -c http.proxy= -c https.proxy= push origin main
+```
+
+校验远端要用 `git ls-remote origin main`，**不要用 GitHub REST API** ——
+私有仓不带 token 会返回 404，看起来像"没推上去"，其实是鉴权问题。
 
 ## 敏感数据
 
@@ -113,9 +199,24 @@ print('CRLF', d.count(b'\r\n'), 'bare LF', d.count(b'\n')-d.count(b'\r\n'))"
 
 ## 已知待办
 
+### 安全 / 运维
+
 - [ ] FastAPI 裸奔 8000 端口，无 Nginx / HTTPS / 并发限制
 - [ ] 服务以 root 运行
+- [ ] `server.py:45` 硬编码了出厂管理员口令（`DEFAULT_PASSWORD`）。
+      现网 admin 已改过，但**新环境初始化仍会用出厂值**——部署后必须立即改
 - [ ] 数据用 JSON 文件持久化，未来建议迁到数据库
 - [ ] `service.log` 无轮转策略，前端轮询日志占比高，需按月切割
-- [ ] `voices/voices.json` 至今为空 `{}`，尚未沉淀参考音色
-- [ ] 前端仍保留「分段字数 / 批量大小」输入框，可考虑移除（后端已兜底，不影响安全）
+- [ ] 备份文件堆积在服务端 `app/`（`*.bak.2026092x`、`*.bak2`），
+      确认稳定后应清理，否则易误传旧版覆盖新版
+
+### 功能
+
+- [ ] 删除音色只删成品 `voices/<名>.wav`，**不清理 `sources/` 里几十 MB 的原音频**。
+      现网已有孤儿文件：`sources/自动截取验证__full.wav`（29M，对应音色已删）、
+      `voices/요한 쿡_25s.wav`（手动裁剪产物，voices.json 无引用）
+- [ ] 参考音频无 ASR 校验：文字稿是否真的对应音频，只能靠录入时的语速告警（2.5~10 字/秒）
+      间接判断。若后续发现克隆质量不稳，可考虑接 ASR 做强制对齐
+- [ ] 前端「分段字数 / 批量大小」输入框已收归管理员可见（`advBox`），
+      但 `POST /api/jobs` 仍不校验 role——员工绕过 UI 调 API 仍可传参；
+      后端 `plan_generation()` 会收敛到 60/8，不会 OOM，只是没彻底封堵
