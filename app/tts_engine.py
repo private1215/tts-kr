@@ -10,7 +10,8 @@ import numpy as np
 import torch
 
 from pipeline import (build_segments, concat_segments, apply_speed_jitter,
-                      trim_edges, prosody_factors, apply_gain)
+                      trim_edges, prosody_factors, apply_gain, split_for_retry)
+from voice_match import match_segments
 
 log = logging.getLogger("tts")
 
@@ -30,8 +31,127 @@ DEFAULT_INSTRUCT = {
     "dutch": "Lees in een natuurlijk, gelijkmatig tempo",
 }
 
-# 低于此字/秒视为"语速异常慢"（正常中文播报约 4~5 字/秒）
+# 低于此字/秒视为"语速异常慢"（旧判据，仅作兜底下限；新判据见 ABNORMAL_RATIO）
 SLOW_CPS = 2.6
+
+# ---------------------------------------------------------------------------
+# 解码策略（2026-09-28 定版）
+#
+# 根因：Qwen3-TTS 在 ICL 克隆下存在官方已知的退化循环（degenerate loop）——
+# 模型不吐 EOS，进入重复/拖长音。默认 do_sample=True + temperature=0.9 + top_k=50
+# 会放大触发概率；而 max_new_tokens 又给得极松（2048，或 字数*6.0+96 ≈ 允许
+# 慢到 2.08 字/秒，是韩语正常值的 3.7 倍），失控段于是一路跑到上限被硬截断。
+#
+# 现网实锤（任务 f38869875eb4，4133 字 81 段）：
+#   31/81 段语速跑飞，区间 1.51 ~ 17.52 字/秒（差 11.6 倍）——
+#   快的段吞字含混（员工反馈"乱码"），慢的段拖长重复（"呀呀呀呀"），
+#   最慢 4 段 45.0~46.4s，正好卡在旧上限 min(2048, 75*6+96=546) 上被截断。
+#
+# 失败是**随机性**的，不是确定性的：同一篇文章、同一套参数、连 plan 都完全一致
+# （batch 8→1、batches 11、headroom 7.68）的两次运行，
+#   7f20 → 中位 8.30 字/秒，异常 1/81
+#   f388 → 中位 6.17 字/秒，异常 31/81
+# 若存在一个确定的致病因子，两次运行不可能差这么远。所以对策不是"调参调到最好"，
+# 而是**拒绝采样**：生成后体检，语速异常的段换个随机种子重来，直到落进健康区间。
+#
+# 关于贪心解码（曾被寄予厚望，实测证伪）：
+#   离线对照（同 7 段文本，batch=1）：
+#     采样+旧默认   104.5s，异常 4/7
+#     贪心+惩罚+收紧 123.4s，异常 5/7   ← 反而更差
+#   原因：贪心在这批文本上**不吐 EOS**，多段直接生成到 max_new_tokens 被硬截断
+#   （不同长度的段齐刷刷都是 19.60s = 246 token 上限，就是被截断的铁证）。
+#   贪心没有随机扰动，一旦进入重复循环反而跳不出来。故默认仍用采样。
+#
+# ⚠️ 待验证的嫌疑：repetition_penalty=1.1 可能让整体语速系统性变慢
+#
+#   证据（2026-09-28 现网，同文章、job 参数逐项一致，只有代码版本不同）：
+#     旧代码（无 rp / 无体检）  7f20 → 中位 8.30 字/秒，实际/预期比中位 0.84
+#     新代码（rp=1.1 + 体检）   A   → 中位 5.65 字/秒，实际/预期比中位 1.24
+#   整体慢了约 48%，而且不只是异常段偏慢——81 段整体分布都右移了，
+#   符合"某个参数系统性影响所有段"的特征，rp 是唯一的全局新变量。
+#   另一个候选 token 上限已排除：健康段最多只需预期时长的 1.07 倍，
+#   而新上限给到 1.6 倍，不存在截断。
+#
+#   → 必须做 rp 1.05 / 1.1 的对照才能定论。**未经验证前不要动这个值**。
+# ---------------------------------------------------------------------------
+# TTS_GEN_DO_SAMPLE=0 可切到贪心（保留开关，便于将来对照实验）
+GEN_DO_SAMPLE = os.environ.get("TTS_GEN_DO_SAMPLE", "1") not in ("0", "", "false", "False")
+GEN_REPETITION_PENALTY = float(os.environ.get("TTS_GEN_REPETITION_PENALTY", "1.1") or 0) or None
+# 体检不达标的段，换随机种子最多重试几次（拒绝采样）。
+# 2 次而非 3 次：异常率约 25% 时，第 3 次的边际收益很低，但要多付 1/3 的重试时间
+# （现网 A 任务 RTF 2.49，其中重试是大头）。
+ABNORMAL_MAX_RETRY = int(os.environ.get("TTS_ABNORMAL_MAX_RETRY", "2") or 2)
+# 达到这个字数的段，体检失败时**第一次重试就直接二分**，不再先整段重掷。
+# 实测依据：现网 C 组 `9423eadfe805` 残留的最长段是段 08（81 字 / 25.81s），
+# 它在两次重试机会里，第一次是"整段换种子"——而长段跑飞是**段长本身**
+# 让模型迟迟不吐 EOS（上下文越长越容易拖长音），换种子不改变段长，
+# 等于把一半机会浪费在一次注定失败的重掷上。
+# 二分则直接缩短上下文，是唯一能改变结果的动作，所以长段要优先用它。
+# 短段相反：短段跑飞是随机波动，二分会破坏韵律连贯，仍先整段重掷。
+LONG_SEG_BISECT_CHARS = int(os.environ.get("TTS_LONG_SEG_BISECT_CHARS", "60") or 60)
+
+# ---------------------------------------------------------------------------
+# 流式 vs 非流式生成 —— ⚠️ 已排除，不是问题的根因
+#
+# 曾怀疑这里是元凶：官方 Issue #239 的机制追踪里，同一份参考音频
+# non_streaming 语速漂移 0.0%、streaming 漂移 +16.7%，而 generate_voice_clone
+# 的 non_streaming_mode **默认是 False（流式）**。
+# 但核查 synth_batch 发现：**代码里早就显式传了 non_streaming_mode=True**，
+# 现网所有任务一直是非流式。所以这条线索是空的，不要再往这个方向查。
+#
+# 保留这段记录是因为：A 任务整体偏慢 48%（中位 5.65 vs 健康基准 8.30），
+# 症状与流式漂移高度相似，很容易误判到这里。真正的嫌疑见文件头的
+# 「repetition_penalty 会让整体变慢」一节。
+# ---------------------------------------------------------------------------
+
+# 各语言的正常语速（字/秒），用于反推 token 上限与生成后体检。
+# 韩语取本业务实测中位（健康样本 8.30、产能模型 6.15），折中 7.0 留余量。
+CPS_REF = {
+    "korean": 7.0, "chinese": 5.0, "japanese": 6.0, "english": 9.0,
+    "german": 8.0, "french": 8.0, "spanish": 9.0, "portuguese": 9.0,
+    "russian": 8.0, "italian": 8.0, "dutch": 8.0,
+}
+CPS_REF_DEFAULT = 6.0
+# 由健康样本实测标定，不是拍脑袋：
+#   健康样本 7f20 共 81 段，「实际时长 ÷ 预期时长」的分布是
+#     中位 0.84、p90 0.93、p99 1.07、**最大 1.07**
+#   → 健康段最多只需要预期时长的 1.07 倍，取 2.0 有近一倍安全余量，零误伤（0/81）。
+#
+# 为什么不取更激进的 1.6：模型输出有约 33% 的随机节奏波动（同文本三次跑出
+# 7.67 / 5.75 / 4.95 字/秒，见 diag_cross.py），整体偏慢的批次里「实际/预期」
+# p90 能到 1.96；用 1.6 会误截 27% 的段，反而触发大量无谓重试。
+# 2.0 只截断真正失控的 8.6%，而且失败段更早止损，整体仍省时间。
+TOKEN_SAFETY = float(os.environ.get("TTS_TOKEN_SAFETY", "2.0") or 2.0)
+TOKEN_FLOOR = 32       # 极短文本的最低额度
+ABNORMAL_RATIO = 2.2   # 体检下限：慢于 正常语速/此值 判为异常
+FAST_RATIO = 1.8       # 体检上限：快于 正常语速×此值 判为异常
+# 阈值标定依据（韩语 → 3.18 ~ 12.6 字/秒）：
+#   健康样本 7f20 共 81 段：中位 8.30，p10 7.52，p90 9.26，
+#   低于 3.18 的 0 段、高于 12.6 的 1 段 —— 两端误伤率都极低。
+#   乱音样本 0c1e7b839b55 逐段 2.70 / 47.98 / 9.77，两端都能抓到。
+
+
+def cps_reference(language: str = "Korean") -> float:
+    """该语言的正常语速（字/秒）。"""
+    return CPS_REF.get(str(language or "").strip().lower(), CPS_REF_DEFAULT)
+
+
+def expected_seconds(text: str, language: str = "Korean") -> float:
+    """一段文本按正常语速应有的发声时长（秒）。用于体检，不是硬约束。"""
+    n = len((text or "").strip())
+    return n / cps_reference(language) if n > 0 else 0.0
+
+
+def token_cap_for(text: str, language: str = "Korean") -> int:
+    """按语言语速反推 max_new_tokens 上限。
+
+    12Hz codec → 12.5 token/秒。一段正常时长 = 字数/cps 秒，
+    对应 字数/cps×12.5 个 token，再乘 TOKEN_SAFETY 作为兜底。
+    旧公式 字数*6.0+96 等价于允许慢到 2.08 字/秒，退化循环能一路跑到上限。
+    """
+    n = max(len((text or "").strip()), 1)
+    est = n / cps_reference(language) * CODEC_HZ * TOKEN_SAFETY + TOKEN_FLOOR
+    return int(min(2048, max(TOKEN_FLOOR * 2, est)))
 
 # ---------------------------------------------------------------------------
 # 自适应批量（员工零感知）：由代码依据「单批 token 预算 + 当前可用显存」反推
@@ -94,7 +214,11 @@ def estimate_clone_prompt_tokens(ref_audio=None, ref_text: str = "") -> int:
 
 
 def seg_token_cap(max_chars: int) -> int:
-    """单段 token 上限，必须与 synth_batch 里的估算公式保持一致。"""
+    """显存规划用的单段 token 上限（保守值，不参与实际生成截断）。
+
+    实际截断已改用 token_cap_for()（按语言语速反推，韩语约为本值的 0.63 倍），
+    这里故意沿用旧的宽松公式：显存预算宁可估高，也不要把 batch 放得太激进。
+    """
     return min(2048, int(max_chars * 6.0) + 96)
 
 
@@ -351,6 +475,10 @@ class TTSEngine:
 
         返回 (wavs, sr, used_bs)。used_bs 是本次实际跑通的批量，
         调用方据此收缩后续批次，避免每批都重新踩一次 OOM。
+
+        ⚠️ used_bs 的语义是"本批实际跑了几段"，**不等于"显存只够跑这么多"**：
+        尾批不足整批时它天然小于请求值。判定是否真降级由调用方负责
+        （需同时满足 len(本批) >= 请求的 bs），别在这里误读。
         """
         n = len(texts)
         if n <= 0:
@@ -401,31 +529,43 @@ class TTSEngine:
                     top_p: Optional[float] = None,
                     repetition_penalty: Optional[float] = None,
                     max_new_tokens: Optional[int] = None,
+                    do_sample: Optional[bool] = None,
                     ) -> Tuple[List[np.ndarray], int]:
         """批量生成一批文本片段。返回 (音频数组列表, 采样率)。
 
         instruct 可以是字符串（每段同语气）或列表（每段不同语气）。
-        temperature/top_p/repetition_penalty 通过 kwargs 透传给底层 generate，
-        若当前版本不支持会自动降级忽略。
+        temperature/top_p/repetition_penalty/do_sample 通过 kwargs 透传给底层
+        generate，若当前版本不支持会自动降级忽略。
+
+        默认保留采样解码（官方文档与多个社区实现都指出：一旦进入重复循环，
+        贪心没有随机扰动反而跳不出来，实测也证伪，见文件头注释块）。
+        同时默认带 repetition_penalty，并对语速异常的段自动换种子重试。
+        理由与实测数据见文件头"解码策略"注释块。
         """
         self._ensure_variant(mode)
         n = len(texts)
         langs = [language] * n
         gen_kw = {}
+        # 贪心解码：克隆的退化循环（不吐 EOS → 重复/拖长音）主要由采样引入。
+        # 关掉采样后输出是确定性的，同输入必得同结果，批量大小也不再影响结果。
+        # subtalker 是独立的第二路采样开关（拼写为 subtalker_dosample），
+        # 必须一起关，否则随机性只关掉一半。
+        ds = GEN_DO_SAMPLE if do_sample is None else bool(do_sample)
+        gen_kw["do_sample"] = ds
+        gen_kw["subtalker_dosample"] = ds
         if temperature is not None:
             gen_kw["temperature"] = float(temperature)
         if top_p is not None:
             gen_kw["top_p"] = float(top_p)
-        if repetition_penalty is not None:
-            gen_kw["repetition_penalty"] = float(repetition_penalty)
-        # max_new_tokens 上限：默认 2048 给了模型巨大的"自由发挥"空间，
-        # 实测会出现越读越慢、尾部拖长音的失控（某段 70 字生成了 45 秒）。
-        # 按文本长度估算一个宽松上限（约正常时长的 2.5 倍），既不会截断，
-        # 又能挡住失控的长生成，同时明显加快生成。
-        # 12Hz 模型约 12.5 tokens/秒；实测中文约 2.2~3.3 tokens/字。
+        rp = repetition_penalty if repetition_penalty is not None else GEN_REPETITION_PENALTY
+        if rp:
+            gen_kw["repetition_penalty"] = float(rp)
+        # max_new_tokens 上限：按语言语速反推（见 token_cap_for）。
+        # 旧公式 字数*6.0+96 允许慢到 2.08 字/秒，退化循环能一路跑到上限被硬截断，
+        # 员工听到的就是"呀呀呀呀"然后突然断掉。
         if max_new_tokens is None:
-            c = max((len(t) for t in texts), default=0)
-            max_new_tokens = min(2048, int(c * 6.0) + 96)
+            longest = max(texts, key=lambda t: len(t)) if texts else ""
+            max_new_tokens = token_cap_for(longest, language)
         gen_kw["max_new_tokens"] = int(max_new_tokens)
 
         def _call(fn, **kw):
@@ -474,6 +614,8 @@ class TTSEngine:
                    temperature: Optional[float] = None,
                    top_p: Optional[float] = None,
                    repetition_penalty: Optional[float] = None,
+                   do_sample: Optional[bool] = None,
+                   voice_match: Optional[np.ndarray] = None,
                    progress=None) -> Tuple[np.ndarray, int, dict]:
         """长文本分段生成 + 韵律拼接。
 
@@ -520,6 +662,7 @@ class TTSEngine:
         pos = 0
         bs = batch_size
         batch_no = 0
+        downgrades = 0          # 因显存不足而降批的次数（留痕，便于事后判断质量风险）
         while pos < total:
             idxs = order[pos:pos + bs]
             chunk = [segs[k] for k in idxs]
@@ -531,7 +674,7 @@ class TTSEngine:
                 ref_audio=ref_audio, ref_text=ref_text,
                 ref_key=ref_key, seed=seed,
                 temperature=temperature, top_p=top_p,
-                repetition_penalty=repetition_penalty,
+                repetition_penalty=repetition_penalty, do_sample=do_sample,
             )
             sr_out = sr
             for k, w in zip(idxs, wavs):
@@ -540,8 +683,13 @@ class TTSEngine:
             # 这是服务长期不重启时显存只涨不跌的主因
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-            # 本批若因显存降过级，后续批次沿用，避免每批重复试错
-            if used_bs < bs:
+            # 本批若因显存降过级，后续批次沿用，避免每批重复试错。
+            # 守卫 len(idxs) >= bs：尾批常常不足整批——81 段按 8 分最后只剩 1 段，
+            # 此时 used_bs 返回 1，但那是"没那么多段可跑"，不是显存降级。
+            # 少了这个守卫会把 bs 一路压到 1，且 plan["batch_size_final"] 记成 1
+            # （排查时误以为全程单段串行，实际前 10 批都是 8）。
+            if used_bs < bs and len(idxs) >= bs:
+                downgrades += 1
                 bs = max(MIN_AUTO_BATCH, used_bs)
             pos += len(idxs)
             if progress:
@@ -554,14 +702,14 @@ class TTSEngine:
         # 削掉每段首尾的模型静音，否则会和拼接停顿叠加成 1.5~2s 的死寂
         audios = [trim_edges(a, sr=sr_out) for a in audios]
 
-        # 语速体检：字/秒过低的段说明模型跑偏了（拖长音/重复），
+        # 语速体检：超出预期时长 ABNORMAL_RATIO 倍的段说明模型跑偏了（拖长音/重复），
         # 切成更小的片段重生成一次，取语速更正常的版本。
-        slow_fixed = self._fix_slow_segments(
+        slow_fixed, abnormal = self._fix_abnormal_segments(
             audios, segs[:len(audios)], sr_out, mode=mode, language=language,
             speaker=speaker, instruct=multi[0] if multi else fallback,
             ref_audio=ref_audio, ref_text=ref_text, ref_key=ref_key, seed=seed,
             temperature=temperature, top_p=top_p,
-            repetition_penalty=repetition_penalty,
+            repetition_penalty=repetition_penalty, do_sample=do_sample,
         )
 
         # 韵律起伏：语速走"呼吸曲线"（起句略慢→中段稍快→收尾放缓）+ 段落间轻微音量差。
@@ -573,6 +721,19 @@ class TTSEngine:
             audios = [apply_speed_jitter(a, f) for a, f in zip(audios, factors)]
             audios = [apply_gain(a, float(rng2.uniform(-0.9, 0.9))) for a in audios]
 
+        # 保真增强：逐段把频谱对齐到该音色的原始录音，补回生成环节丢掉的 2~4kHz。
+        # 原理与实测数据见 app/voice_match.py 模块头。放在拼接之前，
+        # 保证每段各自匹配（段间偏离度能差 4.7 倍，整条用一条曲线会推过头）。
+        voice_matched = 0
+        if voice_match is not None and audios:
+            try:
+                audios, voice_matched = match_segments(audios, voice_match, sr_out)
+                log.info("保真增强: %d/%d 段已对齐源录音频谱", voice_matched, len(audios))
+            except Exception as e:
+                # 后处理出任何问题都不能让任务失败，宁可原样输出
+                log.warning("保真增强失败，按原样输出: %s", e)
+                voice_matched = 0
+
         out = concat_segments(audios, segs[:len(audios)], sr=sr_out,
                               base_ms=pause_ms, para_ms=para_ms, jitter=jitter)
         elapsed = time.time() - t_start
@@ -582,7 +743,10 @@ class TTSEngine:
         for a, s in zip(audios, segs[:len(audios)]):
             d = len(a) / sr_out
             n = max(len(s["text"].strip()), 1)
-            detail.append({"chars": n, "dur": round(d, 2), "cps": round(n / d, 2) if d > 0 else 0})
+            detail.append({"chars": n, "dur": round(d, 2),
+                           "cps": round(n / d, 2) if d > 0 else 0,
+                           # 预期时长：排查时一眼看出这段慢了几倍/快了几倍
+                           "exp": round(expected_seconds(s["text"], language), 2)})
         total_chars = sum(d["chars"] for d in detail)
         if torch.cuda.is_available():
             plan["peak_alloc_gib"] = round(
@@ -600,8 +764,11 @@ class TTSEngine:
             "chars": total_chars,
             "cps": round(total_chars / dur, 2) if dur > 0 else 0,
             "slow_fixed": slow_fixed,
+            "abnormal_segments": abnormal,
+            "batch_downgraded": downgrades,
             "segments_detail": detail,
             "plan": plan,
+            "voice_matched": voice_matched,
         }
         cps = stats["cps"]
         if cps and cps < SLOW_CPS:
@@ -609,48 +776,117 @@ class TTSEngine:
                         cps, SLOW_CPS, len(audios))
         return out, sr_out, stats
 
-    def _fix_slow_segments(self, audios, segs, sr, mode="custom", language="Korean",
-                           speaker=None, instruct="", ref_audio=None, ref_text=None,
-                           ref_key=None, min_chars: int = 40, seed: Optional[int] = None,
-                           temperature=None, top_p=None, repetition_penalty=None) -> int:
-        """把语速异常慢的段切成更小的片段重生成，成功替换返回修复数量。"""
+    def _gen_one(self, texts, mode, language, speaker, instruct, ref_audio,
+                 ref_text, ref_key, seed, temperature, top_p,
+                 repetition_penalty, do_sample):
+        """生成一个 batch 并做边缘裁剪，返回 (音频数组列表, sr)。"""
+        wavs, sr2 = self.synth_batch(
+            texts, mode=mode, language=language, speaker=speaker,
+            instruct=instruct, ref_audio=ref_audio, ref_text=ref_text,
+            ref_key=ref_key, seed=seed, temperature=temperature, top_p=top_p,
+            repetition_penalty=repetition_penalty, do_sample=do_sample,
+        )
+        return [trim_edges(np.asarray(w, dtype=np.float32).flatten(), sr=sr2)
+                for w in wavs], sr2
+
+    def _fix_abnormal_segments(self, audios, segs, sr, mode="custom", language="Korean",
+                               speaker=None, instruct="", ref_audio=None, ref_text=None,
+                               ref_key=None, min_chars: int = 6, seed: Optional[int] = None,
+                               temperature=None, top_p=None, repetition_penalty=None,
+                               do_sample=None) -> Tuple[int, int]:
+        """逐段语速体检，不达标的段换随机种子重试。返回 (修复数, 异常数)。
+
+        双侧判据（旧版只看"慢"，且阈值 2.6 字/秒太松）：
+          过慢 —— 拖长音/重复循环，模型迟迟不吐 EOS；
+          过快 —— 吞字含混，员工反馈的"乱码"主要来自这里。
+
+        必须逐段判，不能只看整体：现网 0c1e7b839b55 整体 6.49 字/秒看似健康，
+        逐段却是 2.70 / 47.98 / 9.77（50 字只念了 1.04 秒），两个极端被均值抹平。
+
+        修复策略是**拒绝采样**而不是"细分文本"：跑飞是随机事件（同一文本同一参数
+        两次跑出 1/81 与 31/81 的差距），换种子重掷一次大概率正常；细分会改变
+        韵律连贯性，且对本就念得太快的段没用。奇数次重试用原文换种子，
+        偶数次退化为半段二分并换种子，两条路都给机会。
+
+        ⚠️ 2026-09-28 修 bug：这里的"二分"曾长期静默失效。
+        旧代码用 build_segments(text, max_chars=len(text)//2)，而它只按
+        **句末标点**切句——体检对象本就是已分好的单句段，再切一次切不开
+        （实测 93 字真实韩语 -> 仍 1 段），于是两次重试全是整段换种子。
+        现改用 split_for_retry（标点 > 停顿 > 空格 > 硬切，保证切成两段）。
+
+        min_chars 由 25 降到 6（2026-09-28 修 bug）：
+        旧下限会把短段整段跳过，而短段恰恰最容易跑飞且最刺耳——
+        现网 A 任务 `499080dcde4d` 的四段漏网里，段 20（10 字 / 1.46 字/秒）
+        和段 40（18 字 / 2.99 字/秒）都是因为字数少于 25 被直接 continue 放过的。
+        段 20 起点在 215 秒（3 分 35 秒），正是员工反馈"4 分钟后开始有乱音"的位置。
+        低于 6 字不体检：过短片段的语速估计本身不可靠，容易误判。
+        """
         fixed = 0
-        for idx, (a, seg) in enumerate(zip(audios, segs)):
+        abnormal = 0
+        ref_cps = cps_reference(language)
+        # 韩语 = 7.0/2.2 = 3.18 字/秒；中文 = 5.0/2.2 = 2.27 -> 兜底到旧阈值 2.6
+        slow_cps = max(SLOW_CPS, ref_cps / ABNORMAL_RATIO)
+        fast_cps = ref_cps * FAST_RATIO
+
+        def _cps(arr, text):
+            d = len(arr) / sr
+            return (len(text) / d) if d > 0 else 0.0
+
+        for idx, (orig, seg) in enumerate(zip(audios, segs)):
             text = seg["text"].strip()
-            dur = len(a) / sr
-            cps = len(text) / dur if dur > 0 else 0
-            if dur <= 0 or cps >= SLOW_CPS or len(text) < min_chars:
+            if len(text) < min_chars or len(orig) == 0:
                 continue
-            sub = build_segments(text, max_chars=max(min_chars, len(text) // 2))
-            if len(sub) < 2:
-                continue
-            try:
-                wavs, sr2 = self.synth_batch(
-                    [s["text"] for s in sub], mode=mode, language=language,
-                    speaker=speaker, instruct=instruct,
-                    ref_audio=ref_audio, ref_text=ref_text, ref_key=ref_key,
-                    seed=seed, temperature=temperature, top_p=top_p,
-                    repetition_penalty=repetition_penalty,
-                )
-                new_parts = []
-                ok = True
-                for w, s in zip(wavs, sub):
-                    arr = trim_edges(np.asarray(w, dtype=np.float32).flatten(), sr=sr2)
-                    d = len(arr) / sr2
-                    if d > 0 and len(s["text"].strip()) / d >= SLOW_CPS:
-                        new_parts.append(arr)
-                    else:
-                        ok = False
-                        break
-                if ok and new_parts:
-                    merged = np.concatenate(new_parts)
-                    if len(merged) / sr2 < dur:
-                        audios[idx] = merged
-                        fixed += 1
-                        log.info("段 %d 语速修复: %.2f -> %.2f 字/秒",
-                                 idx, cps, len(text) / (len(merged) / sr2))
-            except BaseException as e:  # noqa: BLE001
-                if is_oom(e) and torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                log.warning("段 %d 重生成失败: %s", idx, e)
-        return fixed
+            best = orig
+            best_dev = abs(_cps(orig, text) - ref_cps)
+            flagged = False
+            attempt = 0
+            while True:
+                c = _cps(best, text)
+                if slow_cps <= c <= fast_cps:
+                    break
+                if not flagged:
+                    flagged = True
+                    abnormal += 1
+                    log.warning("段 %d 语速%s: %d 字 %.2fs = %.2f 字/秒"
+                                "（正常约 %.1f，判定区间 %.2f~%.2f）",
+                                idx, "过慢" if c < slow_cps else "过快",
+                                len(text), len(best) / sr, c, ref_cps, slow_cps, fast_cps)
+                if attempt >= ABNORMAL_MAX_RETRY:
+                    log.warning("段 %d 重试 %d 次仍未回到正常区间，保留最接近的 "
+                                "%.2f 字/秒", idx, attempt, c)
+                    break
+                attempt += 1
+                # 奇数次：整段换种子重来；偶数次：二分后换个种子。
+                # 例外：长段第一次就二分（理由见 LONG_SEG_BISECT_CHARS）。
+                base = (seed or 0) + attempt * 7919
+                if len(text) >= LONG_SEG_BISECT_CHARS or attempt % 2 == 0:
+                    # 用 split_for_retry 而不是 build_segments：后者只认句末标点，
+                    # 对已经是一整句的段切不开（实测 93 字真实韩语 -> 仍 1 段），
+                    # 会让"二分"静默退化成"整段换种子"。
+                    parts = split_for_retry(text, min_chars=min_chars)
+                else:
+                    parts = [text]
+                try:
+                    arrs, sr2 = self._gen_one(
+                        parts, mode, language, speaker, instruct,
+                        ref_audio, ref_text, ref_key, base, temperature, top_p,
+                        repetition_penalty, do_sample)
+                    cand = np.concatenate(arrs) if len(arrs) > 1 else arrs[0]
+                    if len(cand) == 0:
+                        continue
+                    nc = _cps(cand, text)
+                    log.info("段 %d 第 %d 次重试 -> %.2f 字/秒", idx, attempt, nc)
+                    dev = abs(nc - ref_cps)
+                    if dev < best_dev:
+                        best, best_dev = cand, dev
+                except BaseException as e:  # noqa: BLE001
+                    if is_oom(e) and torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    log.warning("段 %d 第 %d 次重生成失败: %s", idx, attempt, e)
+                    break
+            if best is not orig:
+                audios[idx] = best
+                fixed += 1
+                log.info("段 %d 最终采用重生成版: %.2f -> %.2f 字/秒",
+                         idx, _cps(orig, text), _cps(best, text))
+        return fixed, abnormal

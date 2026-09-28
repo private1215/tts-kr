@@ -26,6 +26,7 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, Response
 
 from tts_engine import TTSEngine
 from voice_trim import trim_reference
+from voice_match import get_target
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("server")
@@ -80,6 +81,10 @@ REF_AUDIO_BEST_SEC = 15.0         # 给员工的建议长度（现在由代码�
 REF_AUDIO_TRIM_TARGET = 15.0      # 自动截取的目标长度
 REF_AUDIO_AUTO_TRIM_ABOVE = 30.0  # 超过这个长度才触发自动截取
 REF_AUDIO_HARD_MAX_SEC = 900.0    # 超过 15 分钟直接拒（读进来太浪费内存）
+# 克隆「保真增强」默认开关：把生成结果频谱对齐到音色原声，补回发闷的中高频。
+# 关掉只会回到发闷的老输出，不影响其它环节。设 TTS_VOICE_MATCH=0 可整体关闭。
+VOICE_MATCH_DEFAULT = os.environ.get("TTS_VOICE_MATCH", "1").strip().lower() \
+    not in ("0", "false", "no", "off")
 
 MODEL_DIRS = {
     "custom_voice": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-CustomVoice"),
@@ -164,7 +169,7 @@ def persist_jobs():
             "id", "title", "owner", "mode", "language", "speaker", "voice",
             "instruct", "status", "created_at", "started_at", "finished_at",
             "progress", "stats", "wav", "mp3", "error", "preview",
-            "max_chars", "batch_size")}
+            "max_chars", "batch_size", "enhanced")}
         # 正文留着，失败时可一键重试
         slim[jid]["text"] = j.get("text") or ""
     save_json(JOBS_FILE, slim)
@@ -294,6 +299,10 @@ async def run_job(job):
     ref_audio = None
     ref_text = None
     ref_key = None
+    _match_target = None
+    # 重启续跑的旧任务没有这个字段，补上服务端默认值，保证行为一致
+    if "enhance" not in job:
+        job["enhance"] = VOICE_MATCH_DEFAULT
     if job["mode"] == "clone":
         v = voices.get(job["voice"])
         if not v:
@@ -312,6 +321,16 @@ async def run_job(job):
                 f"请用原音频重新录入一次，系统会自动截取最佳片段")
         ref_audio = read_audio(v["path"])
         ref_key = job["voice"]
+        # 保真增强：取该音色源录音的长时谱作为目标（详见 app/voice_match.py）
+        if job.get("enhance"):
+            try:
+                _match_target = get_target(job["voice"], v)
+            except Exception as e:
+                log.warning("保真增强目标曲线计算失败，本次跳过: %s", e)
+                _match_target = None
+            if _match_target is None:
+                log.warning("音色「%s」找不到可用的原声素材，本次不做保真增强",
+                            job["voice"])
 
     def _progress(done, total):
         job["progress"] = {"done": done, "total": total}
@@ -338,6 +357,7 @@ async def run_job(job):
             temperature=job.get("temperature"),
             top_p=job.get("top_p"),
             repetition_penalty=job.get("repetition_penalty"),
+            voice_match=_match_target,
             progress=_progress,
         )
 
@@ -368,6 +388,7 @@ async def run_job(job):
 
     job["wav"] = f"{jid}.wav"
     job["stats"] = stats
+    job["enhanced"] = bool((stats or {}).get("voice_matched") or 0)
     # 自适应生效值回写：前端提交的 max_chars/batch_size 可能不安全，
     # 这里记录引擎实际采用的值，便于在历史任务里核对。
     _plan = (stats or {}).get("plan") or {}
@@ -638,6 +659,7 @@ async def meta(request: Request):
             for k, v in voices.items()},
         "variants": list(MODEL_DIRS.keys()),
         "loaded": engine.variant,
+        "voice_match_default": VOICE_MATCH_DEFAULT,
     }
 
 
@@ -653,7 +675,8 @@ async def create_job(request: Request,
                      max_chars: int = Form(60),
                      batch_size: int = Form(16),
                      seed: int = Form(42),
-                     temperature: Optional[float] = Form(None)):
+                     temperature: Optional[float] = Form(None),
+                     enhance: Optional[bool] = Form(None)):
     u = require(request)
     if temperature is not None and not (0.3 <= temperature <= 1.5):
         raise HTTPException(400, "temperature 需在 0.3~1.5 之间")
@@ -691,6 +714,9 @@ async def create_job(request: Request,
         "batch_size": batch_size,
         "seed": seed,
         "temperature": temperature,
+        # 不传则跟随服务端默认开关；传 false 可产出老版本输出做 A/B 对照
+        "enhance": VOICE_MATCH_DEFAULT if enhance is None else bool(enhance),
+        "enhanced": False,
         "status": "queued",
         "started_at": None,
         "progress": {"done": 0, "total": 0},
@@ -1010,11 +1036,13 @@ async def upload_voice(request: Request,
                  "请确认粘贴的是这段录音的完整文字稿后重新录入")
     warn = ""
     if out_dur > 0:
-        # 语速阈值收紧到 2.5~10 字/秒：文字明显多于/少于音频内容时，模型会从
+        # 语速阈值收紧到 4.5~12 字/秒：文字明显多于/少于音频内容时，模型会从
         # prompt 里学到一个错的语速——实测 130 字配 10.5 秒（12.4 字/秒）时，
         # 生成语速崩到 2.44 字/秒（正常 6.15），耗时涨 5.6 倍、音频长 2.5 倍。
+        # 下限由 2.5 抬到 4.5：文字远少于音频时长同样会教出一个错的慢语速，
+        # 而生成端的体检只能事后补救，不如在录入时就拦住。
         rate = len(used_text) / out_dur
-        if rate < 2.5 or rate > 10:
+        if rate < 4.5 or rate > 12:
             warn = (f"文字稿与音频时长对不上（约 {rate:.1f} 字/秒，正常语速约 5~7），"
                     f"克隆出来的语速可能偏快或偏慢。建议核对文字稿后重新录入")
 
@@ -1027,6 +1055,9 @@ async def upload_voice(request: Request,
         "src_path": src_path,
         "src_dur": info.get("src_dur"),
         "src_text_len": len(ref_text),
+        # 完整原文稿：出问题时能直接比对「员工到底粘贴了什么」，
+        # 不用再去翻 sources/ 里的音频猜。只存文本，体积可忽略。
+        "src_ref_text": ref_text,
         "clip": None if not info.get("trimmed") else {
             "start": info.get("clip_start"),
             "end": info.get("clip_end"),

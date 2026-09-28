@@ -102,6 +102,50 @@ def build_segments(text: str, max_chars: int = 160) -> list:
     return segments
 
 
+def split_for_retry(text: str, min_chars: int = 6) -> list:
+    """把一段文本切成两半，供语速体检失败时重试使用。**保证切得开**。
+
+    为什么不能直接用 build_segments：
+      build_segments 只按**句末标点**切句（SENT_END），而体检的对象
+      本身就是已经分好的句读级片段——再走一遍往往切不开。实测：
+        93 字真实韩语句子 + max_chars=22 -> 仍返回 1 段
+        带空格的 79 字文本 + max_chars=22 -> 仍返回 1 段
+      结果是「二分重试」从上线起就没真正二分过，两次重试机会实际都是
+      整段换种子。这正是段 08（81 字 / 30.52s）连救两次都没救回来的原因。
+
+    四级降级，最后一定切得开：
+      1. 句末标点（。！？…）  2. 句中停顿（，、；：—）
+      3. 空格（韩语词边界）    4. 中点硬切（宁可在词中断，也要缩短上下文）
+
+    硬切听起来会怪，但它是**兜底**：只有当重生成结果的语速更接近正常时
+    才会被采用（调用方按 |cps - 参考| 择优），不会让成品变差。
+    """
+    t = text.strip()
+    if len(t) < 2:
+        return [t]
+    mid = len(t) // 2
+
+    def _cut_at(positions):
+        """在给定候选切点中取离中点最近的那个，两半都要够长。"""
+        if not positions:
+            return None
+        best = min(positions, key=lambda p: abs(p - mid))
+        left, right = t[:best].strip(), t[best:].strip()
+        if len(left) >= min_chars and len(right) >= min_chars:
+            return [left, right]
+        return None
+
+    for pat in (SENT_END, CLAUSE_END):
+        got = _cut_at([m.end() for m in pat.finditer(t)])
+        if got:
+            return got
+    got = _cut_at([i + 1 for i, c in enumerate(t) if c.isspace()])
+    if got:
+        return got
+    # 兜底：中点硬切
+    return [t[:mid].strip(), t[mid:].strip()]
+
+
 def make_silence(ms: float, sr: int = 24000) -> np.ndarray:
     """生成静音片段。"""
     n = int(sr * ms / 1000.0)
