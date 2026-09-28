@@ -15,6 +15,10 @@ User=root
 WorkingDirectory=/mnt/tts/projects/qwen3-tts/app
 Environment=PATH=/mnt/tts/projects/qwen3-tts/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=PYTHONUNBUFFERED=1
+# 数据/模型根目录。换服务器时只需改这一行（代码里所有路径都由它派生），
+# 改完记得同步改上面 PATH / WorkingDirectory / ExecStart / 日志路径，以及 RequiresMountsFor。
+# 删除此行则回落到代码默认值 /mnt/tts。
+Environment=TTS_BASE=/mnt/tts
 # PyTorch 缓存分配器调优：服务长期不重启时 reserved 会碎片化累积，
 # 实测 service.log 里出现过 "2.15 GiB reserved but unallocated" 导致的假性 OOM。
 # expandable_segments：创建可动态扩展的内存段，从根源减少碎片（PyTorch 官方首推）

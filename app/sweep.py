@@ -11,7 +11,9 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from tts_engine import TTSEngine
 
-MODEL_DIR = "/mnt/tts/models"
+# 换服务器时设 TTS_BASE 即可整体迁移，不设则等价于 /mnt/tts
+BASE = os.environ.get("TTS_BASE", "").strip() or "/mnt/tts"
+MODEL_DIR = os.path.join(BASE, "models")
 MODEL_DIRS = {
     "custom_voice": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-CustomVoice"),
     "base": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-Base"),

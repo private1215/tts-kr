@@ -30,7 +30,10 @@ from voice_trim import trim_reference
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("server")
 
-BASE = "/mnt/tts"
+# 数据/模型根目录。默认 /mnt/tts（现网数据盘挂载点）。
+# 换服务器时不改代码：设环境变量 TTS_BASE 即可整体迁移
+# （systemd 里加 Environment=TTS_BASE=/新路径）。不设则与旧行为完全一致。
+BASE = os.environ.get("TTS_BASE", "").strip() or "/mnt/tts"
 OUTPUT_DIR = os.path.join(BASE, "output")
 DATA_DIR = os.path.join(BASE, "data")
 VOICE_DIR = os.path.join(DATA_DIR, "voices")

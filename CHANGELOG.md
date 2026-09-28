@@ -4,6 +4,33 @@
 > 当前生效的行为以 `README.md` 与 `docs/` 为准；早期条目里的部分验收结论
 > 可能已被后续改动推翻，这类地方都有 ⚠️ 标注，不要照抄早期结论排查问题。
 
+## 2026-09-28 换机可迁移性改造 + 新增《从零部署与迁移》手册
+
+**背景**：用户问"换服务器重新搭建会有区别吗"。核查发现两个真问题——
+① `BASE = "/mnt/tts"` 在数据根目录写死，换挂载点必须改源码；
+② `requirements.txt` 里 `torch==2.14.0` **不带 `+cu130` 后缀**，
+新机器 `pip install -r` 会装成 **CPU 版 torch**，服务能启动但一生成就废，
+且报错不指向这里（最危险的静默故障）。
+
+**改动**
+- `app/server.py`：`BASE` 改为 `os.environ.get("TTS_BASE") or "/mnt/tts"`，
+  不设环境变量时行为与旧版**完全一致**（零风险）
+- `app/bench.py` / `opt.py` / `realism.py` / `sweep.py`：`MODEL_DIR`、
+  bench 输出路径同样改为由 `TTS_BASE` 派生
+- `deploy/qwen-tts.service`：显式声明 `Environment=TTS_BASE=/mnt/tts`，
+  并注明换机时需同步改的 6 处路径
+- 新增 `docs/从零部署与迁移.md`：仓库里有什么/没有什么、挂载单元名转义规则、
+  **torch 必须先走官方 CUDA 源**、模型下载、`data/` 迁移、验收清单、换机 Checklist
+
+**实测验收**（服务端，队列空闲时操作）
+| 项 | 结果 |
+|---|---|
+| `systemctl show qwen-tts -p Environment` | `TTS_BASE=/mnt/tts` PASS |
+| 重启后 `systemctl is-active` | active PASS |
+| `GET /` | 200 PASS |
+| 5 个 .py `ast.parse` | AST OK PASS |
+| server.py CRLF 保持 | 1129 行全 CRLF，bare LF 0 PASS |
+
 ## 2026-09-28 清理三项遗留 + 服务重启不再弄丢任务
 
 ### 背景

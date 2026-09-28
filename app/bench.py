@@ -16,7 +16,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from tts_engine import TTSEngine
 from pipeline import build_segments
 
-MODEL_DIR = "/mnt/tts/models"
+# 换服务器时设 TTS_BASE 即可整体迁移，不设则等价于 /mnt/tts
+BASE = os.environ.get("TTS_BASE", "").strip() or "/mnt/tts"
+MODEL_DIR = os.path.join(BASE, "models")
 MODEL_DIRS = {
     "custom_voice": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-CustomVoice"),
     "base": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-Base"),
@@ -98,7 +100,7 @@ stats["vram_peak_gb"] = round(torch.cuda.max_memory_allocated() / 1e9, 2)
 emit("LONG", stats)
 result["long"] = stats
 
-os.makedirs("/mnt/tts/output", exist_ok=True)
+os.makedirs(os.path.join(BASE, "output"), exist_ok=True)
 sf.write("/mnt/tts/output/bench_sample.wav", audio, sr)
 emit("INFO", {"sample": "/mnt/tts/output/bench_sample.wav",
               "dur_s": round(len(audio) / sr, 1)})
@@ -111,5 +113,5 @@ for n in (100, 200):
                       "feasible": gpu_h < 20})
 emit("DONE", {"ok": True})
 
-with open("/mnt/tts/projects/qwen3-tts/bench_result.json", "w", encoding="utf-8") as f:
+with open(os.path.join(BASE, "projects", "qwen3-tts", "bench_result.json"), "w", encoding="utf-8") as f:
     json.dump(result, f, ensure_ascii=False, indent=2)
