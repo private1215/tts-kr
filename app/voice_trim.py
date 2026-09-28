@@ -129,9 +129,14 @@ def pick_window(x: np.ndarray, sr: int, target: float = TARGET_SEC):
             pen *= 0.35
         return m * stab * pen, m, cv
 
+    # 两条候选路径都要跑，不能只用停顿边界：
+    # 一段「全程连续、没有停顿」的语音往往音质最好，但它根本产生不了停顿边界，
+    # 只按停顿选就会系统性地错过最佳区域（实测把 cv 0.23 的好片段漏掉，
+    # 选了 cv 0.80 的差片段）。停顿边界只给一点加成，不作为准入条件。
+    PAUSE_BONUS = 1.08
+
     best = None
     if len(pauses) >= 2:
-        # 优先用停顿点做边界：切在句间，最干净
         bounds = [0] + pauses + [n]
         for pi, sf in enumerate(bounds):
             for ef in bounds[pi + 1:]:
@@ -139,18 +144,18 @@ def pick_window(x: np.ndarray, sr: int, target: float = TARGET_SEC):
                 if L < MIN_CLIP_SEC or L > MAX_CLIP_SEC:
                     continue
                 s, m, cv = score(sf, ef)
+                s *= PAUSE_BONUS
                 if best is None or s > best[0]:
                     best = (s, sf, ef, m, cv, "pause")
-    if best is None:
-        # 连续语音：滑窗 + 边界吸附到能量最低点
-        step = max(1, int(0.5 / HOP_SEC))
-        for sf in range(0, max(1, n - target_f), step):
-            ef = min(n, sf + target_f)
-            if (ef - sf) * HOP_SEC < MIN_CLIP_SEC:
-                continue
-            s, m, cv = score(sf, ef)
-            if best is None or s > best[0]:
-                best = (s, sf, ef, m, cv, "slide")
+
+    step = max(1, int(0.5 / HOP_SEC))
+    for sf in range(0, max(1, n - target_f), step):
+        ef = min(n, sf + target_f)
+        if (ef - sf) * HOP_SEC < MIN_CLIP_SEC:
+            continue
+        s, m, cv = score(sf, ef)
+        if best is None or s > best[0]:
+            best = (s, sf, ef, m, cv, "slide")
 
     if best is None:
         return 0.0, min(dur, MAX_CLIP_SEC), {"method": "fallback_head"}
@@ -249,8 +254,10 @@ def slice_transcript(text: str, mask: np.ndarray, hop: int, a: float, b: float):
             e0 = sents[-1][1]
         if e0 > s0:
             cand = text[s0:e0].strip()
-            # 吸附后长度离谱（比如整篇没有标点，一句话吞掉全部）就弃用
-            if len(cand) <= want * 2.2:
+            # 句子吸附会两头外扩，实测能扩到 1.8 倍——文字明显多于音频内容时，
+            # 模型会学到一个偏快的语速（音频只有预期的一半长）。
+            # 1.5 倍以外就退回按词边界切，宁可切在句中，也不要字数对不上。
+            if len(cand) <= want * 1.5:
                 got = (s0, e0, cand, "sentence")
 
     if got is None:

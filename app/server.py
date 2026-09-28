@@ -957,10 +957,13 @@ async def upload_voice(request: Request,
                  "请确认粘贴的是这段录音的完整文字稿后重新录入")
     warn = ""
     if out_dur > 0:
-        rate = len(used_text) / out_dur     # 字/秒
-        if rate < 1.5 or rate > 25:
+        # 语速阈值收紧到 2.5~10 字/秒：文字明显多于/少于音频内容时，模型会从
+        # prompt 里学到一个错的语速——实测 130 字配 10.5 秒（12.4 字/秒）时，
+        # 生成语速崩到 2.44 字/秒（正常 6.15），耗时涨 5.6 倍、音频长 2.5 倍。
+        rate = len(used_text) / out_dur
+        if rate < 2.5 or rate > 10:
             warn = (f"文字稿与音频时长对不上（约 {rate:.1f} 字/秒，正常语速约 5~7），"
-                    f"自动截取的文字可能不准，建议核对文字稿后重新录入")
+                    f"克隆出来的语速可能偏快或偏慢。建议核对文字稿后重新录入")
 
     voices[safe] = {
         "path": path,
