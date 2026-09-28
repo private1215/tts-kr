@@ -167,6 +167,18 @@ td button{padding:4px 11px;font-size:12px}
 .req{color:#e5534b;font-weight:700;margin:0 2px}
 .hint.warn{color:#e0a33a}
 .hint.bad{color:#e5534b}
+.vitem{border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-top:8px;background:var(--panel2)}
+.vitem.bad{border-color:#7a3b34}
+.vtop{display:flex;align-items:center;gap:8px}
+.vname{font-size:13px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vmeta{font-size:11px;color:var(--dim);white-space:nowrap}
+.vtag{font-size:10px;padding:1px 6px;border-radius:999px;background:#3a2f1c;color:#e0a33a;white-space:nowrap}
+.vtag.ok{background:#1f3a2a;color:#5fcf80}
+.vtext{font-size:11.5px;color:var(--dim);margin-top:6px;line-height:1.5;word-break:break-all}
+.vact{margin-top:7px;display:flex;gap:6px;align-items:center}
+.vact button{padding:3px 9px;font-size:11.5px}
+.vdel{color:#e5534b}
+.vplay{width:100%;margin-top:6px;display:none}
 details.adv{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
 details.adv summary{cursor:pointer;font-size:12px;color:var(--dim);outline:none;font-weight:500}
 details.adv summary:hover{color:var(--txt2)}
@@ -365,16 +377,25 @@ details.adv summary:hover{color:var(--txt2)}
         <div class="row">
           <input id="vname" data-i18n-ph="vnamePh" style="flex:1">
         </div>
-        <label style="margin-top:10px" data-i18n="refAudio">参考音频（3–30 秒干净人声，建议 15 秒左右，无背景噪音）</label>
+        <label style="margin-top:10px" data-i18n="refAudio">参考音频（整段录音直接上传，无需自己剪辑）</label>
         <input id="vfile" type="file" accept="audio/*">
-        <label><span data-i18n="refText">参考音频对应的文字（必填：这段音频的完整逐字稿）</span><span class="req">*</span></label>
-        <input id="vtext" data-i18n-ph="refTextPh">
+        <label><span data-i18n="refText">音频对应的完整文字稿</span><span class="req">*</span></label>
+        <textarea id="vtext" rows="5" data-i18n-ph="refTextPh" style="width:100%;resize:vertical"></textarea>
         <div class="hint" id="vdur" style="display:none"></div>
-        <div class="hint" data-i18n="enrollHint">必填原因：克隆走 ICL 模式，模型必须用这段文字对齐参考音频的音色与韵律；留空会直接报错。音频越长显存占用越高、生成越慢，而准确度并不会提升——超过 30 秒会被拒绝。</div>
+        <div class="hint" data-i18n="enrollHint">怎么用：直接上传整段录音 + 粘贴这段录音的完整文字稿即可，不用自己剪音频、也不用自己对时间轴。系统会自动挑出音质最好的约 15 秒，并把文字稿按实际说话时间对齐截出对应片段。首次录入会多花几秒做分析，之后这个音色就是现成的。</div>
         <div class="row" style="margin-top:12px">
           <button id="vupload" data-i18n="upload">上传录入</button>
         </div>
         <div class="hint" id="vmsg"></div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="margin-bottom:8px">
+          <h2 style="margin:0" data-i18n="savedVoices">已录入音色</h2>
+          <span class="hint" style="margin-left:auto" id="vcount"></span>
+        </div>
+        <div class="hint" data-i18n="voiceListHint">录入一次即可长期复用：生成时在上方「录入音色克隆」里直接选。可试听、可查看文字稿、可删除重录。</div>
+        <div id="vlist" style="margin-top:10px"></div>
       </div>
     </div>
   </div>
@@ -447,22 +468,31 @@ const I18N = {
     advanced:'高级设置（分段 / 批量）',
     paramHint:'保持默认即可：后端会按显存自动收敛到安全值（分段 ≤60、批量 ≤8）。调大不会更快，只会被自动压回。',
     submit:'提交生成', clear:'清空', enroll:'录入声音（声音克隆用）',
-    vnamePh:'音色名称，例：韩语女声-知妍', refAudio:'参考音频（3–30 秒干净人声，建议 15 秒左右，无背景噪音）',
-    refText:'参考音频对应的文字（必填：这段音频的完整逐字稿）', refTextPh:'参考音频里说的话，需与音频逐字一致',
-    enrollHint:'必填原因：克隆走 ICL 模式，模型必须用这段文字对齐参考音频的音色与韵律，留空会直接报错。音频越长显存占用越高、生成越慢，准确度却不会提升——超过 30 秒会被拒绝。',
-    needRefText:'请填写参考音频对应的文字（完整逐字稿，克隆模式必填）',
-    refTooLong:(d)=>`参考音频 ${d} 秒，超过 30 秒上限。请截取 15 秒左右最清晰的一段再上传：音频越长显存占用越高、生成越慢，准确度并不会提升`,
-    refTooShort:(d)=>`参考音频仅 ${d} 秒，至少需要 3 秒`,
-    refDurOk:(d)=>`参考音频时长 ${d} 秒，符合要求`,
+    vnamePh:'音色名称，例：韩语女声-知妍', refAudio:'参考音频（整段录音直接上传，无需自己剪辑）',
+    refText:'音频对应的完整文字稿', refTextPh:'把这段录音里说的话完整粘进来（不用挑片段，系统会自动截取对应部分）',
+    enrollHint:'怎么用：直接上传整段录音 + 粘贴这段录音的完整文字稿即可，不用自己剪音频、也不用自己对时间轴。系统会自动挑出音质最好的约 15 秒，并把文字稿按实际说话时间对齐截出对应片段。首次录入会多花几秒做分析，之后这个音色就是现成的。',
+    needRefText:'请粘贴这段录音的完整文字稿（克隆必填，系统会自动截取对应片段）',
+    refTooShort:(d)=>`音频仅 ${d} 秒，至少需要 3 秒`,
+    refDurOk:(d)=>`音频 ${d} 秒，可直接录入`,
+    refAutoTrim:(d)=>`音频 ${d} 秒，录入时会自动截取其中最清晰的约 15 秒，并同步截取对应文字`,
+    refTooLong:(d)=>`音频 ${d} 秒，超过 15 分钟上限。请先粗略裁到几分钟内再上传`,
+    analyzing:'上传成功，正在分析音频并截取最佳片段…',
     voiceUnusable:'（不可用）',
-    voiceBad:'所选音色不可用：缺少参考文字稿，或参考音频超过 30 秒。请重新录入该音色。',
+    voiceBad:'所选音色不可用：缺少参考文字稿，或参考音频未经自动截取。请用原音频重新录入一次。',
+    noVoices:'还没有录入任何音色', voiceListHint:'录入一次即可长期复用：生成时在上方「录入音色克隆」里直接选。可试听、可查看文字稿、可删除重录。',
+    voiceSrc:(d)=>`原音频 ${d}s`, voiceClip:(a,b)=>` · 自动截取 ${a}s–${b}s`,
+    voiceReady:'可用', voiceNoText:'缺文字稿',
+    vPlay:'试听', vViewText:'查看文字稿', vHideText:'收起',
+    delVoice:'删除', confirmDelVoice:(n)=>`删除音色「${n}」？参考音频会一起删掉，删除后需要重新录入才能再用。`,
     upload:'上传录入', queue:'任务队列', noJobs:'暂无任务', scopeMine:'我的', scopeAll:'全部',
     searchPh:'搜索标题或内容…', allStatus:'全部状态', allOwner:'全部成员',
     stRunning:'生成中', stQueued:'排队中', stDone:'已完成', stError:'失败',
     countFmt:(n,seg)=>`${n} 字 · 约 ${seg} 段`,
     needText:'请先粘贴文案', needVoice:'请先在右侧录入一个音色',
     needName:'请填写音色名称并选择音频', uploading:'上传中...',
-    enrolled:(n,d)=>`已录入：${n}（${d}s）`, fail:'失败：', submitFail:'提交失败: ',
+    enrolled:(n,d)=>`已录入：${n}（${d}s）`,
+    enrolledTrim:(n,d,a,b)=>`已录入：${n}（从 ${a}s–${b}s 自动截出 ${d}s，文字同步截取）`,
+    fail:'失败：', submitFail:'提交失败: ',
     st:{queued:'排队中',running:'生成中',done:'已完成',error:'失败'},
     modeLabel:(j)=> j.mode==='clone' ? '克隆: '+j.voice : '音色: '+j.speaker,
     statFmt:s=>`分段 ${s.segments} · 音频 ${s.audio_seconds}s · 耗时 ${s.gen_seconds}s · RTF ${s.rtf}`,
@@ -517,22 +547,31 @@ const I18N = {
     advanced:'Advanced (segment / batch)',
     paramHint:'Keep defaults: the backend auto-tunes a safe plan (seg ≤60, batch ≤8) from free VRAM. Larger values get clamped, not faster.',
     submit:'Generate', clear:'Clear', enroll:'Enroll a voice (for cloning)',
-    vnamePh:'Voice name, e.g. Korean female — Jiyeon', refAudio:'Reference audio (3–30s clean speech, ~15s recommended, no background noise)',
-    refText:'Transcript of the reference audio (required: exact words of the clip)', refTextPh:'Exactly what is said in the reference audio',
-    enrollHint:'Required: cloning runs in ICL mode — the model needs this transcript to align timbre and prosody with the reference audio; leaving it blank fails immediately. Longer audio costs more VRAM and runs slower without improving accuracy — anything over 30s is rejected.',
-    needRefText:'Please enter the transcript of the reference audio (required for cloning)',
-    refTooLong:(d)=>`Reference audio is ${d}s, over the 30s limit. Please trim a clean ~15s segment: longer audio uses more VRAM and runs slower, and does not improve accuracy`,
-    refTooShort:(d)=>`Reference audio is only ${d}s — at least 3s required`,
-    refDurOk:(d)=>`Reference audio is ${d}s — OK`,
+    vnamePh:'Voice name, e.g. Korean female — Jiyeon', refAudio:'Reference audio (upload the whole recording — no need to trim it yourself)',
+    refText:'Full transcript of the audio', refTextPh:'Paste everything said in this recording — no need to pick a clip, the matching part is cut automatically',
+    enrollHint:'How to use: upload the full recording and paste its full transcript. No manual trimming, no timeline work. The server picks the cleanest ~15s and cuts the transcript to match it by actual speaking time. The first enrollment takes a few extra seconds to analyze; after that the voice is ready to use.',
+    needRefText:'Please paste the full transcript of this recording (required — the matching part is cut automatically)',
+    refTooShort:(d)=>`Audio is only ${d}s — at least 3s required`,
+    refDurOk:(d)=>`Audio is ${d}s — ready to enroll`,
+    refAutoTrim:(d)=>`Audio is ${d}s — the cleanest ~15s will be cut automatically, with the matching transcript`,
+    refTooLong:(d)=>`Audio is ${d}s, over the 15-minute limit. Please trim it roughly to a few minutes first`,
+    analyzing:'Uploaded — analyzing the audio and cutting the best segment…',
     voiceUnusable:'(unusable)',
-    voiceBad:'This voice is unusable: missing transcript, or reference audio over 30s. Please enroll it again.',
+    voiceBad:'This voice is unusable: missing transcript, or the reference audio was never auto-trimmed. Please enroll it again from the original recording.',
+    noVoices:'No voices enrolled yet', voiceListHint:'Enroll once, reuse forever: pick it under "Cloned voice" when generating. You can preview, read the transcript, or delete and re-enroll.',
+    voiceSrc:(d)=>`source ${d}s`, voiceClip:(a,b)=>` · auto-cut ${a}s–${b}s`,
+    voiceReady:'ready', voiceNoText:'no transcript',
+    vPlay:'Preview', vViewText:'Transcript', vHideText:'Collapse',
+    delVoice:'Delete', confirmDelVoice:(n)=>`Delete voice "${n}"? The reference audio is removed too — you must enroll again to use it.`,
     upload:'Enroll', queue:'Job queue', noJobs:'No jobs yet', scopeMine:'Mine', scopeAll:'All',
     searchPh:'Search title or text…', allStatus:'All status', allOwner:'All members',
     stRunning:'running', stQueued:'queued', stDone:'done', stError:'error',
     countFmt:(n,seg)=>`${n} chars · ~${seg} segments`,
     needText:'Please paste a script first', needVoice:'Please enroll a voice on the right first',
     needName:'Please enter a voice name and choose an audio file', uploading:'Uploading...',
-    enrolled:(n,d)=>`Enrolled: ${n} (${d}s)`, fail:'Failed: ', submitFail:'Submit failed: ',
+    enrolled:(n,d)=>`Enrolled: ${n} (${d}s)`,
+    enrolledTrim:(n,d,a,b)=>`Enrolled: ${n} (auto-cut ${a}s–${b}s → ${d}s, transcript cut to match)`,
+    fail:'Failed: ', submitFail:'Submit failed: ',
     st:{queued:'queued',running:'running',done:'done',error:'error'},
     modeLabel:(j)=> j.mode==='clone' ? 'clone: '+j.voice : 'voice: '+j.speaker,
     statFmt:s=>`${s.segments} segments · audio ${s.audio_seconds}s · took ${s.gen_seconds}s · RTF ${s.rtf}`,
@@ -587,22 +626,31 @@ const I18N = {
     advanced:'고급 설정 (분할 / 배치)',
     paramHint:'기본값 유지: 백엔드가 여유 VRAM에 따라 안전한 값(분할 ≤60, 배치 ≤8)으로 자동 조정합니다. 크게 해도 빨라지지 않습니다.',
     submit:'생성 요청', clear:'지우기', enroll:'음성 등록 (클론용)',
-    vnamePh:'음성 이름, 예: 한국어 여성-지연', refAudio:'참고 음성 (3~30초, 잡음 없는 깨끗한 목소리, 15초 권장)',
-    refText:'참고 음성의 대사 (필수: 해당 구간의 전체 대사)', refTextPh:'참고 음성에 담긴 말 (글자 그대로)',
-    enrollHint:'필수인 이유: 클론은 ICL 모드로 동작하므로, 이 대사로 참고 음성의 음색과 리듬을 정렬해야 합니다. 비우면 즉시 오류가 납니다. 음성이 길수록 VRAM 사용량이 커지고 생성도 느려지지만 정확도는 올라가지 않습니다—30초를 넘으면 거부됩니다.',
-    needRefText:'참고 음성의 대사를 입력해 주세요 (클론 모드 필수)',
-    refTooLong:(d)=>`참고 음성이 ${d}초로 30초 제한을 넘었습니다. 가장 깨끗한 15초 정도만 잘라 올려 주세요: 길수록 VRAM을 많이 쓰고 느려지며 정확도는 올라가지 않습니다`,
-    refTooShort:(d)=>`참고 음성이 ${d}초뿐입니다. 최소 3초가 필요합니다`,
-    refDurOk:(d)=>`참고 음성 ${d}초 — 사용 가능`,
+    vnamePh:'음성 이름, 예: 한국어 여성-지연', refAudio:'참고 음성 (녹음 전체를 그대로 올리세요. 직접 자를 필요 없습니다)',
+    refText:'녹음 전체의 대사', refTextPh:'이 녹음에서 한 말을 전체로 붙여 넣으세요. 구간을 고를 필요 없이 해당 부분은 자동으로 잘립니다',
+    enrollHint:'사용법: 녹음 전체와 그 대사 전체를 올리면 끝입니다. 오디오를 자르거나 타임라인을 맞출 필요가 없습니다. 서버가 가장 깨끗한 약 15초를 골라 실제 발화 시간에 맞춰 대사도 함께 잘라 줍니다. 첫 등록 때 분석에 몇 초 더 걸리고, 이후에는 바로 사용할 수 있습니다.',
+    needRefText:'이 녹음의 대사 전체를 붙여 넣어 주세요 (클론 필수, 해당 구간은 자동으로 잘립니다)',
+    refTooShort:(d)=>`음성이 ${d}초뿐입니다. 최소 3초가 필요합니다`,
+    refDurOk:(d)=>`음성 ${d}초 — 바로 등록 가능`,
+    refAutoTrim:(d)=>`음성 ${d}초 — 가장 깨끗한 약 15초가 자동으로 잘리고, 대사도 함께 잘립니다`,
+    refTooLong:(d)=>`음성이 ${d}초로 15분 제한을 넘었습니다. 몇 분 내로 대략 잘라서 올려 주세요`,
+    analyzing:'업로드 완료 — 음성을 분석해 최적 구간을 자르는 중…',
     voiceUnusable:'(사용 불가)',
-    voiceBad:'이 음성은 사용할 수 없습니다: 대사가 없거나 참고 음성이 30초를 넘습니다. 다시 등록해 주세요.',
+    voiceBad:'이 음성은 사용할 수 없습니다: 대사가 없거나 자동 자르기가 적용되지 않은 음성입니다. 원본 녹음으로 다시 등록해 주세요.',
+    noVoices:'등록된 음성이 없습니다', voiceListHint:'한 번 등록하면 계속 재사용할 수 있습니다: 생성할 때 위의 "녹음 음성 클론"에서 골라 주세요. 미리 듣기, 대사 확인, 삭제 후 재등록이 가능합니다.',
+    voiceSrc:(d)=>`원본 ${d}초`, voiceClip:(a,b)=>` · 자동 절단 ${a}초~${b}초`,
+    voiceReady:'사용 가능', voiceNoText:'대사 없음',
+    vPlay:'미리 듣기', vViewText:'대사 보기', vHideText:'접기',
+    delVoice:'삭제', confirmDelVoice:(n)=>`음성 "${n}"을(를) 삭제할까요? 참고 음성도 함께 삭제되며, 다시 사용하려면 재등록해야 합니다.`,
     upload:'등록하기', queue:'작업 대기열', noJobs:'작업이 없습니다', scopeMine:'내 작업', scopeAll:'전체',
     searchPh:'제목이나 내용 검색…', allStatus:'전체 상태', allOwner:'전체 멤버',
     stRunning:'생성중', stQueued:'대기중', stDone:'완료', stError:'실패',
     countFmt:(n,seg)=>`${n}자 · 약 ${seg}개 구간`,
     needText:'원고를 먼저 붙여넣어 주세요', needVoice:'오른쪽에서 음성을 먼저 등록해 주세요',
     needName:'음성 이름과 오디오 파일을 선택해 주세요', uploading:'업로드 중...',
-    enrolled:(n,d)=>`등록 완료: ${n} (${d}초)`, fail:'실패: ', submitFail:'요청 실패: ',
+    enrolled:(n,d)=>`등록 완료: ${n} (${d}초)`,
+    enrolledTrim:(n,d,a,b)=>`등록 완료: ${n} (${a}초~${b}초에서 ${d}초 자동 절단, 대사도 함께 절단)`,
+    fail:'실패: ', submitFail:'요청 실패: ',
     st:{queued:'대기중',running:'생성중',done:'완료',error:'실패'},
     modeLabel:(j)=> j.mode==='clone' ? '클론: '+j.voice : '음색: '+j.speaker,
     statFmt:s=>`구간 ${s.segments} · 오디오 ${s.audio_seconds}초 · 소요 ${s.gen_seconds}초 · RTF ${s.rtf}`,
@@ -657,22 +705,31 @@ const I18N = {
     advanced:'詳細設定（分割 / バッチ）',
     paramHint:'既定値のまま：バックエンドが空き VRAM に応じて安全な値（分割 ≤60、バッチ ≤8）へ自動調整します。大きくしても速くなりません。',
     submit:'生成する', clear:'クリア', enroll:'音色を登録（クローン用）',
-    vnamePh:'音色名、例：韓国語女性-ジヨン', refAudio:'参照音声（3〜30秒、ノイズのないクリアな音声、15秒程度を推奨）',
-    refText:'参照音声の書き起こし（必須：その区間の全文）', refTextPh:'参照音声で話している内容（一字一句）',
-    enrollHint:'必須の理由：クローンは ICL モードで動作するため、この書き起こしで参照音声の音色と韻律を揃える必要があります。空欄だと即エラーになります。音声が長いほど VRAM を消費し生成も遅くなりますが、精度は上がりません—30秒を超える場合は拒否されます。',
-    needRefText:'参照音声の書き起こしを入力してください（クローンモードでは必須）',
-    refTooLong:(d)=>`参照音声が ${d} 秒で 30 秒制限を超えています。最もクリアな 15 秒程度に切り取って再アップロードしてください：長いほど VRAM を消費し遅くなりますが、精度は上がりません`,
-    refTooShort:(d)=>`参照音声が ${d} 秒しかありません。最低 3 秒必要です`,
-    refDurOk:(d)=>`参照音声 ${d} 秒 — 使用可能`,
+    vnamePh:'音色名、例：韓国語女性-ジヨン', refAudio:'参照音声（録音をそのままアップロード。自分で切る必要はありません）',
+    refText:'録音全体の書き起こし', refTextPh:'この録音で話した内容をすべて貼り付けてください。区間を選ぶ必要はなく、該当部分は自動で切り出されます',
+    enrollHint:'使い方：録音全体とその書き起こし全体をアップロードするだけです。音声の編集もタイムライン調整も不要です。サーバーが最もクリアな約 15 秒を選び、実際の発話時間に合わせて書き起こしも同時に切り出します。初回登録は分析に数秒余計にかかりますが、以降はそのまま使えます。',
+    needRefText:'この録音の書き起こし全体を貼り付けてください（クローン必須、該当部分は自動で切り出されます）',
+    refTooShort:(d)=>`音声が ${d} 秒しかありません。最低 3 秒必要です`,
+    refDurOk:(d)=>`音声 ${d} 秒 — そのまま登録できます`,
+    refAutoTrim:(d)=>`音声 ${d} 秒 — 最もクリアな約 15 秒が自動で切り出され、書き起こしも連動します`,
+    refTooLong:(d)=>`音声が ${d} 秒で 15 分の上限を超えています。数分程度に大まかに切ってからアップロードしてください`,
+    analyzing:'アップロード完了 — 音声を解析して最適な区間を切り出しています…',
     voiceUnusable:'（使用不可）',
-    voiceBad:'この音色は使用できません：書き起こしが空、または参照音声が 30 秒を超えています。再登録してください。',
+    voiceBad:'この音色は使用できません：書き起こしが空、または自動切り出しが未適用です。元の録音から再登録してください。',
+    noVoices:'まだ音色が登録されていません', voiceListHint:'一度登録すればずっと再利用できます：生成時に上の「録音音色のクローン」から選ぶだけ。試聴・書き起こしの確認・削除して再登録ができます。',
+    voiceSrc:(d)=>`元 audio ${d}秒`, voiceClip:(a,b)=>` · 自動切り出し ${a}秒〜${b}秒`,
+    voiceReady:'使用可', voiceNoText:'書き起こしなし',
+    vPlay:'試聴', vViewText:'書き起こし', vHideText:'閉じる',
+    delVoice:'削除', confirmDelVoice:(n)=>`音色「${n}」を削除しますか？参照音声も一緒に削除され、再利用には再登録が必要です。`,
     upload:'登録', queue:'ジョブキュー', noJobs:'ジョブはありません', scopeMine:'自分の', scopeAll:'すべて',
     searchPh:'タイトル・本文を検索…', allStatus:'すべての状態', allOwner:'全メンバー',
     stRunning:'生成中', stQueued:'待機中', stDone:'完了', stError:'失敗',
     countFmt:(n,seg)=>`${n}文字 · 約${seg}セグメント`,
     needText:'先に原稿を貼り付けてください', needVoice:'先に右側で音色を登録してください',
     needName:'音色名と音声ファイルを指定してください', uploading:'アップロード中...',
-    enrolled:(n,d)=>`登録完了: ${n}（${d}秒）`, fail:'失敗: ', submitFail:'送信失敗: ',
+    enrolled:(n,d)=>`登録完了: ${n}（${d}秒）`,
+    enrolledTrim:(n,d,a,b)=>`登録完了: ${n}（${a}秒〜${b}秒から ${d}秒を自動切断、書き起こしも連動）`,
+    fail:'失敗: ', submitFail:'送信失敗: ',
     st:{queued:'待機中',running:'生成中',done:'完了',error:'失敗'},
     modeLabel:(j)=> j.mode==='clone' ? 'クローン: '+j.voice : '音色: '+j.speaker,
     statFmt:s=>`セグメント ${s.segments} · 音声 ${s.audio_seconds}秒 · 処理 ${s.gen_seconds}秒 · RTF ${s.rtf}`,
@@ -899,7 +956,64 @@ function renderCount(){
 }
 async function loadMeta(){
   try{ META = await (await api('/api/meta')).json(); }catch(e){ return; }
-  renderSpeakers(); renderLanguages(); renderVoices();
+  // 音色详情（时长/文字稿/截取来源）单独一份，用于右侧音色列表
+  try{ META.info = await (await api('/api/voices')).json(); }catch(e){ META.info = META.info || {}; }
+  renderSpeakers(); renderLanguages(); renderVoices(); renderVoiceList();
+}
+
+/* ---------- 已录入音色：可试听 / 查看文字稿 / 删除重录 ---------- */
+function renderVoiceList(){
+  const box = $('#vlist'), list = META.voices || [], info = META.info || {};
+  $('#vcount').textContent = list.length ? String(list.length) : '';
+  if(!list.length){ box.innerHTML = `<div class="hint">${t('noVoices')}</div>`; return; }
+  box.innerHTML = list.map(n => {
+    const v = info[n] || {}, ok = voiceOk(n);
+    const src = v.src_dur ? t('voiceSrc')(v.src_dur) : '';
+    const clip = (v.clip && v.clip.start != null) ? t('voiceClip')(v.clip.start, v.clip.end) : '';
+    const txt = v.ref_text || '';
+    return `<div class="vitem${ok ? '' : ' bad'}" data-v="${esc(n)}">
+      <div class="vtop">
+        <span class="vname" title="${esc(n)}">${esc(n)}</span>
+        <span class="vtag${ok ? ' ok' : ''}">${ok ? t('voiceReady') : t('voiceUnusable')}</span>
+        <span class="vmeta">${v.dur != null ? v.dur + 's' : ''}</span>
+      </div>
+      <div class="vmeta">${src}${clip}</div>
+      <div class="vtext" data-full="${esc(txt)}">${txt ? esc(txt.length > 46 ? txt.slice(0, 46) + '…' : txt)
+            : '<span style="color:#e5534b">' + t('voiceNoText') + '</span>'}</div>
+      <div class="vact">
+        <button class="vplaybtn">${t('vPlay')}</button>
+        ${txt ? `<button class="vview">${t('vViewText')}</button>` : ''}
+        <button class="vdel">${t('delVoice')}</button>
+      </div>
+      <audio class="vplay" controls preload="none"></audio>
+    </div>`;
+  }).join('');
+
+  box.querySelectorAll('.vitem').forEach(item => {
+    const n = item.dataset.v, a = item.querySelector('audio');
+    item.querySelector('.vplaybtn').onclick = () => {
+      if(a.style.display === 'block'){ a.pause(); a.style.display = 'none'; return; }
+      if(!a.src) a.src = '/api/voices/' + encodeURIComponent(n) + '/audio';
+      a.style.display = 'block';
+      a.play().catch(()=>{});
+    };
+    const vt = item.querySelector('.vtext');
+    const vv = item.querySelector('.vview');
+    if(vv) vv.onclick = () => {
+      const full = vt.dataset.full || '';
+      const open = vt.dataset.open === '1';
+      vt.textContent = open ? (full.length > 46 ? full.slice(0, 46) + '…' : full) : full;
+      vt.dataset.open = open ? '0' : '1';
+      vv.textContent = open ? t('vViewText') : t('vHideText');
+    };
+    item.querySelector('.vdel').onclick = async () => {
+      if(!confirm(t('confirmDelVoice')(n))) return;
+      try{
+        await api('/api/voices/' + encodeURIComponent(n), {method:'DELETE'});
+        loadMeta();
+      }catch(e){ if(e.message !== '401') alert(t('fail') + e.message); }
+    };
+  });
 }
 
 /* ---------- 登录 ---------- */
@@ -1166,9 +1280,11 @@ function probeDuration(file){
   }).then(d=>{
     if(d == null) return null;
     el.style.display = '';
-    if(d > 30){ el.className = 'hint bad';  el.textContent = t('refTooLong')(d.toFixed(1)); }
+    // 长音频不再拦：由服务端自动截取，这里只做提示
+    if(d > 900){ el.className = 'hint bad'; el.textContent = t('refTooLong')(d.toFixed(1)); }
     else if(d < 3){ el.className = 'hint bad'; el.textContent = t('refTooShort')(d.toFixed(1)); }
-    else { el.className = 'hint'; el.textContent = (t('refDurOk') || ((x)=>`参考音频时长 ${x} 秒`))(d.toFixed(1)); }
+    else if(d > 30){ el.className = 'hint warn'; el.textContent = t('refAutoTrim')(d.toFixed(1)); }
+    else { el.className = 'hint'; el.textContent = t('refDurOk')(d.toFixed(1)); }
     return d;
   });
 }
@@ -1181,7 +1297,7 @@ $('#vupload').onclick = async () => {
   // 拦在这里员工能当场看到原因，不用等一次上传往返。
   if(!$('#vtext').value.trim()){ $('#vmsg').textContent = t('needRefText'); $('#vtext').focus(); return; }
   const d = await probeDuration(f);
-  if(d != null && d > 30){ $('#vmsg').textContent = t('refTooLong')(d.toFixed(1)); return; }
+  if(d != null && d > 900){ $('#vmsg').textContent = t('refTooLong')(d.toFixed(1)); return; }
   if(d != null && d < 3){ $('#vmsg').textContent = t('refTooShort')(d.toFixed(1)); return; }
   const fd = new FormData();
   fd.append('name', name); fd.append('ref_text', $('#vtext').value.trim()); fd.append('file', f);
@@ -1190,7 +1306,13 @@ $('#vupload').onclick = async () => {
     const r = await api('/api/voices', {method:'POST', body:fd});
     if(!r.ok){ const j = await r.json().catch(()=>({detail:'error'})); throw new Error(j.detail||'error'); }
     const j = await r.json();
-    $('#vmsg').textContent = t('enrolled')(j.name, j.dur);
+    if(j.trimmed){ $('#vmsg').textContent = t('analyzing'); }
+    $('#vmsg').textContent = j.trimmed
+      ? t('enrolledTrim')(j.name, j.dur, j.clip_start, j.clip_end)
+      : t('enrolled')(j.name, j.dur);
+    if(j.warn) $('#vmsg').textContent += ' | ' + j.warn;
+    $('#vtext').value = ''; $('#vfile').value = '';
+    $('#vdur').style.display = 'none';
     loadMeta();
   }catch(e){ if(e.message !== '401') $('#vmsg').textContent = t('fail')+e.message; }
 };

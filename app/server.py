@@ -25,6 +25,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, Response
 
 from tts_engine import TTSEngine
+from voice_trim import trim_reference
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("server")
@@ -59,10 +60,17 @@ MIN_PW_LEN = 6
 #
 # 30 秒上限对应的最坏情况：375 codec + 约 185 字 × 0.634 ≈ 117 → 约 516 tokens
 # → 56 MiB/样本 → batch8 仅 0.44 GiB，仍在安全区内，且不会拖慢生成。
+#
+# 但**不让员工自己剪**：员工只管上传整段录音 + 整段文字稿，超过 AUTO_TRIM_ABOVE
+# 的由 voice_trim 自动挑最清晰的一段（约 TARGET 秒），并把文字稿按累计有声时长
+# 对齐截出对应片段。分析一次的耗时在秒级，之后该音色就是现成的成品。
 # ---------------------------------------------------------------------------
-REF_AUDIO_MIN_SEC = 3.0
-REF_AUDIO_MAX_SEC = 30.0
-REF_AUDIO_BEST_SEC = 15.0
+REF_AUDIO_MIN_SEC = 3.0           # 短于这个没法克隆
+REF_AUDIO_MAX_SEC = 30.0          # 成品音色的硬上限（自动裁剪后必然满足）
+REF_AUDIO_BEST_SEC = 15.0         # 给员工的建议长度（现在由代码自动达成）
+REF_AUDIO_TRIM_TARGET = 15.0      # 自动截取的目标长度
+REF_AUDIO_AUTO_TRIM_ABOVE = 30.0  # 超过这个长度才触发自动截取
+REF_AUDIO_HARD_MAX_SEC = 900.0    # 超过 15 分钟直接拒（读进来太浪费内存）
 
 MODEL_DIRS = {
     "custom_voice": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-CustomVoice"),
@@ -256,9 +264,9 @@ async def run_job(job):
                 f"请重新录入该音色，并填写参考音频对应的逐字文字")
         if float(v.get("dur") or 0) > REF_AUDIO_MAX_SEC:
             raise RuntimeError(
-                f"音色「{job['voice']}」的参考音频 {v.get('dur')}s 超过 "
-                f"{REF_AUDIO_MAX_SEC:.0f}s 上限（显存会暴涨），请截取 "
-                f"{REF_AUDIO_BEST_SEC:.0f} 秒左右的一段重新录入")
+                f"音色「{job['voice']}」的参考音频 {v.get('dur')}s 是未裁剪的旧音色"
+                f"（超过 {REF_AUDIO_MAX_SEC:.0f}s，显存会暴涨）。"
+                f"请用原音频重新录入一次，系统会自动截取最佳片段")
         ref_audio = read_audio(v["path"])
         ref_key = job["voice"]
 
@@ -291,6 +299,15 @@ async def run_job(job):
         )
 
     audio, sr, stats = await loop.run_in_executor(None, _work)
+
+    # 覆盖度自检：分段时空白/换行会被规整掉，正常落在 90%~100%。
+    # 掉到 85% 以下说明有文本没被送进模型，必须在日志里暴露出来。
+    _src_len = max(len(job.get("text") or ""), 1)
+    _cov = ((stats or {}).get("chars") or 0) / _src_len
+    if _cov < 0.85:
+        log.warning("覆盖度异常 job=%s: 原文 %d 字，实际只生成 %d 字（%.1f%%），段数 %s",
+                    job["id"], _src_len, (stats or {}).get("chars") or 0,
+                    _cov * 100, (stats or {}).get("segments"))
 
     jid = job["id"]
     job["stage"] = "encoding"
@@ -603,9 +620,9 @@ async def create_job(request: Request,
                      f"请重新录入该音色，并填写参考音频对应的逐字文字")
         if float(_v.get("dur") or 0) > REF_AUDIO_MAX_SEC:
             raise HTTPException(
-                400, f"音色「{voice}」的参考音频 {_v.get('dur')}s 超过 "
-                     f"{REF_AUDIO_MAX_SEC:.0f}s 上限，会让显存暴涨、生成明显变慢。"
-                     f"请截取 {REF_AUDIO_BEST_SEC:.0f} 秒左右最清晰的一段重新录入")
+                400, f"音色「{voice}」的参考音频 {_v.get('dur')}s 是未裁剪的旧音色"
+                     f"（超过 {REF_AUDIO_MAX_SEC:.0f}s，显存会暴涨、生成明显变慢）。"
+                     f"请用原音频重新录入一次，系统会自动截取最佳片段")
 
     title = (title or "").strip() or text.strip().replace("\n", " ")[:24]
     jid = uuid.uuid4().hex[:12]
@@ -900,27 +917,98 @@ async def upload_voice(request: Request,
     if dur < REF_AUDIO_MIN_SEC:
         os.remove(tmp)
         raise HTTPException(
-            400, f"参考音频太短: {dur:.1f}s，至少需要 {REF_AUDIO_MIN_SEC:.0f} 秒，"
-                 f"建议 {REF_AUDIO_BEST_SEC:.0f} 秒左右")
-    if dur > REF_AUDIO_MAX_SEC:
+            400, f"参考音频太短: {dur:.1f}s，至少需要 {REF_AUDIO_MIN_SEC:.0f} 秒")
+    if dur > REF_AUDIO_HARD_MAX_SEC:
         os.remove(tmp)
         raise HTTPException(
-            400, f"参考音频太长: {dur:.1f}s，最多 {REF_AUDIO_MAX_SEC:.0f} 秒。"
-                 f"音频越长显存占用越高、生成越慢，而克隆准确度并不会提升——"
-                 f"请截取 {REF_AUDIO_BEST_SEC:.0f} 秒左右最清晰、无背景音的一段再上传")
+            400, f"参考音频太长: {dur / 60:.1f} 分钟，上限 "
+                 f"{REF_AUDIO_HARD_MAX_SEC / 60:.0f} 分钟。"
+                 f"请先粗略裁剪到几分钟内再上传")
+
+    # 原始音频留档：便于日后换策略重新分析，不必让员工再传一次
+    src_dir = os.path.join(VOICE_DIR, "sources")
+    src_path = ""
+    try:
+        os.makedirs(src_dir, exist_ok=True)
+        src_path = os.path.join(src_dir, f"{safe}__full.wav")
+        sf.write(src_path, data, sr)
+    except Exception as e:
+        log.warning("原始音频留档失败（不影响录入）: %s", e)
+        src_path = ""
+
+    # 自动截取：员工不需要懂剪辑。超过 30 秒的音频由代码挑最清晰的一段，
+    # 文字稿按累计有声时长对齐截出对应片段。
+    t0 = time.time()
+    audio, sr2, used_text, info = trim_reference(
+        data, sr, ref_text,
+        target=REF_AUDIO_TRIM_TARGET, trim_above=REF_AUDIO_AUTO_TRIM_ABOVE)
+    info["analyze_seconds"] = round(time.time() - t0, 2)
+    out_dur = len(audio) / float(sr2)
+
     path = os.path.join(VOICE_DIR, f"{safe}.wav")
-    sf.write(path, data, sr)
+    sf.write(path, audio, sr2)
     os.remove(tmp)
-    voices[safe] = {"path": path, "ref_text": ref_text, "sr": sr, "dur": round(dur, 2)}
+
+    if not used_text.strip():
+        # ref_text 为空会让模型提前收尾（表现为「只念了一半」），这里直接拦住，
+        # 不让一个坏音色混进来。
+        raise HTTPException(
+            400, "自动截取后文字为空：文字稿与这段音频对不上（或文字稿为空）。"
+                 "请确认粘贴的是这段录音的完整文字稿后重新录入")
+    warn = ""
+    if out_dur > 0:
+        rate = len(used_text) / out_dur     # 字/秒
+        if rate < 1.5 or rate > 25:
+            warn = (f"文字稿与音频时长对不上（约 {rate:.1f} 字/秒，正常语速约 5~7），"
+                    f"自动截取的文字可能不准，建议核对文字稿后重新录入")
+
+    voices[safe] = {
+        "path": path,
+        "ref_text": used_text,
+        "sr": sr2,
+        "dur": round(out_dur, 2),
+        # 留痕：出问题时能看出代码到底截了哪一段、文字对不对
+        "src_path": src_path,
+        "src_dur": info.get("src_dur"),
+        "src_text_len": len(ref_text),
+        "clip": None if not info.get("trimmed") else {
+            "start": info.get("clip_start"),
+            "end": info.get("clip_end"),
+            "method": info.get("method"),
+            "text_method": info.get("text_method"),
+        },
+    }
     save_voices(voices)
-    log.info("录入音色 %s (%.1fs, ref_text %d 字)", safe, dur, len(ref_text))
-    return {"name": safe, "dur": round(dur, 2), "sr": sr}
+    log.info("录入音色 %s: 原 %.1fs -> 成品 %.2fs, ref_text %d 字, 分析 %.2fs, %s",
+             safe, dur, out_dur, len(used_text), info["analyze_seconds"], info)
+    return {
+        "name": safe,
+        "dur": round(out_dur, 2),
+        "sr": sr2,
+        "trimmed": bool(info.get("trimmed")),
+        "src_dur": info.get("src_dur"),
+        "clip_start": info.get("clip_start"),
+        "clip_end": info.get("clip_end"),
+        "ref_text": used_text,
+        "warn": warn,
+    }
 
 
 @app.get("/api/voices")
 async def list_voices(request: Request):
     require(request)
     return {k: {kk: vv for kk, vv in v.items() if kk != "path"} for k, v in voices.items()}
+
+
+@app.get("/api/voices/{name}/audio")
+async def voice_audio(request: Request, name: str):
+    """试听已录入音色的参考音频（成品片段，不是原始长音频）。"""
+    require(request)
+    v = voices.get(name)
+    if not v or not os.path.isfile(v.get("path", "")):
+        raise HTTPException(404, "音色不存在")
+    return FileResponse(v["path"], media_type="audio/wav",
+                        filename=f"{name}.wav")
 
 
 @app.delete("/api/voices/{name}")
