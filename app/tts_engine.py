@@ -55,6 +55,43 @@ REF_HEADROOM_GIB = 7.4      # 模型加载后应有的净可用显存（11.63 - 
 OOM_MAX_RETRY = 3           # OOM 降批重试次数（每次批量减半）
 OOM_THRESHOLD_TOKENS = 7300  # 实测崩溃阈值，仅用于日志对照
 
+# ---------------------------------------------------------------------------
+# 克隆模式（ICL）的参考音频前缀成本
+#
+# generate_voice_clone 的 voice_clone_prompt=[prompt]*n —— **每个样本都背一份
+# 完整前缀**，prompt 长度会按 batch 倍数放大 KV cache，这是克隆模式唯一的
+# 额外显存项，也是 329s 参考音频必 OOM 的直接原因。
+#
+# 实测参数（Qwen3-TTS-12Hz-1.7B-Base，服务端真机读取 config.json）：
+#   codec 帧率 = input_sample_rate / encode_downsample_rate = 24000 / 1920 = 12.5 Hz
+#   talker: 28 层 / 16 注意力头 / 8 KV 头 / head_dim 128 / bf16
+#   → KV = 2(K,V) × 28 × 8 × 128 × 2B = 114 688 B/token ≈ 0.109375 MiB/token
+#   韩文文本实测 0.634 token/字（AutoTokenizer 三段样本均值）
+#
+# 329.33s + 全文稿 ≈ 5 420 prompt tokens → 593 MiB/样本 → batch8 需 4.63 GiB
+# > 空余 4.14 GiB ⇒ 必 OOM；batch2（1.16 GiB）才安全。
+# 裁到 25s 后 ≈ 430 tokens → 47 MiB/样本 → batch8 仅 0.37 GiB，吞吐零损失。
+# ---------------------------------------------------------------------------
+CODEC_HZ = 12.5                 # 语音 codec 帧率（帧/秒）
+KO_TOKENS_PER_CHAR = 0.634      # 韩文 token/字（实测）
+KV_MIB_PER_TOKEN = 0.109375     # 2 × 28层 × 8KV头 × 128维 × 2B / 1024 / 1024
+CLONE_PROMPT_OVERHEAD = 24      # prompt 里的特殊 token / 结构开销
+ACT_GIB_PER_ITEM = 0.30         # 单样本激活显存：实测 batch8 峰值 6.97 - 常驻 4.17 ≈ 2.8
+KV_HEADROOM_SHARE = 0.40        # prompt KV 最多吃掉的净余量比例
+MEM_SAFETY = 0.85               # 显存估算安全系数
+
+
+def estimate_clone_prompt_tokens(ref_audio=None, ref_text: str = "") -> int:
+    """估算单条样本的 ICL 前缀 token 数（codec 帧 + 文字稿 + 结构开销）。"""
+    codec = 0
+    if ref_audio is not None:
+        try:
+            data, sr = ref_audio
+            codec = int(max(0.0, len(data) / float(sr)) * CODEC_HZ)
+        except Exception:
+            codec = 0
+    return int(codec + len(ref_text or "") * KO_TOKENS_PER_CHAR + CLONE_PROMPT_OVERHEAD)
+
 
 def seg_token_cap(max_chars: int) -> int:
     """单段 token 上限，必须与 synth_batch 里的估算公式保持一致。"""
@@ -72,6 +109,21 @@ def gpu_headroom_gib() -> Optional[float]:
             return None
         total = torch.cuda.get_device_properties(0).total_memory
         return (total - torch.cuda.memory_allocated(0)) / (1024 ** 3)
+    except Exception:
+        return None
+
+
+def gpu_free_gib() -> Optional[float]:
+    """真正尚未被占用的显存(GiB)，不含 PyTorch 已 reserved 但可复用的部分。
+
+    KV cache 是「硬占用」——分配后不能被别的张量挤走，所以它只能用真正的
+    空余显存来算，不能像 token 预算那样把 reserved 计为余量。
+    """
+    try:
+        if not torch.cuda.is_available():
+            return None
+        free, _total = torch.cuda.mem_get_info()
+        return free / (1024 ** 3)
     except Exception:
         return None
 
@@ -210,12 +262,16 @@ class TTSEngine:
             torch.cuda.manual_seed_all(seed)
 
     # ---- 自适应配置 -------------------------------------------------------
-    def plan_generation(self, max_chars=None, batch_size=None) -> dict:
+    def plan_generation(self, max_chars=None, batch_size=None,
+                        clone_prompt_tokens: int = 0) -> dict:
         """把调用方传入的分段字数/批量大小收敛到安全区间。
 
         命中过的故障：调用方传 max_chars=110 / batch_size=16 或 1000 时，
         单批 token 预算会冲到 7 560~31 680，必然 OOM。这里统一兜住，
         实际生效值写进返回值的 max_chars/batch_size，供 stats 落盘审计。
+
+        clone_prompt_tokens：克隆模式下每个样本额外背负的前缀 token 数。
+        不传时按普通模式处理（前缀为 0）。
         """
         try:
             req_mc = int(max_chars) if max_chars else SEG_MAX_CHARS
@@ -236,9 +292,28 @@ class TTSEngine:
             # 服务长期运行后 PyTorch reserved 会累积，显存越脏批量越小
             ratio = max(0.30, min(1.0, headroom / REF_HEADROOM_GIB))
 
+        # 克隆前缀用「显存」而不是「token 预算」来卡：前缀只做一次 prefill，
+        # 不产生 decode 步和 vocoder 开销，按 token 预算折算会过度保守，
+        # 把 25s 参考音频（完全安全）也从 batch8 压到 batch4，白白损失吞吐。
+        prompt_kv_gib = KV_MIB_PER_TOKEN * max(0, int(clone_prompt_tokens)) / 1024.0
+        mem_bs = MAX_AUTO_BATCH
+        # KV 用「真正空余」而不是 headroom 来算：headroom 把 PyTorch reserved
+        # 计成余量，对 token 预算成立，对不可挤压的 KV 不成立。
+        free = gpu_free_gib()
+        kv_base = headroom if free is None else min(headroom, free)
+        if kv_base is not None:
+            per_item = (ACT_GIB_PER_ITEM
+                        + prompt_kv_gib
+                        + KV_MIB_PER_TOKEN * seg_token_cap(mc) / 1024.0)
+            mem_bs = int((kv_base * MEM_SAFETY) // per_item)
+            if prompt_kv_gib > 0:
+                # 前缀 KV 按 batch 倍数放大，单独设一道更硬的天花板
+                mem_bs = min(mem_bs, int((kv_base * KV_HEADROOM_SHARE) // prompt_kv_gib))
+            mem_bs = max(MIN_AUTO_BATCH, mem_bs)
+
         budget = SAFE_BATCH_TOKENS * ratio
         auto_bs = int(budget // seg_token_cap(mc))
-        auto_bs = max(MIN_AUTO_BATCH, min(auto_bs, MAX_AUTO_BATCH))
+        auto_bs = max(MIN_AUTO_BATCH, min(auto_bs, MAX_AUTO_BATCH, mem_bs))
         # 调用方显式要求更小的批量（调试用）则尊重；要求更大的一律无效
         bs = min(auto_bs, req_bs) if req_bs >= 1 else auto_bs
         bs = max(MIN_AUTO_BATCH, bs)
@@ -255,13 +330,20 @@ class TTSEngine:
             "batch_token_budget": int(budget),
             "batch_tokens": bs * per_seg,
             "oom_threshold_tokens": OOM_THRESHOLD_TOKENS,
+            "clone_prompt_tokens": int(clone_prompt_tokens),
+            "clone_prompt_kv_gib": round(prompt_kv_gib, 3),
+            "clone_prompt_kv_total_gib": round(prompt_kv_gib * bs, 3),
+            "free_gib": round(free, 2) if free is not None else None,
         }
         log.info(
             "自适应配置: max_chars=%d batch_size=%d | 请求值 %d/%d | "
-            "净余量 %s GiB -> 预算 %d tokens，实际单批 %d tokens（崩溃阈值 %d）",
+            "净余量 %s GiB -> 预算 %d tokens，实际单批 %d tokens（崩溃阈值 %d）%s",
             mc, bs, req_mc, req_bs, info["headroom_gib"],
             info["batch_token_budget"], info["batch_tokens"],
-            OOM_THRESHOLD_TOKENS)
+            OOM_THRESHOLD_TOKENS,
+            (" | 克隆前缀 %d tokens -> KV %.2f GiB/样本，合计 %.2f GiB"
+             % (int(clone_prompt_tokens), prompt_kv_gib, prompt_kv_gib * bs))
+            if clone_prompt_tokens else "")
         return info
 
     def _gen_batch_safe(self, texts, batch_size, **kw):
@@ -403,7 +485,13 @@ class TTSEngine:
         progress: 可选回调 progress(done, total)
         """
         # 自适应兜底：无论调用方（含前端）传了什么参数，都先收敛到安全区间
-        plan = self.plan_generation(max_chars, batch_size)
+        # 克隆模式下把参考音频前缀的 token 数一并计入，否则长参考音频会让
+        # batch 停留在 8，直接把 KV cache 撑爆（329s 参考音频 = 4.63 GiB > 空余 4.14 GiB）
+        _prompt_tokens = 0
+        if mode == "clone" and ref_audio is not None:
+            _prompt_tokens = estimate_clone_prompt_tokens(ref_audio, ref_text or "")
+        plan = self.plan_generation(max_chars, batch_size,
+                                    clone_prompt_tokens=_prompt_tokens)
         max_chars = plan["max_chars"]
         batch_size = plan["batch_size"]
 

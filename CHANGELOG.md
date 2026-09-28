@@ -1,5 +1,105 @@
 # 变更记录
 
+## 2026-09-28 声音克隆加固：参考文字稿改必填 + 参考音频时长上限 + 克隆前缀显存感知
+
+### 背景：克隆 100% 失败，且失败原因被 UI 误导
+
+录入参考音频后所有克隆任务都失败，报
+`ValueError: ref_text is required when x_vector_only_mode=False (ICL mode). Bad index=0`。
+
+根因链：
+
+1. 前端 `index.html` 把参考文本写成「可选，能提升克隆准确度」——**错的**，
+   ICL 模式下 ref_text 是硬性必填（`qwen3_tts_model.py:437` 对空串和 None 都抛错）
+2. 后端 `server.py` 的 `/api/voices` 默认 `Form("")` 且不做非空校验
+3. `run_job` 里 `v.get("ref_text") or None` 把空串转成 None，必然踩中模型校验
+
+第二个问题：用户上传的是 **329.33 秒**完整讲话，而 UI 只写了「3–10 秒」。
+后端只校验 `dur < 1.0`，没有上限，整段被放行。
+
+### 实测：329 秒参考音频的代价（服务端真机读取 config.json + tokenizer）
+
+| 项 | 实测值 |
+|---|---|
+| codec 帧率 | `input_sample_rate / encode_downsample_rate = 24000 / 1920 = 12.5 Hz` |
+| talker 结构 | 28 层 / 16 注意力头 / **8 KV 头** / head_dim 128 / bf16 |
+| 韩文文本 token 比 | **0.634 token/字**（AutoTokenizer 三段样本均值） |
+| 329.33s + 全文稿 | 4117 codec + 1284 text ≈ **5423 prompt tokens** |
+| KV cache 单价 | 2(K,V) × 28 × 8 × 128 × 2B = **0.109375 MiB/token** |
+| 单样本 KV | **593 MiB** |
+| 模型常驻后空余 | **4.14 GiB** |
+| batch 8 的 KV | 4.63 GiB > 空余 ⇒ **必 OOM**，只能降到 batch 2，耗时 1.7~2.2 倍 |
+
+关键在 `voice_clone_prompt=[prompt] * n` —— **batch 内每个样本各背一份完整前缀**，
+prompt 长度按 batch 倍数放大 KV cache。裁到 25.74s 后 prompt ≈ 445 tokens，
+KV 仅 47 MiB/样本，batch 8 合计 0.38 GiB，吞吐零损失。
+
+### 改动
+
+**`app/server.py`**
+
+- 新增 `REF_AUDIO_MIN_SEC=3.0` / `REF_AUDIO_MAX_SEC=30.0` / `REF_AUDIO_BEST_SEC=15.0`
+- `/api/voices`：ref_text 非空校验（含纯空白）；时长改为 `[3, 30]` 双端校验；
+  拒绝时给出中文原因与"截取 15 秒"的可执行建议
+- `POST /api/jobs`：克隆模式提交时校验音色存在 + 有文字稿 + 音频未超长，
+  **在入队前**就 400，不再占用队列槽位后才失败
+- `run_job`：重试/补跑的旧任务同样兜一层，给出中文原因（否则只会看到英文 ValueError）
+- `/api/meta` 新增 `voices_ok`：音色是否可用于克隆，供前端标记
+
+**`app/tts_engine.py`**
+
+- 新增实测常量：`CODEC_HZ=12.5` `KO_TOKENS_PER_CHAR=0.634` `KV_MIB_PER_TOKEN=0.109375`
+  `ACT_GIB_PER_ITEM=0.30` `KV_HEADROOM_SHARE=0.40` `MEM_SAFETY=0.85`
+- 新增 `gpu_free_gib()`：KV 是硬占用，只能用"真正空余"算，
+  不能像 token 预算那样把 PyTorch reserved 计为余量
+- 新增 `estimate_clone_prompt_tokens(ref_audio, ref_text)`
+- `plan_generation()` 新增 `clone_prompt_tokens` 参数：按显存反推 batch 上限，
+  并对 prompt KV 单独设一道更硬的天花板
+- `synth_long` 克隆模式自动估算并传入前缀长度
+
+> 用"显存"而不是"token 预算"折算：前缀只做一次 prefill，不产生 decode 步和
+> vocoder 开销。按 token 预算折算会把 25s 参考音频（完全安全）也从 batch 8
+> 压到 batch 4，白白损失吞吐。
+
+**`app/ui/index.html`**
+
+- 参考文本标签改为必填 + 红色星号，四语（中英日韩）文案同步
+  （`applyStatic` 会整块覆盖 `textContent`，星号必须放在 `data-i18n` 元素**外面**）
+- 新增 `probeDuration()`：选完文件本机即时读时长，超限当场红色提示，
+  不必等上传被服务端拒
+- 上传按钮：文字稿空 / 时长超限直接拦住，不发请求
+- 音色下拉：缺文字稿或音频超长的音色标注「（不可用）」，克隆提交时拦截并说明原因
+- 补 `loading` 四语 key（原先只有内联中文，`applyStatic` 因缺 key 不会替换）
+
+### 验收
+
+服务端 HTTP 端到端（7 项全过）：
+
+| 用例 | 结果 |
+|---|---|
+| `/api/meta` 的 `voices_ok` 把两个旧音色判为不可用 | PASS |
+| 上传 ref_text 空 → 400「文字不能为空」 | PASS |
+| 上传 329.3s → 400「最多 30 秒」 | PASS |
+| 克隆提交缺文字稿音色 → 400 | PASS |
+| 普通模式提交并跑完（21 字 / 3.12s 音频 / RTF 3.73） | PASS |
+
+`plan_generation` 实测（free 7.45 GiB）：
+
+| 场景 | prompt tokens | 生效 batch | 前缀 KV 合计 |
+|---|---|---|---|
+| 普通模式 | 0 | 8 | 0 |
+| 克隆 15s | 269 | 8 | 0.23 GiB |
+| 克隆 25.74s（裁剪版） | 445 | **8** | 0.38 GiB |
+| 克隆 30s（上限） | 516 | **8** | 0.44 GiB |
+| 克隆 329.33s（旧音频） | 5423 | 5（旧版为 8，必 OOM） | 2.90 GiB |
+
+前端 jsdom 加载真实 `index.html` 驱动真实事件，**21 项断言全过**（文案必填、
+时长即时提示、上传拦截、音色标记、提交拦截、合法输入放行）。
+
+原始文件已备份：`app/*.bak.20260928`（服务端）。
+
+---
+
 ## 2026-09-27 修复长文本 CUDA OOM，批量/分段改为自适应
 
 ### 背景

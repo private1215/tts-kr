@@ -164,6 +164,9 @@ td button{padding:4px 11px;font-size:12px}
   border-radius:9px;border:1px solid var(--line)}
 .scopes .tab{padding:5px 12px;font-size:12px}
 .hide{display:none !important}
+.req{color:#e5534b;font-weight:700;margin:0 2px}
+.hint.warn{color:#e0a33a}
+.hint.bad{color:#e5534b}
 details.adv{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
 details.adv summary{cursor:pointer;font-size:12px;color:var(--dim);outline:none;font-weight:500}
 details.adv summary:hover{color:var(--txt2)}
@@ -362,10 +365,12 @@ details.adv summary:hover{color:var(--txt2)}
         <div class="row">
           <input id="vname" data-i18n-ph="vnamePh" style="flex:1">
         </div>
-        <label style="margin-top:10px" data-i18n="refAudio">参考音频（3–10 秒干净人声，无背景噪音）</label>
+        <label style="margin-top:10px" data-i18n="refAudio">参考音频（3–30 秒干净人声，建议 15 秒左右，无背景噪音）</label>
         <input id="vfile" type="file" accept="audio/*">
-        <label data-i18n="refText">参考音频对应的文字（可选，能提升克隆准确度）</label>
+        <label><span data-i18n="refText">参考音频对应的文字（必填：这段音频的完整逐字稿）</span><span class="req">*</span></label>
         <input id="vtext" data-i18n-ph="refTextPh">
+        <div class="hint" id="vdur" style="display:none"></div>
+        <div class="hint" data-i18n="enrollHint">必填原因：克隆走 ICL 模式，模型必须用这段文字对齐参考音频的音色与韵律；留空会直接报错。音频越长显存占用越高、生成越慢，而准确度并不会提升——超过 30 秒会被拒绝。</div>
         <div class="row" style="margin-top:12px">
           <button id="vupload" data-i18n="upload">上传录入</button>
         </div>
@@ -442,8 +447,15 @@ const I18N = {
     advanced:'高级设置（分段 / 批量）',
     paramHint:'保持默认即可：后端会按显存自动收敛到安全值（分段 ≤60、批量 ≤8）。调大不会更快，只会被自动压回。',
     submit:'提交生成', clear:'清空', enroll:'录入声音（声音克隆用）',
-    vnamePh:'音色名称，例：韩语女声-知妍', refAudio:'参考音频（3–10 秒干净人声，无背景噪音）',
-    refText:'参考音频对应的文字（可选，能提升克隆准确度）', refTextPh:'参考音频里说的话',
+    vnamePh:'音色名称，例：韩语女声-知妍', refAudio:'参考音频（3–30 秒干净人声，建议 15 秒左右，无背景噪音）',
+    refText:'参考音频对应的文字（必填：这段音频的完整逐字稿）', refTextPh:'参考音频里说的话，需与音频逐字一致',
+    enrollHint:'必填原因：克隆走 ICL 模式，模型必须用这段文字对齐参考音频的音色与韵律，留空会直接报错。音频越长显存占用越高、生成越慢，准确度却不会提升——超过 30 秒会被拒绝。',
+    needRefText:'请填写参考音频对应的文字（完整逐字稿，克隆模式必填）',
+    refTooLong:(d)=>`参考音频 ${d} 秒，超过 30 秒上限。请截取 15 秒左右最清晰的一段再上传：音频越长显存占用越高、生成越慢，准确度并不会提升`,
+    refTooShort:(d)=>`参考音频仅 ${d} 秒，至少需要 3 秒`,
+    refDurOk:(d)=>`参考音频时长 ${d} 秒，符合要求`,
+    voiceUnusable:'（不可用）',
+    voiceBad:'所选音色不可用：缺少参考文字稿，或参考音频超过 30 秒。请重新录入该音色。',
     upload:'上传录入', queue:'任务队列', noJobs:'暂无任务', scopeMine:'我的', scopeAll:'全部',
     searchPh:'搜索标题或内容…', allStatus:'全部状态', allOwner:'全部成员',
     stRunning:'生成中', stQueued:'排队中', stDone:'已完成', stError:'失败',
@@ -460,7 +472,7 @@ const I18N = {
     batchFmt:(n,m)=>`第 ${n}/${m} 批`, pctFmt:(p)=>`${p}%`, elapsedFmt:(s)=>`已用 ${s}`,
     etaFmt:(s)=>`预计还需 ${s}`, queueAhead:(n)=> n>0?`排队中 · 前面还有 ${n} 个任务`:'排队中，即将开始',
     statsFmt:(td,n,h)=>`今日 ${td} 条 · 累计 ${n} 条 · 累计音频 ${h} 小时`,
-    by:(o)=>`由 ${o} 生成`, untitled:'未命名',
+    by:(o)=>`由 ${o} 生成`, untitled:'未命名', loading:'加载中...',
     delJob:'删除', retry:'重试', confirmDelJob:(t)=>`删除「${t}」？音频文件会一起删掉`, noRetry:'原文案已丢失，无法重试',
     draftSaved:'草稿已恢复', draftCleared:'草稿已清空',
     emptyOpt:'（尚未录入）', noInstructPreset:'该语言暂无预设，可直接手动输入',
@@ -505,8 +517,15 @@ const I18N = {
     advanced:'Advanced (segment / batch)',
     paramHint:'Keep defaults: the backend auto-tunes a safe plan (seg ≤60, batch ≤8) from free VRAM. Larger values get clamped, not faster.',
     submit:'Generate', clear:'Clear', enroll:'Enroll a voice (for cloning)',
-    vnamePh:'Voice name, e.g. Korean female — Jiyeon', refAudio:'Reference audio (3–10s clean speech, no background noise)',
-    refText:'Transcript of the reference audio (optional, improves accuracy)', refTextPh:'What is said in the reference audio',
+    vnamePh:'Voice name, e.g. Korean female — Jiyeon', refAudio:'Reference audio (3–30s clean speech, ~15s recommended, no background noise)',
+    refText:'Transcript of the reference audio (required: exact words of the clip)', refTextPh:'Exactly what is said in the reference audio',
+    enrollHint:'Required: cloning runs in ICL mode — the model needs this transcript to align timbre and prosody with the reference audio; leaving it blank fails immediately. Longer audio costs more VRAM and runs slower without improving accuracy — anything over 30s is rejected.',
+    needRefText:'Please enter the transcript of the reference audio (required for cloning)',
+    refTooLong:(d)=>`Reference audio is ${d}s, over the 30s limit. Please trim a clean ~15s segment: longer audio uses more VRAM and runs slower, and does not improve accuracy`,
+    refTooShort:(d)=>`Reference audio is only ${d}s — at least 3s required`,
+    refDurOk:(d)=>`Reference audio is ${d}s — OK`,
+    voiceUnusable:'(unusable)',
+    voiceBad:'This voice is unusable: missing transcript, or reference audio over 30s. Please enroll it again.',
     upload:'Enroll', queue:'Job queue', noJobs:'No jobs yet', scopeMine:'Mine', scopeAll:'All',
     searchPh:'Search title or text…', allStatus:'All status', allOwner:'All members',
     stRunning:'running', stQueued:'queued', stDone:'done', stError:'error',
@@ -523,7 +542,7 @@ const I18N = {
     batchFmt:(n,m)=>`batch ${n}/${m}`, pctFmt:(p)=>`${p}%`, elapsedFmt:(s)=>`${s} elapsed`,
     etaFmt:(s)=>`~${s} left`, queueAhead:(n)=> n>0?`queued · ${n} ahead`:'queued, starting soon',
     statsFmt:(td,n,h)=>`Today ${td} · total ${n} · ${h}h audio`,
-    by:(o)=>`by ${o}`, untitled:'Untitled',
+    by:(o)=>`by ${o}`, untitled:'Untitled', loading:'Loading...',
     delJob:'Delete', retry:'Retry', confirmDelJob:(t)=>`Delete "${t}"? Audio files go too`, noRetry:'Original script lost, cannot retry',
     draftSaved:'Draft restored', draftCleared:'Draft cleared',
     emptyOpt:'(none enrolled)', noInstructPreset:'No presets for this language — type one manually',
@@ -568,8 +587,15 @@ const I18N = {
     advanced:'고급 설정 (분할 / 배치)',
     paramHint:'기본값 유지: 백엔드가 여유 VRAM에 따라 안전한 값(분할 ≤60, 배치 ≤8)으로 자동 조정합니다. 크게 해도 빨라지지 않습니다.',
     submit:'생성 요청', clear:'지우기', enroll:'음성 등록 (클론용)',
-    vnamePh:'음성 이름, 예: 한국어 여성-지연', refAudio:'참고 음성 (3~10초, 잡음 없는 깨끗한 목소리)',
-    refText:'참고 음성의 대사 (선택, 정확도 향상)', refTextPh:'참고 음성에 담긴 말',
+    vnamePh:'음성 이름, 예: 한국어 여성-지연', refAudio:'참고 음성 (3~30초, 잡음 없는 깨끗한 목소리, 15초 권장)',
+    refText:'참고 음성의 대사 (필수: 해당 구간의 전체 대사)', refTextPh:'참고 음성에 담긴 말 (글자 그대로)',
+    enrollHint:'필수인 이유: 클론은 ICL 모드로 동작하므로, 이 대사로 참고 음성의 음색과 리듬을 정렬해야 합니다. 비우면 즉시 오류가 납니다. 음성이 길수록 VRAM 사용량이 커지고 생성도 느려지지만 정확도는 올라가지 않습니다—30초를 넘으면 거부됩니다.',
+    needRefText:'참고 음성의 대사를 입력해 주세요 (클론 모드 필수)',
+    refTooLong:(d)=>`참고 음성이 ${d}초로 30초 제한을 넘었습니다. 가장 깨끗한 15초 정도만 잘라 올려 주세요: 길수록 VRAM을 많이 쓰고 느려지며 정확도는 올라가지 않습니다`,
+    refTooShort:(d)=>`참고 음성이 ${d}초뿐입니다. 최소 3초가 필요합니다`,
+    refDurOk:(d)=>`참고 음성 ${d}초 — 사용 가능`,
+    voiceUnusable:'(사용 불가)',
+    voiceBad:'이 음성은 사용할 수 없습니다: 대사가 없거나 참고 음성이 30초를 넘습니다. 다시 등록해 주세요.',
     upload:'등록하기', queue:'작업 대기열', noJobs:'작업이 없습니다', scopeMine:'내 작업', scopeAll:'전체',
     searchPh:'제목이나 내용 검색…', allStatus:'전체 상태', allOwner:'전체 멤버',
     stRunning:'생성중', stQueued:'대기중', stDone:'완료', stError:'실패',
@@ -586,7 +612,7 @@ const I18N = {
     batchFmt:(n,m)=>`${n}/${m} 배치`, pctFmt:(p)=>`${p}%`, elapsedFmt:(s)=>`${s} 경과`,
     etaFmt:(s)=>`약 ${s} 남음`, queueAhead:(n)=> n>0?`대기중 · 앞에 ${n}개`:'대기중, 곧 시작',
     statsFmt:(td,n,h)=>`오늘 ${td}건 · 누적 ${n}건 · 누적 오디오 ${h}시간`,
-    by:(o)=>`${o} 생성`, untitled:'제목 없음',
+    by:(o)=>`${o} 생성`, untitled:'제목 없음', loading:'불러오는 중...',
     delJob:'삭제', retry:'재시도', confirmDelJob:(t)=>`"${t}"을(를) 삭제할까요? 음성 파일도 함께 삭제됩니다`, noRetry:'원고가 없어 재시도할 수 없습니다',
     draftSaved:'임시 저장된 원고를 불러왔습니다', draftCleared:'임시 저장이 비워졌습니다',
     emptyOpt:'(등록된 음성 없음)', noInstructPreset:'이 언어의 프리셋이 없습니다. 직접 입력하세요',
@@ -631,8 +657,15 @@ const I18N = {
     advanced:'詳細設定（分割 / バッチ）',
     paramHint:'既定値のまま：バックエンドが空き VRAM に応じて安全な値（分割 ≤60、バッチ ≤8）へ自動調整します。大きくしても速くなりません。',
     submit:'生成する', clear:'クリア', enroll:'音色を登録（クローン用）',
-    vnamePh:'音色名、例：韓国語女性-ジヨン', refAudio:'参照音声（3〜10秒、ノイズのないクリアな音声）',
-    refText:'参照音声の書き起こし（任意、精度が上がります）', refTextPh:'参照音声で話している内容',
+    vnamePh:'音色名、例：韓国語女性-ジヨン', refAudio:'参照音声（3〜30秒、ノイズのないクリアな音声、15秒程度を推奨）',
+    refText:'参照音声の書き起こし（必須：その区間の全文）', refTextPh:'参照音声で話している内容（一字一句）',
+    enrollHint:'必須の理由：クローンは ICL モードで動作するため、この書き起こしで参照音声の音色と韻律を揃える必要があります。空欄だと即エラーになります。音声が長いほど VRAM を消費し生成も遅くなりますが、精度は上がりません—30秒を超える場合は拒否されます。',
+    needRefText:'参照音声の書き起こしを入力してください（クローンモードでは必須）',
+    refTooLong:(d)=>`参照音声が ${d} 秒で 30 秒制限を超えています。最もクリアな 15 秒程度に切り取って再アップロードしてください：長いほど VRAM を消費し遅くなりますが、精度は上がりません`,
+    refTooShort:(d)=>`参照音声が ${d} 秒しかありません。最低 3 秒必要です`,
+    refDurOk:(d)=>`参照音声 ${d} 秒 — 使用可能`,
+    voiceUnusable:'（使用不可）',
+    voiceBad:'この音色は使用できません：書き起こしが空、または参照音声が 30 秒を超えています。再登録してください。',
     upload:'登録', queue:'ジョブキュー', noJobs:'ジョブはありません', scopeMine:'自分の', scopeAll:'すべて',
     searchPh:'タイトル・本文を検索…', allStatus:'すべての状態', allOwner:'全メンバー',
     stRunning:'生成中', stQueued:'待機中', stDone:'完了', stError:'失敗',
@@ -649,7 +682,7 @@ const I18N = {
     batchFmt:(n,m)=>`${n}/${m} バッチ`, pctFmt:(p)=>`${p}%`, elapsedFmt:(s)=>`経過 ${s}`,
     etaFmt:(s)=>`残り 約 ${s}`, queueAhead:(n)=> n>0?`待機中 · 前に ${n} 件`:'待機中、まもなく開始',
     statsFmt:(td,n,h)=>`本日 ${td}件 · 累計 ${n}件 · 音声 ${h}時間`,
-    by:(o)=>`${o} が生成`, untitled:'無題',
+    by:(o)=>`${o} が生成`, untitled:'無題', loading:'読み込み中...',
     delJob:'削除', retry:'再試行', confirmDelJob:(t)=>`「${t}」を削除しますか？音声ファイルも削除されます`, noRetry:'原稿が残っていないため再試行できません',
     draftSaved:'下書きを復元しました', draftCleared:'下書きをクリアしました',
     emptyOpt:'（未登録）', noInstructPreset:'この言語のプリセットはありません。手入力してください',
@@ -844,10 +877,13 @@ function addInstruct(v){
   ta.value = lines.join('\n');
 }
 $('#insClear').onclick = ()=>{ $('#instruct').value=''; };
+const voiceOk = x => { const m = META.voices_ok || {}; return m[x] !== false; };
 function renderVoices(){
   const v = $('#voice'), list = META.voices || [], prev = v.value;
-  v.innerHTML = list.length ? list.map(x=>`<option value="${x}">${esc(x)}</option>`).join('')
-                            : `<option value="">${t('emptyOpt')}</option>`;
+  // 缺文字稿 / 音频超长的音色在 ICL 模式下必崩，直接标出来，别让员工白等一轮排队
+  v.innerHTML = list.length
+    ? list.map(x=>`<option value="${x}">${esc(x)}${voiceOk(x)?'':' '+t('voiceUnusable')}</option>`).join('')
+    : `<option value="">${t('emptyOpt')}</option>`;
   if(prev && list.includes(prev)) v.value = prev;
 }
 function renderOwners(){
@@ -1089,7 +1125,10 @@ function debounce(fn, ms){ let x; return (...a)=>{ clearTimeout(x); x=setTimeout
 $('#submit').onclick = async () => {
   const text = $('#text').value.trim();
   if(!text){ alert(t('needText')); return; }
-  if(mode==='clone' && !$('#voice').value){ alert(t('needVoice')); return; }
+  if(mode==='clone'){
+    if(!$('#voice').value){ alert(t('needVoice')); return; }
+    if(!voiceOk($('#voice').value)){ alert(t('voiceBad')); return; }
+  }
   const fd = new FormData();
   fd.append('title', $('#title').value.trim());
   fd.append('text', text);
@@ -1111,11 +1150,41 @@ $('#submit').onclick = async () => {
 };
 $('#clear').onclick = ()=>{ $('#text').value=''; $('#title').value=''; localStorage.removeItem(DRAFT); renderCount(); };
 
+/* 选完文件立刻在本机读出时长：超长不必等上传被服务端拒，员工当场就知道要裁剪 */
+function probeDuration(file){
+  const el = $('#vdur');
+  el.style.display = 'none'; el.className = 'hint'; el.textContent = '';
+  if(!file) return Promise.resolve(null);
+  return new Promise(res=>{
+    const url = URL.createObjectURL(file), a = new Audio();
+    const done = v => { URL.revokeObjectURL(url); res(v); };
+    a.preload = 'metadata';
+    a.onloadedmetadata = ()=> done(isFinite(a.duration) ? a.duration : null);
+    a.onerror = ()=> done(null);
+    setTimeout(()=>{ if(a.readyState === 0) done(null); }, 4000);
+    a.src = url;
+  }).then(d=>{
+    if(d == null) return null;
+    el.style.display = '';
+    if(d > 30){ el.className = 'hint bad';  el.textContent = t('refTooLong')(d.toFixed(1)); }
+    else if(d < 3){ el.className = 'hint bad'; el.textContent = t('refTooShort')(d.toFixed(1)); }
+    else { el.className = 'hint'; el.textContent = (t('refDurOk') || ((x)=>`参考音频时长 ${x} 秒`))(d.toFixed(1)); }
+    return d;
+  });
+}
+$('#vfile').onchange = ()=>{ probeDuration($('#vfile').files[0]); };
+
 $('#vupload').onclick = async () => {
   const f = $('#vfile').files[0], name = $('#vname').value.trim();
   if(!f || !name){ $('#vmsg').textContent = t('needName'); return; }
+  // 克隆是 ICL 模式，文字稿是硬性必填项：模型对空串直接抛错，
+  // 拦在这里员工能当场看到原因，不用等一次上传往返。
+  if(!$('#vtext').value.trim()){ $('#vmsg').textContent = t('needRefText'); $('#vtext').focus(); return; }
+  const d = await probeDuration(f);
+  if(d != null && d > 30){ $('#vmsg').textContent = t('refTooLong')(d.toFixed(1)); return; }
+  if(d != null && d < 3){ $('#vmsg').textContent = t('refTooShort')(d.toFixed(1)); return; }
   const fd = new FormData();
-  fd.append('name', name); fd.append('ref_text', $('#vtext').value); fd.append('file', f);
+  fd.append('name', name); fd.append('ref_text', $('#vtext').value.trim()); fd.append('file', f);
   $('#vmsg').textContent = t('uploading');
   try{
     const r = await api('/api/voices', {method:'POST', body:fd});

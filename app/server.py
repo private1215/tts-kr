@@ -45,6 +45,25 @@ DEFAULT_PASSWORD = "aaaa1234"
 SESSION_TTL = 7 * 24 * 3600
 MIN_PW_LEN = 6
 
+# ---------------------------------------------------------------------------
+# 参考音频（声音克隆）硬性约束
+#
+# 克隆走 ICL 模式：参考音频会被 codec 编成 12.5 帧/秒的 token，连同文字稿
+# 一起作为 prompt 前缀，并且 **batch 内每个样本各背一份**（voice_clone_prompt
+# = [prompt] * n）。所以参考音频越长，显存按 batch 倍数放大。
+#
+# 实测（Qwen3-TTS-12Hz-1.7B-Base，服务端真机读取 config.json + tokenizer）：
+#   329.33s + 全文稿 ≈ 5 420 prompt tokens → 593 MiB/样本 → batch8 需 4.63 GiB，
+#   而模型常驻后仅剩 4.14 GiB ⇒ 必 OOM，只能降到 batch2，耗时翻 1.7~2.2 倍。
+#   裁到 25s ≈ 430 tokens → 47 MiB/样本 → batch8 仅 0.37 GiB，吞吐零损失。
+#
+# 30 秒上限对应的最坏情况：375 codec + 约 185 字 × 0.634 ≈ 117 → 约 516 tokens
+# → 56 MiB/样本 → batch8 仅 0.44 GiB，仍在安全区内，且不会拖慢生成。
+# ---------------------------------------------------------------------------
+REF_AUDIO_MIN_SEC = 3.0
+REF_AUDIO_MAX_SEC = 30.0
+REF_AUDIO_BEST_SEC = 15.0
+
 MODEL_DIRS = {
     "custom_voice": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-CustomVoice"),
     "base": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-Base"),
@@ -228,8 +247,19 @@ async def run_job(job):
         v = voices.get(job["voice"])
         if not v:
             raise RuntimeError(f"音色不存在: {job['voice']}")
+        # 提交时已校验过，这里再兜一次：重试/补跑的旧任务同样要给出中文原因，
+        # 否则只会看到模型抛的英文 ValueError，且要等到排队轮到才失败。
+        ref_text = (v.get("ref_text") or "").strip() or None
+        if not ref_text:
+            raise RuntimeError(
+                f"音色「{job['voice']}」缺少参考文字稿，无法克隆。"
+                f"请重新录入该音色，并填写参考音频对应的逐字文字")
+        if float(v.get("dur") or 0) > REF_AUDIO_MAX_SEC:
+            raise RuntimeError(
+                f"音色「{job['voice']}」的参考音频 {v.get('dur')}s 超过 "
+                f"{REF_AUDIO_MAX_SEC:.0f}s 上限（显存会暴涨），请截取 "
+                f"{REF_AUDIO_BEST_SEC:.0f} 秒左右的一段重新录入")
         ref_audio = read_audio(v["path"])
-        ref_text = v.get("ref_text") or None
         ref_key = job["voice"]
 
     def _progress(done, total):
@@ -533,6 +563,11 @@ async def meta(request: Request):
         # 各音色支持的语言：实测全部音色均支持全部语言
         "all_speakers_all_langs": True,
         "voices": list(voices.keys()),
+        # 音色是否可用于克隆：ICL 模式必须有文字稿，且参考音频不能超长
+        "voices_ok": {
+            k: bool((v.get("ref_text") or "").strip())
+            and float(v.get("dur") or 0) <= REF_AUDIO_MAX_SEC
+            for k, v in voices.items()},
         "variants": list(MODEL_DIRS.keys()),
         "loaded": engine.variant,
     }
@@ -556,8 +591,21 @@ async def create_job(request: Request,
         raise HTTPException(400, "temperature 需在 0.3~1.5 之间")
     if not text.strip():
         raise HTTPException(400, "文本为空")
-    if mode == "clone" and not voice:
-        raise HTTPException(400, "克隆模式需要选择已录入的音色")
+    if mode == "clone":
+        if not voice:
+            raise HTTPException(400, "克隆模式需要选择已录入的音色")
+        _v = voices.get(voice)
+        if not _v:
+            raise HTTPException(400, f"音色不存在：{voice}")
+        if not (_v.get("ref_text") or "").strip():
+            raise HTTPException(
+                400, f"音色「{voice}」缺少参考文字稿，无法克隆。"
+                     f"请重新录入该音色，并填写参考音频对应的逐字文字")
+        if float(_v.get("dur") or 0) > REF_AUDIO_MAX_SEC:
+            raise HTTPException(
+                400, f"音色「{voice}」的参考音频 {_v.get('dur')}s 超过 "
+                     f"{REF_AUDIO_MAX_SEC:.0f}s 上限，会让显存暴涨、生成明显变慢。"
+                     f"请截取 {REF_AUDIO_BEST_SEC:.0f} 秒左右最清晰的一段重新录入")
 
     title = (title or "").strip() or text.strip().replace("\n", " ")[:24]
     jid = uuid.uuid4().hex[:12]
@@ -830,6 +878,13 @@ async def upload_voice(request: Request,
     safe = "".join(c for c in name if c not in '/\\:*?"<>|').strip()
     if not safe:
         raise HTTPException(400, "音色名无效")
+    # 克隆是 ICL 模式：模型内部对空文字稿直接抛 ValueError，必须拦在入口处，
+    # 否则员工只会看到一句英文报错，且任务已经占掉队列才失败。
+    ref_text = (ref_text or "").strip()
+    if not ref_text:
+        raise HTTPException(
+            400, "参考音频对应的文字不能为空：克隆模式必须填写这段音频的完整逐字稿，"
+                 "文字与音频不一致会直接拉低克隆相似度")
     raw = await file.read()
     tmp = os.path.join(VOICE_DIR, f"_tmp_{uuid.uuid4().hex[:8]}")
     with open(tmp, "wb") as f:
@@ -842,15 +897,23 @@ async def upload_voice(request: Request,
     if data.ndim > 1:
         data = data.mean(axis=1)
     dur = len(data) / sr
-    if dur < 1.0:
+    if dur < REF_AUDIO_MIN_SEC:
         os.remove(tmp)
-        raise HTTPException(400, f"参考音频太短: {dur:.1f}s，至少需要 3 秒")
+        raise HTTPException(
+            400, f"参考音频太短: {dur:.1f}s，至少需要 {REF_AUDIO_MIN_SEC:.0f} 秒，"
+                 f"建议 {REF_AUDIO_BEST_SEC:.0f} 秒左右")
+    if dur > REF_AUDIO_MAX_SEC:
+        os.remove(tmp)
+        raise HTTPException(
+            400, f"参考音频太长: {dur:.1f}s，最多 {REF_AUDIO_MAX_SEC:.0f} 秒。"
+                 f"音频越长显存占用越高、生成越慢，而克隆准确度并不会提升——"
+                 f"请截取 {REF_AUDIO_BEST_SEC:.0f} 秒左右最清晰、无背景音的一段再上传")
     path = os.path.join(VOICE_DIR, f"{safe}.wav")
     sf.write(path, data, sr)
     os.remove(tmp)
     voices[safe] = {"path": path, "ref_text": ref_text, "sr": sr, "dur": round(dur, 2)}
     save_voices(voices)
-    log.info("录入音色 %s (%.1fs)", safe, dur)
+    log.info("录入音色 %s (%.1fs, ref_text %d 字)", safe, dur, len(ref_text))
     return {"name": safe, "dur": round(dur, 2), "sr": sr}
 
 
