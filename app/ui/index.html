@@ -385,6 +385,11 @@ details.adv summary:hover{color:var(--txt2)}
         <div class="row">
           <input id="vname" data-i18n-ph="vnamePh" style="flex:1">
         </div>
+        <label style="margin-top:10px" data-i18n="engineLabel">这个音色用哪个引擎</label>
+        <select id="vengine" style="width:100%">
+          <option value="qwen" data-i18n="engineQwen">千问 Qwen（最准确，语调平稳）</option>
+          <option value="cosyvoice3" data-i18n="engineCosy">CosyVoice3（更有感情，可选激昂/亲切/严肃）</option>
+        </select>
         <label style="margin-top:10px" data-i18n="refAudio">参考音频（整段录音直接上传，无需自己剪辑）</label>
         <input id="vfile" type="file" accept="audio/*">
         <label><span data-i18n="refText">音频对应的完整文字稿</span><span class="req">*</span></label>
@@ -479,6 +484,9 @@ const I18N = {
     paramHint:'保持默认即可：后端会按显存自动收敛到安全值（分段 ≤60、批量 ≤8）。调大不会更快，只会被自动压回。',
     submit:'提交生成', clear:'清空', enroll:'录入声音（声音克隆用）',
     vnamePh:'音色名称，例：韩语女声-知妍', refAudio:'参考音频（整段录音直接上传，无需自己剪辑）',
+    engineLabel:'这个音色用哪个引擎', engineQwen:'千问 Qwen（最准确，语调平稳）', engineCosy:'CosyVoice3（更有感情，可选激昂/亲切/严肃）',
+    vEngine:'引擎', engQwen:'千问 Qwen（最准）', engCosy:'CosyVoice3（有感情）', engSaved:'引擎已保存', engFail:'引擎保存失败',
+    engineHint:'这个音色的默认引擎。员工生成时若选了「激昂/亲切/严肃」，会强制改走 CosyVoice3 —— 千问克隆没有情感入参，给不了情绪。',
     refText:'音频对应的完整文字稿', refTextPh:'把这段录音里说的话完整粘进来（不用挑片段，系统会自动截取对应部分）',
     enrollHint:'怎么用：直接上传整段录音 + 粘贴这段录音的完整文字稿即可，不用自己剪音频、也不用自己对时间轴。系统会自动挑出音质最好的约 15 秒，并把文字稿按实际说话时间对齐截出对应片段。首次录入会多花几秒做分析，之后这个音色就是现成的。',
     needRefText:'请粘贴这段录音的完整文字稿（克隆必填，系统会自动截取对应片段）',
@@ -566,6 +574,9 @@ const I18N = {
     paramHint:'Keep defaults: the backend auto-tunes a safe plan (seg ≤60, batch ≤8) from free VRAM. Larger values get clamped, not faster.',
     submit:'Generate', clear:'Clear', enroll:'Enroll a voice (for cloning)',
     vnamePh:'Voice name, e.g. Korean female — Jiyeon', refAudio:'Reference audio (upload the whole recording — no need to trim it yourself)',
+    engineLabel:'Engine for this voice', engineQwen:'Qwen (most accurate, calm)', engineCosy:'CosyVoice3 (more expressive; excited / warm / serious available)',
+    vEngine:'Engine', engQwen:'Qwen (most accurate)', engCosy:'CosyVoice3 (expressive)', engSaved:'Engine saved', engFail:'Failed to save engine',
+    engineHint:'Default engine for this voice. If the employee picks Excited / Warm / Serious when generating, CosyVoice3 is forced — Qwen cloning has no emotion input.',
     refText:'Full transcript of the audio', refTextPh:'Paste everything said in this recording — no need to pick a clip, the matching part is cut automatically',
     enrollHint:'How to use: upload the full recording and paste its full transcript. No manual trimming, no timeline work. The server picks the cleanest ~15s and cuts the transcript to match it by actual speaking time. The first enrollment takes a few extra seconds to analyze; after that the voice is ready to use.',
     needRefText:'Please paste the full transcript of this recording (required — the matching part is cut automatically)',
@@ -652,6 +663,9 @@ const I18N = {
     paramHint:'기본값 유지: 백엔드가 여유 VRAM에 따라 안전한 값(분할 ≤60, 배치 ≤8)으로 자동 조정합니다. 크게 해도 빨라지지 않습니다.',
     submit:'생성 요청', clear:'지우기', enroll:'음성 등록 (클론용)',
     vnamePh:'음성 이름, 예: 한국어 여성-지연', refAudio:'참고 음성 (녹음 전체를 그대로 올리세요. 직접 자를 필요 없습니다)',
+    engineLabel:'이 음성에 사용할 엔진', engineQwen:'Qwen (가장 정확하고 차분함)', engineCosy:'CosyVoice3 (감정 표현이 풍부함 · 격양/부드러움/진지함 선택 가능)',
+    vEngine:'엔진', engQwen:'Qwen (가장 정확)', engCosy:'CosyVoice3 (감정 표현)', engSaved:'엔진이 저장되었습니다', engFail:'엔진 저장 실패',
+    engineHint:'이 음성의 기본 엔진입니다. 생성 시 "격앙/부드러움/진지함"을 선택하면 CosyVoice3로 강제 전환됩니다 — Qwen 클론에는 감정 입력이 없습니다.',
     refText:'녹음 전체의 대사', refTextPh:'이 녹음에서 한 말을 전체로 붙여 넣으세요. 구간을 고를 필요 없이 해당 부분은 자동으로 잘립니다',
     enrollHint:'사용법: 녹음 전체와 그 대사 전체를 올리면 끝입니다. 오디오를 자르거나 타임라인을 맞출 필요가 없습니다. 서버가 가장 깨끗한 약 15초를 골라 실제 발화 시간에 맞춰 대사도 함께 잘라 줍니다. 첫 등록 때 분석에 몇 초 더 걸리고, 이후에는 바로 사용할 수 있습니다.',
     needRefText:'이 녹음의 대사 전체를 붙여 넣어 주세요 (클론 필수, 해당 구간은 자동으로 잘립니다)',
@@ -738,6 +752,9 @@ const I18N = {
     paramHint:'既定値のまま：バックエンドが空き VRAM に応じて安全な値（分割 ≤60、バッチ ≤8）へ自動調整します。大きくしても速くなりません。',
     submit:'生成する', clear:'クリア', enroll:'音色を登録（クローン用）',
     vnamePh:'音色名、例：韓国語女性-ジヨン', refAudio:'参照音声（録音をそのままアップロード。自分で切る必要はありません）',
+    engineLabel:'この音色に使うエンジン', engineQwen:'Qwen（最も正確、抑揚は穏やか）', engineCosy:'CosyVoice3（感情表現が豊か・激昂/穏やか/真剣を選べます）',
+    vEngine:'エンジン', engQwen:'Qwen（最も正確）', engCosy:'CosyVoice3（感情表現）', engSaved:'エンジンを保存しました', engFail:'エンジンの保存に失敗',
+    engineHint:'この音色の既定エンジンです。生成時に「激昂/穏やか/真剣」を選ぶと CosyVoice3 に強制切り替えされます — Qwen のクローンには感情入力がありません。',
     refText:'録音全体の書き起こし', refTextPh:'この録音で話した内容をすべて貼り付けてください。区間を選ぶ必要はなく、該当部分は自動で切り出されます',
     enrollHint:'使い方：録音全体とその書き起こし全体をアップロードするだけです。音声の編集もタイムライン調整も不要です。サーバーが最もクリアな約 15 秒を選び、実際の発話時間に合わせて書き起こしも同時に切り出します。初回登録は分析に数秒余計にかかりますが、以降はそのまま使えます。',
     needRefText:'この録音の書き起こし全体を貼り付けてください（クローン必須、該当部分は自動で切り出されます）',
@@ -1060,6 +1077,13 @@ function renderVoiceList(){
         <span class="vmeta">${v.dur != null ? v.dur + 's' : ''}</span>
       </div>
       <div class="vmeta">${src}${clip}</div>
+      <div class="vrow" style="display:flex;align-items:center;gap:6px;margin:4px 0">
+        <span class="vmeta">${t('vEngine')}</span>
+        <select class="veng" style="flex:1" title="${t('engineHint')}">
+          <option value="qwen"${v.engine === 'cosyvoice3' ? '' : ' selected'}>${t('engQwen')}</option>
+          <option value="cosyvoice3"${v.engine === 'cosyvoice3' ? ' selected' : ''}>${t('engCosy')}</option>
+        </select>
+      </div>
       <div class="vtext" data-full="${esc(txt)}">${txt ? esc(txt.length > 46 ? txt.slice(0, 46) + '…' : txt)
             : '<span style="color:#e5534b">' + t('voiceNoText') + '</span>'}</div>
       <div class="vact">
@@ -1078,6 +1102,26 @@ function renderVoiceList(){
       if(!a.src) a.src = '/api/voices/' + encodeURIComponent(n) + '/audio';
       a.style.display = 'block';
       a.play().catch(()=>{});
+    };
+    // 引擎：管理员可随时改，立即生效（服务端 voices 在内存里，写回后下个任务就用新引擎）
+    const es = item.querySelector('.veng');
+    if(es) es.onchange = async () => {
+      const val = es.value;
+      try{
+        const r = await api('/api/voices/' + encodeURIComponent(n) + '/engine', {
+          method:'POST',
+          headers:{'Content-Type':'application/x-www-form-urlencoded'},
+          body:'engine=' + encodeURIComponent(val)});
+        if(!r.ok){ const j = await r.json().catch(()=>({detail:'error'})); throw new Error(j.detail || 'error'); }
+        if(META.info[n]) META.info[n].engine = val;
+        const tip = item.querySelector('.vengtip');
+        if(!tip){ const s = document.createElement('span'); s.className = 'vmeta vengtip'; item.querySelector('.vrow').appendChild(s); }
+        item.querySelector('.vengtip').textContent = t('engSaved');
+        setTimeout(()=>{ const x = item.querySelector('.vengtip'); if(x) x.textContent = ''; }, 2500);
+      }catch(e){
+        if(e.message !== '401') alert(t('engFail') + ': ' + e.message);
+        loadMeta();
+      }
     };
     const vt = item.querySelector('.vtext');
     const vv = item.querySelector('.vview');
@@ -1394,6 +1438,7 @@ $('#vupload').onclick = async () => {
   if(d != null && d < 3){ $('#vmsg').textContent = t('refTooShort')(d.toFixed(1)); return; }
   const fd = new FormData();
   fd.append('name', name); fd.append('ref_text', $('#vtext').value.trim()); fd.append('file', f);
+  fd.append('engine', ($('#vengine') && $('#vengine').value) || 'qwen');
   $('#vmsg').textContent = t('uploading');
   try{
     const r = await api('/api/voices', {method:'POST', body:fd});

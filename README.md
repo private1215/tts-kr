@@ -314,12 +314,12 @@ env -u HTTPS_PROXY -u https_proxy -u HTTP_PROXY -u http_proxy \
 
 ### 功能
 
-- [ ] **P0（2026-09-29 发现，未修）**：生成路径切 CosyVoice3 时**没有先卸 Qwen 模型**。
-      显存串行目前只写在选型路径（`engine_select`），`run_job → _synth_cosy` 直接调
-      `cosy_client.synth()`。→ Qwen 跑完进程仍持 ~8 GiB，紧接着的 excited/warm/serious
-      任务让 CosyVoice3 加载 → OOM → HTTP 500 → **整个任务失败且无兜底回退**。
-      今日已失败两单：`9d95858c`（12:55）、`2a8e4e31`（14:11）。
-      详见 `docs/CosyVoice3双引擎方案.md` 第 8 节
+- [x] ~~P0：生成路径切 CosyVoice3 时没先卸 Qwen，情感任务 OOM 失败~~
+      **已修**（2026-09-29 深夜）：显存串行统一收敛到 `app/vram.py`，
+      生成路径走 Cosy 前先卸 Qwen 并等显存真释放，失败自动降级 Qwen 重出。
+      同日还取消了自动选型，引擎改由管理员手动指定（录入表单 + 音色列表 +
+      `POST /api/voices/{name}/engine`，立即生效）。
+      详见 `docs/CosyVoice3双引擎方案.md` 第 8~9 节
 - [ ] 参考音频无 ASR 校验：文字稿是否真的对应音频，只能靠录入时的语速告警（4.5~12 字/秒）
       间接判断。若后续发现克隆质量不稳，可考虑接 ASR 做强制对齐。
       **2026-09-28 已用 Whisper small 手工核验过现网唯一音色**：转录结果与 `ref_text`

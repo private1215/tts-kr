@@ -31,6 +31,7 @@ from voice_match import get_target
 from pipeline import CHUNK_MAX_CHARS, split_chunks
 import asr_check
 import cosy_client
+import vram
 import engine_select
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -131,6 +132,18 @@ COSY_FALLBACK_CER = float(os.environ.get("TTS_COSY_FALLBACK_CER", "0.15"))
 # 在做出「GPU 串行锁 + 选型前先卸载对方模型」之前，不能开着它跑生产，
 # 否则员工录入音色时会挤爆正在生成的任务。
 AUTO_SELECT_ON_CREATE = os.environ.get("TTS_AUTO_SELECT_ON_CREATE", "0") != "0"
+
+# ---- 音色级引擎：由管理员在录入音色时手动指定 ---------------------------
+
+# ⚠️ 2026-09-29 取消自动选型。原打分 score = -10×CER + 句内动态，
+
+# Qwen 的 CER 极低（0.0047）导致它恒赢，两个内置音色都被判成 qwen/standard，
+
+# 测了等于没测。改为录入时人工指定，行为可预期、可追溯。
+
+DEFAULT_ENGINE = os.environ.get("TTS_DEFAULT_ENGINE", "qwen")
+
+VALID_ENGINES = ("qwen", "cosyvoice3")
 
 MODEL_DIRS = {
     "custom_voice": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-CustomVoice"),
@@ -399,20 +412,18 @@ async def run_job(job):
         ref_audio = read_audio(v["path"])
         ref_wav_path = v["path"]
         ref_key = job["voice"]
-        # 音色级自适应选型：员工用默认情感（「平稳/standard」）时，
-        # 走录入那一刻测出来的最优「引擎+情感」组合，而不是写死用 Qwen。
-        # 员工显式选了其它情感时，一律尊重员工的选择。
-        _auto = v.get("auto")
-        if _auto and _emotion == DEFAULT_EMOTION:
-            _eff_engine = (_auto.get("engine") or _engine_name).strip()
-            if _eff_engine in ("qwen", "cosyvoice3"):
-                _engine_name = _eff_engine
-                _cosy_instruct = _auto.get("instruct") or "neutral"
-                job["engine"] = _engine_name
-                job["auto_applied"] = True
-                job["effective_emotion"] = _auto.get("emotion") or _emotion
-                log.info("音色「%s」自适应选型生效: 情感=%s -> 引擎=%s",
-                         job["voice"], job["effective_emotion"], _engine_name)
+        # 引擎取「管理员录入该音色时手动指定的」engine 字段（voices.json）。
+        # 员工选了非平稳情感时**强制**改走 CosyVoice3 —— Qwen 克隆没有 instruct，
+        # 只有 CosyVoice3 带得动情感，否则员工点了「激昂」却听不出任何变化。
+        _ve = (v.get("engine") or "").strip()
+        if _ve in VALID_ENGINES:
+            _engine_name = _ve
+        if _emotion != DEFAULT_EMOTION and _engine_name != "cosyvoice3":
+            _engine_name = "cosyvoice3"
+        _cosy_instruct = _preset.get("instruct") or "neutral"
+        job["engine"] = _engine_name
+        log.info("任务 %s 音色引擎=%s 情感=%s -> 最终引擎=%s",
+                 job["id"], _ve or "未指定", _emotion, _engine_name)
         # 保真增强：取该音色源录音的长时谱作为目标（详见 app/voice_match.py）
         if job.get("enhance"):
             try:
@@ -513,12 +524,39 @@ async def run_job(job):
     # 各块的 plan 内容一致，取最后一块的即可用于参数留痕
     last_plan = {}
 
+    # ---- 显存串行：走 CosyVoice3 之前必须先把 Qwen 请出显存 ----
+    # 两个引擎不能同时驻留（12G 卡放不下 Qwen ~8 GiB + CosyVoice3 3.2 GiB）。
+    # 少了这一步，CosyVoice3 在加载阶段直接 CUDA OOM → HTTP 500 → 整个任务失败
+    # （2026-09-29 实测失败两单：9d95858c / 2a8e4e31）。详见 app/vram.py。
+    job["_used_cosy"] = False
+    if _engine_name == "cosyvoice3" and ref_wav_path:
+        vram.switch_to("cosyvoice3", f"任务 {jid} ")
+        job["_used_cosy"] = True
+
     for ci, chunk_text in enumerate(chunks):
         best = None
         for attempt in range(ASR_MAX_RETRY + 1):
             seed = base_seed + attempt * 7919
-            audio, sr, st = await loop.run_in_executor(
-                None, _synth, (ci, chunk_text, seed))
+            try:
+                audio, sr, st = await loop.run_in_executor(
+                    None, _synth, (ci, chunk_text, seed))
+            except Exception as _e:
+                # CosyVoice3 失败（绝大多数是显存不够导致加载 OOM）→ 整任务降级 Qwen。
+                # 员工拿到手的永远是成品，不会因换引擎而失败；降级原因留在 job 上可查。
+                if _engine_name != "cosyvoice3":
+                    raise
+                log.warning("任务 %s 第 %d/%d 块 CosyVoice3 失败（%s），"
+                            "整任务降级为 Qwen 重出", jid, ci + 1, n_chunk,
+                            repr(_e)[:120])
+                _engine_name = "qwen"
+                job["engine"] = "qwen"
+                job["fallback_from"] = "cosyvoice3"
+                job["fallback_reason"] = repr(_e)[:200]
+                job.pop("_cosy_speed_applied", None)
+                job["_used_cosy"] = False
+                vram.switch_to("qwen", f"任务 {jid} ")
+                audio, sr, st = await loop.run_in_executor(
+                    None, _synth, (ci, chunk_text, seed))
             # 内容回检：语速体检抓不到「说着说着又笑又说奇怪的话」，
             # 只能用 ASR 转写比对原文。详见 app/asr_check.py。
             tmp_wav = os.path.join(folder_path, f".asr_{jid}_{ci}.wav")
@@ -554,6 +592,8 @@ async def run_job(job):
             job["engine"] = "qwen"
             job["fallback_from"] = "cosyvoice3"
             job.pop("_cosy_speed_applied", None)
+            # Qwen 此时已被卸掉（串行），要让位回来才能重出
+            vram.switch_to("qwen", f"任务 {jid} ")
             audio, sr, st = await loop.run_in_executor(
                 None, _synth, (ci, chunk_text, base_seed))
             tmp_wav = os.path.join(folder_path, f".asr_{jid}_{ci}.wav")
@@ -566,6 +606,7 @@ async def run_job(job):
                     os.remove(tmp_wav)
                 except OSError:
                     pass
+            vram.switch_to("cosyvoice3", f"任务 {jid} ")
             _engine_name = "cosyvoice3"      # 下一块仍按原情感走
             job["engine"] = "cosyvoice3"
         st = st or {}
@@ -693,6 +734,14 @@ async def worker():
             job["finished_at"] = time.time()
             persist_jobs()
         finally:
+            # 双引擎显存串行收尾：本任务用过 CosyVoice3 就把 Qwen 恢复常驻，
+            # 否则下个 Qwen 任务要等懒加载，Cosy 也会白占 3.2 GiB 直到空闲超时。
+            if job.get("_used_cosy"):
+                try:
+                    _loop = asyncio.get_running_loop()
+                    await _loop.run_in_executor(None, vram.restore_qwen)
+                except Exception as _e:
+                    log.warning("收尾恢复 Qwen 失败: %s", repr(_e)[:160])
             job_queue.task_done()
 
 
@@ -1286,8 +1335,13 @@ async def get_job(request: Request, jid: str):
 async def upload_voice(request: Request,
                        name: str = Form(...),
                        ref_text: str = Form(""),
+                       engine: str = Form(DEFAULT_ENGINE),
                        file: UploadFile = File(...)):
     require(request)
+    # 引擎由录入者（管理员）手动指定，写进 voices.json，之后这个音色的生成都走它。
+    engine = (engine or DEFAULT_ENGINE).strip()
+    if engine not in VALID_ENGINES:
+        raise HTTPException(400, f"引擎需在 {list(VALID_ENGINES)} 之内")
     safe = "".join(c for c in name if c not in '/\\:*?"<>|').strip()
     if not safe:
         raise HTTPException(400, "音色名无效")
@@ -1368,6 +1422,8 @@ async def upload_voice(request: Request,
         "ref_text": used_text,
         "sr": sr2,
         "dur": round(out_dur, 2),
+        # 引擎：管理员录入时手动指定（qwen=最准平稳 / cosyvoice3=有情感）
+        "engine": engine,
         # 留痕：出问题时能看出代码到底截了哪一段、文字对不对
         "src_path": src_path,
         "src_dur": info.get("src_dur"),
@@ -1383,28 +1439,14 @@ async def upload_voice(request: Request,
         },
     }
     save_voices(voices)
-    log.info("录入音色 %s: 原 %.1fs -> 成品 %.2fs, ref_text %d 字, 分析 %.2fs, %s",
-             safe, dur, out_dur, len(used_text), info["analyze_seconds"], info)
+    log.info("录入音色 %s: 原 %.1fs -> 成品 %.2fs, ref_text %d 字, 引擎=%s, 分析 %.2fs, %s",
+             safe, dur, out_dur, len(used_text), engine, info["analyze_seconds"], info)
 
-    # 自动选型：给这个音色实测一遍「哪个引擎 + 哪种情感」最合适，
-    # 结果写回音色，之后员工用默认情感生成时自动走最优组合（零额外操作）。
-    # 选型失败不能连累录入本身 —— 音色必须能用，选型只是锦上添花。
-    # 队列里有任务在跑时不抢 GPU：两个模型同时推理 + 正在生成的任务会 OOM。
+    # ⚠️ 自动选型已取消（2026-09-29）：打分公式 score = -10×CER + 句内动态 让
+    # CER 极低的 Qwen 恒赢，两个内置音色都被判成 qwen/standard，测了等于没测。
+    # 改为录入时手动指定引擎（engine 字段）。
+    # 手动端点 POST /api/voices/{name}/auto-select 保留，需要单独标定时仍可调用。
     auto_info = None
-    if AUTO_SELECT_ON_CREATE:
-        _busy = any(j.get("status") in ("running", "queued") for j in jobs.values())
-        if _busy:
-            log.info("队列非空，音色 %s 暂缓自动选型（可在音色列表手动触发）", safe)
-        else:
-            try:
-                loop = asyncio.get_running_loop()
-                t1 = time.time()
-                auto_info = await loop.run_in_executor(
-                    None, engine_select.select_for_voice, safe, voices[safe])
-                log.info("音色 %s 自动选型完成，耗时 %.0fs", safe, time.time() - t1)
-            except Exception as e:
-                log.warning("音色 %s 自动选型失败（不影响使用）: %s", safe, repr(e)[:200])
-                auto_info = None
 
     return {
         "name": safe,
@@ -1418,6 +1460,31 @@ async def upload_voice(request: Request,
         "warn": warn,
         "auto": auto_info,
     }
+
+
+@app.post("/api/voices/{name}/engine")
+async def set_voice_engine(request: Request, name: str, engine: str = Form(...)):
+    """改某个音色默认用哪个引擎。**立即生效，不用重启服务**。
+
+    2026-09-29 取消自动选型后，引擎完全由人工指定：录入时选一次，
+    之后在这里随时改。voices 是内存里的 dict，写回 voices.json 后
+    下一个任务就直接按新引擎走。
+
+    注意：这只是「默认引擎」。员工生成时选了非平稳情感，**仍然强制走
+    CosyVoice3** —— Qwen 克隆没有 instruct，给不了情绪。
+    """
+    require(request)
+    v = voices.get(name)
+    if not v:
+        raise HTTPException(404, "音色不存在")
+    engine = (engine or "").strip()
+    if engine not in VALID_ENGINES:
+        raise HTTPException(400, f"引擎需在 {list(VALID_ENGINES)} 之内")
+    old = (v.get("engine") or "").strip() or "未指定"
+    v["engine"] = engine
+    save_voices(voices)
+    log.info("音色 %s 引擎: %s -> %s", name, old, engine)
+    return {"ok": True, "name": name, "engine": engine, "old": old}
 
 
 @app.post("/api/voices/{name}/auto-select")

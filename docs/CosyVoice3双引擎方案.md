@@ -163,16 +163,40 @@ gc.collect() → torch.cuda.synchronize() → empty_cache() → gc.collect() →
 `cer=None / ok=False`（CosyVoice3 加载即 OOM）；修复后全部拿到真实 CER
 （qwen 0.0047 / warm 0.0351 / excited 0.0790 / serious 0.0790），整轮 430s。
 
-## 8. ⚠️ 已知遗留 / 未修
+## 8. 生成路径的显存串行（2026-09-29 深夜补齐）
 
-- **P0：生成路径切 CosyVoice3 时没有先卸 Qwen。** 显存串行目前只写在选型路径，
-  `run_job → _synth_cosy` 直接调 `cosy_client.synth()`，没调 `engine.unload()`。
-  → Qwen 跑完后进程仍持 ~8 GiB，紧接着的 excited/warm/serious 任务让 CosyVoice3
-  加载 → OOM → HTTP 500 → **整个任务失败**（无兜底回退）。
-  今日已失败两单：`9d95858c`（12:55）、`2a8e4e31`（14:11）。
-- ~~`engine_select.py` 未接入音色创建流程~~ **已解决**：录入音色后自动跑选型，
-  并有 `POST /api/voices/{name}/auto-select` 手动补跑；`run_job` 在默认情感时读 `voice["auto"]`。
-- 选型打分 `score = -10×CER + dyn`：Qwen 的 CER 极低（0.0047），动态稍低也总是赢，
-  两个内置音色最终都选了 qwen/standard。**员工显式选情感时不受影响**（尊重员工选择）。
+第 7 节的串行逻辑最初**只写在选型路径**，生成路径没有 —— 员工一旦选情感
+（excited/warm/serious），任务就因 CosyVoice3 加载 OOM 而 100% 失败
+（当日失败两单 `9d95858c` / `2a8e4e31`）。
+
+根因是「两处各写一份串行逻辑，其中一份静默失效」。现在统一收敛到 `app/vram.py`，
+`engine_select` 与 `run_job` 都调它：
+
+| 位置 | 行为 |
+|---|---|
+| `run_job` 分块循环前 | 走 CosyVoice3 时 `vram.switch_to("cosyvoice3")`（卸 Qwen + 等显存真释放） |
+| `run_job` 单块异常 | CosyVoice3 失败 → **整任务降级 Qwen 重出**，任务不会变成 error |
+| CER 闸门回退 | 回退前 `vram.switch_to("qwen")`，用完再切回 CosyVoice3 |
+| `worker()` finally | 本任务用过 Cosy 就 `vram.restore_qwen()`，恢复常驻 |
+
+实测：停掉 CosyVoice3 服务后提交 excited 任务 → 自动降级 Qwen 重出，CER 0.0369，
+任务 **done**（降级前是 error）。
+
+## 9. 引擎怎么定：管理员手动指定（自动选型已取消）
+
+- **取消自动选型**：打分 `score = -10×CER + dyn` 让 CER 极低的 Qwen 恒赢，
+  两个内置音色都被判成 qwen/standard，测了等于没测。
+- **改为手动指定**，三个入口：
+  1. 录入音色表单的「这个音色用哪个引擎」下拉 → 写入 `voices.json` 的 `engine`
+  2. **已录入音色列表**里每个音色各带一个引擎下拉，随时改
+  3. `POST /api/voices/{name}/engine`（`engine=qwen|cosyvoice3`）—— **立即生效，不用重启**
+- **覆盖规则**：员工生成时若选了非平稳情感，**强制走 CosyVoice3**
+  （Qwen 克隆没有 `instruct`，给不了情绪）。音色引擎只决定「平稳」时走谁。
+- 现有两个内置音色已补 `engine` 字段。
+
+## 10. 已知遗留
+
 - CosyVoice3 未启用 fp16 / TensorRT / vLLM，速度还有优化空间。
-- 两个引擎同时常驻时峰值约 7.5 GiB —— **该数字已被 10.52 GiB 实测值取代**，靠空闲卸载规避不再够用。
+- Qwen 开保真增强时峰值显存 **10.52~10.6 GiB**（旧基线 6.97 已过时），
+  12G 卡余量不多；以后再叠功能要先复核。
+- 音色只能在新录入时或列表里改引擎，没有「批量改」入口。

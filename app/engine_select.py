@@ -69,28 +69,14 @@ TTS_SELECT_RELOAD_QWEN = os.environ.get("TTS_SELECT_RELOAD_QWEN", "1") == "1"
 
 
 def _wait_free_vram(min_free_gib=6.0, timeout=90.0):
-    """等整卡空闲显存真正达标再往下走（验证式等待）。
+    """等整卡空闲显存真正达标再往下走。
 
-    为什么需要：跨进程 unload 是「请求返回 ≠ 显存已释放」——
-    cosy 的 /unload 返回后 nvidia-smi 仍显示其进程持有 5~7.6G
-    （torch 缓存引用环未回收），立刻加载另一个引擎直接 OOM（实测）。
-    所以以 torch.cuda.mem_get_info() 的整卡空闲量为判据轮询；
-    超时只告警不阻断（懒加载/候选失败兜底，不能让选型卡死）。
-    返回达标时的空闲 GiB，拿不到信息返回 None。
+    实现统一收敛到 `app/vram.py`（生成路径与选型路径共用一套），
+    避免出现「一处改了另一处没改」的静默失效 —— 2026-09-29 的 P0 正是这么来的。
     """
     try:
-        import torch
-        t0 = time.time()
-        free_gib = 0.0
-        while time.time() - t0 < timeout:
-            free_b, _total = torch.cuda.mem_get_info()
-            free_gib = free_b / 1024 ** 3
-            if free_gib >= min_free_gib:
-                return free_gib
-            time.sleep(2.0)
-        log.warning("等待空闲显存 >= %.1f GiB 超时（%.0fs，当前 %.1f GiB），仍继续",
-                    min_free_gib, timeout, free_gib)
-        return free_gib
+        import vram
+        return vram.wait_free_vram(min_free_gib, timeout)
     except Exception:
         return None
 
@@ -98,37 +84,14 @@ def _wait_free_vram(min_free_gib=6.0, timeout=90.0):
 def _switch_engine(engine_name):
     """显存串行核心：跑某引擎前，把另一个引擎从显存彻底赶出去并**等显存真释放**。
 
-    - 目标引擎 Qwen    -> 卸 CosyVoice3（HTTP /unload，已同步释放）+ 等整卡空闲 ≥ 6G
-      （Qwen base 加载需 ~4.2G，留余量），Qwen 由 _ensure_variant 懒加载/复用
-    - 目标引擎 CosyVoice3 -> 卸 Qwen（进程内 unload，del+empty_cache 即真释放）
-      + 等整卡空闲 ≥ 4.5G（CosyVoice3 fp32 加载需 ~3.2G）
-    卸载都是幂等的，重复调用无副作用。
+    实现统一收敛到 `app/vram.py`。卸载都是幂等的，重复调用无副作用。
     """
     try:
-        import torch
-        torch.cuda.empty_cache()
-    except Exception:
-        pass
-    if engine_name == "cosyvoice3":
-        try:
-            import server
-            eng = getattr(server, "engine", None)
-            if eng is not None:
-                eng.unload()
-        except Exception as e:
-            log.warning("卸载 Qwen 失败（继续跑 CosyVoice3，可能 OOM）: %s", repr(e)[:120])
-        free = _wait_free_vram(4.5)
-        if free is not None:
-            log.info("切换引擎 -> CosyVoice3，整卡空闲显存 %.1f GiB", free)
-    else:
-        try:
-            import cosy_client
-            cosy_client.unload()
-        except Exception as e:
-            log.warning("卸载 CosyVoice3 失败（继续跑 Qwen，可能 OOM）: %s", repr(e)[:120])
-        free = _wait_free_vram(6.0)
-        if free is not None:
-            log.info("切换引擎 -> Qwen，整卡空闲显存 %.1f GiB", free)
+        import vram
+        return vram.switch_to(engine_name)
+    except Exception as e:
+        log.warning("切换引擎 -> %s 失败（可能 OOM）: %s", engine_name, repr(e)[:120])
+        return None
 
 
 def _finish_benchmark():
