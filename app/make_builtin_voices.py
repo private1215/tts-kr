@@ -82,12 +82,88 @@ def load_concat(paths, workdir):
     return np.concatenate(xs), sr
 
 
+# ---- 表达力（句内音高动态）------------------------------------------------
+# 2026-09-29 实测（同文本同性别横向对比，见 docs/内置音色与自动分块方案.md）：
+#   我们平台成品  句内动态 8.71 半音
+#   elevenlabs    句内动态 10.34 半音
+#   源素材本身     句内动态  9.00 半音
+# → 我们的成品≈源素材，说明模型忠实克隆了素材；而差距正是员工说的「全程一个调」。
+# 所以挑参考片段时要把「抑扬顿挫」作为正向指标。
+EXPRESS_MIX_MIN = 0.5      # 表达力项的最低权重（保证它不会把典型窗口一票否决）
+F0_MIN, F0_MAX = 60.0, 600.0
+# ⚠️ 别用绝对半音阈值当门槛：实测男声 15s 窗口的句内动态中位就有 13.3 半音，
+# 定 9.0 会让 1954/1954 个候选全部"达标"，筛选直接失效（2026-09-29 踩过）。
+# 一律用**候选分布内的相对分位数**做门槛。
+EXPRESS_POOL_Q = 75.0      # 只在句内动态最高的前 25% 窗口里挑
+EXPRESS_NORM_LO_Q = 25.0   # 归一化下界
+EXPRESS_NORM_HI_Q = 95.0   # 归一化上界（到这就满分，防止挑中最亢奋的喊单段）
+
+
+def _f0_track(x, sr, hop_sec, n_frames):
+    """全篇算一次 F0，帧对齐到 rms 的帧率。失败返回 None（评分退化为旧行为）。"""
+    try:
+        import librosa
+    except Exception:
+        return None
+    hop_n = max(1, int(round(hop_sec * sr)))
+    try:
+        f0, _, _ = librosa.pyin(x, fmin=F0_MIN, fmax=F0_MAX, sr=sr,
+                                hop_length=hop_n,
+                                frame_length=max(2048, hop_n * 4))
+    except Exception as e:
+        print(f"    (F0 提取失败，表达力项跳过: {e})")
+        return None
+    f0 = np.asarray(f0, dtype=float)
+    if len(f0) < n_frames:
+        f0 = np.pad(f0, (0, n_frames - len(f0)), constant_values=np.nan)
+    return f0[:n_frames]
+
+
+def _semi_dyn(f0, a, b, min_frames=12):
+    """窗口内**逐句**音高动态宽度的中位数（半音）。
+
+    先按浊音连续性把窗口切成若干「句」，再对每句算 p15/p85 宽度取中位。
+    这比整窗 p90/p10 更贴近人耳感知的抑扬顿挫：整窗口径会被**句间**音高
+    漂移污染——句 A 高、句 B 低也会让整窗看起来"起伏很大"，但每句内部
+    其实很平，听起来仍然是一个调（这正是员工抱怨的形态）。
+    """
+    if f0 is None:
+        return 0.0
+    w = f0[a:b]
+    idx = np.where(~np.isnan(w))[0]
+    if len(idx) < 30:
+        return 0.0
+    breaks = np.where(np.diff(idx) > 1)[0] + 1
+    out = []
+    for r in np.split(idx, breaks):
+        if len(r) < min_frames:
+            continue
+        v = w[r]
+        v = v[v > 0]
+        if len(v) < min_frames:
+            continue
+        lo, hi = np.percentile(v, 15), np.percentile(v, 85)
+        if lo > 0 and hi > 0:
+            out.append(12.0 * np.log2(hi / lo))
+    if not out:
+        return 0.0
+    return float(np.median(out))
+
+
 def pick_typical_window(x, sr, target=TARGET_SEC):
-    """挑「最典型」的一段：能量接近全篇中位 + 内部稳定 + 无长停顿。
+    """挑「最典型 + 最有抑扬」的一段：能量接近全篇中位 + 内部稳定 + 无长停顿。
 
     与 voice_trim.pick_window 的区别：那边用 `平均能量 × 稳定度`，会挑中
     最响亮的喊单段；这里把「能量项」换成「与中位能量的接近程度」，
     挑的是主播最常态的那 15 秒。
+
+    ⚠️ 2026-09-29 修订 —— 原版评分会系统性挑中**最平淡**的片段：
+    `stab` 奖励"能量平稳"、`pen` 惩罚"有停顿"，而自然人声的语调恰恰是
+    靠**能量起伏 + 停顿**做出来的。于是 15 秒的 ICL prompt 全篇一个调，
+    模型就学到了"一个调"。这是员工反馈「没有声调」的根因之一。
+    改为两阶段：先用音高动态筛掉平淡窗口，再在达标池里按原评分挑最典型的；
+    达标池内部仍偏好动态更大的（但到 11 半音封顶，避免又挑回亢奋喊单段，
+    见 QwenLM/Qwen3-TTS#16 —— 笑声来自参考音频自带的情绪）。
     """
     dur = len(x) / float(sr)
     # 注意：short_time_rms 返回的 hop 是「采样点数」不是秒，时间换算一律用
@@ -120,20 +196,41 @@ def pick_typical_window(x, sr, target=TARGET_SEC):
         pen = 1.0 / (1.0 + max(0.0, worst * hop - vt.LONG_PAUSE_SEC) * 2.0)
         return typical * stab * pen, m, cv
 
-    best = None
+    # 全篇一次 F0：候选窗口有上千个，逐个跑 pyin 太慢
+    f0 = _f0_track(x, sr, hop, n)
+
+    cands = []
     step = max(1, int(0.25 / hop))
     for s0 in range(0, max(1, n - target_f), step):
         e0 = min(n, s0 + target_f)
         if (e0 - s0) * hop < MIN_CLIP_SEC:
             continue
         sc, m, cv = score(s0, e0)
-        if best is None or sc > best[0]:
-            best = (sc, s0, e0, m, cv)
-    if best is None:
+        cands.append((sc, s0, e0, m, cv, _semi_dyn(f0, s0, e0)))
+    if not cands:
         raise RuntimeError(
             f"挑不出可用窗口：n={n} target_f={target_f} dur={dur:.1f}s "
             f"(素材太短或几乎无声)")
-    _, s0, e0, m, cv = best
+
+    # 阶段一：按表达力筛掉平淡窗口（相对分位数，不用绝对阈值——见常量处注释）
+    ds = np.array([c[5] for c in cands], dtype=float)
+    q_pool = float(np.percentile(ds, EXPRESS_POOL_Q))
+    pool = [c for c in cands if c[5] >= q_pool] or cands
+    # 阶段二：池内按原评分挑最典型的，同时按动态线性加权（到 95 分位封顶，
+    # 避免又挑回最亢奋的喊单段 —— QwenLM/Qwen3-TTS#16：笑声来自参考音频情绪）
+    lo = float(np.percentile(ds, EXPRESS_NORM_LO_Q))
+    hi = float(np.percentile(ds, EXPRESS_NORM_HI_Q))
+    span = max(hi - lo, 1e-6)
+
+    def _w(d):
+        return EXPRESS_MIX_MIN + (1.0 - EXPRESS_MIX_MIN) * min(max((d - lo) / span, 0.0), 1.0)
+
+    best = max(pool, key=lambda c: c[0] * _w(c[5]))
+    dyn_best = best[5]
+    print(f"    候选 {len(cands)} 个 | 句内音高动态 p25={lo:.2f} 中位={np.median(ds):.2f} "
+          f"p95={hi:.2f} 最高={ds.max():.2f} 半音 → 达标池 {len(pool)} 个"
+          f"(≥{q_pool:.2f})，选中 {dyn_best:.2f} 半音")
+    _, s0, e0, m, cv, _dyn_sel = best
     half = int(vt.SNAP_SEC / hop)
     s1 = vt._snap(s0, rms, half)
     e1 = vt._snap(e0, rms, half)
@@ -147,7 +244,10 @@ def pick_typical_window(x, sr, target=TARGET_SEC):
         b = a + MAX_CLIP_SEC
     return a, b, {
         "mean_rms": round(float(m), 4), "cv": round(float(cv), 3),
-        "median_rms": round(med, 4), "method": "typical"}
+        "median_rms": round(med, 4), "method": "typical+expressive",
+        "semi_dyn": round(float(dyn_best), 2),
+        "semi_dyn_median": round(float(np.median(ds)), 2),
+        "semi_dyn_p95": round(float(hi), 2)}
 
 
 def align_to_script(asr_text: str, script: str) -> str:

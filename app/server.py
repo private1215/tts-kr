@@ -96,6 +96,16 @@ CHUNK_MAX_CHARS = int(os.environ.get("TTS_CHUNK_CHARS", "2600") or 2600)
 # ASR 内容回检不通过时最多重掷几次（0 = 只跑一次不重掷）
 ASR_MAX_RETRY = int(os.environ.get("TTS_ASR_RETRY", "2") or 2)
 
+# ---- 语速调节 ----------------------------------------------------------
+# Qwen3-TTS 模型本身**没有** speed / length_scale 接口（已核对源码：
+# qwen_tts/inference/qwen3_tts_model.py 里 grep speed|length_scale|duration|prosody
+# 零命中），所以只能在后处理变速。
+# 用 ffmpeg atempo（WSOLA 类算法，变速不变调）在**成品 wav**上做一次，
+# 实测几乎无损（LTAS 误差 0.05dB，4-7k 能量保留 1.005），
+# 远优于此前 np.interp 的线性插值（丢 4-7k 42% 能量）。
+SPEED_MIN, SPEED_MAX = 0.5, 2.0          # atempo 单次支持的范围
+MP3_BITRATE = os.environ.get("TTS_MP3_BITRATE", "192k")   # 旧值 128k，对齐 elevenlabs
+
 MODEL_DIRS = {
     "custom_voice": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-CustomVoice"),
     "base": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-Base"),
@@ -197,7 +207,7 @@ def persist_jobs():
             "id", "title", "owner", "mode", "language", "speaker", "voice",
             "instruct", "status", "created_at", "started_at", "finished_at",
             "progress", "stats", "wav", "mp3", "error", "preview",
-            "max_chars", "batch_size", "enhanced",
+            "max_chars", "batch_size", "enhanced", "speed", "subtalker_temperature",
             # 分块输出：files 是每块的 mp3 清单，不落盘的话重启后
             # 员工就再也下载不到已生成的音频了
             "files", "chunks", "chunks_total", "chunk", "folder", "seed")}
@@ -406,13 +416,15 @@ async def run_job(job):
             temperature=job.get("temperature"),
             top_p=job.get("top_p"),
             repetition_penalty=job.get("repetition_penalty"),
+            subtalker_temperature=job.get("subtalker_temperature"),
             voice_match=_match_target,
             progress=_mk_progress(text_ci[0]),
         )
 
     files = []
     agg = {"segments": 0, "chars": 0, "gen_seconds": 0.0, "audio_seconds": 0.0,
-           "abnormal_segments": 0, "slow_fixed": 0, "voice_matched": 0}
+           "abnormal_segments": 0, "slow_fixed": 0, "voice_matched": 0,
+           "asr_skipped": 0}
     detail_all = []
     chunk_info = []
     base_seed = int(job.get("seed") or 42)
@@ -459,19 +471,25 @@ async def run_job(job):
         agg["abnormal_segments"] += st.get("abnormal_segments") or 0
         agg["slow_fixed"] += st.get("slow_fixed") or 0
         agg["voice_matched"] += st.get("voice_matched") or 0
+        if res.get("skipped"):
+            agg["asr_skipped"] += 1
         detail_all.extend(st.get("segments_detail") or [])
 
         # 只输出 mp3：wav 36MB/块太占磁盘，员工实际用的就是 mp3
+        _speed = float(job.get("speed") or 1.0)
         mp3_name = f"{base_name}-{ci + 1}.mp3"
         mp3_abs = os.path.join(folder_path, mp3_name)
         job["stage"] = "encoding"
         tmp_wav = os.path.join(folder_path, f".enc_{jid}_{ci}.wav")
         try:
             sf.write(tmp_wav, audio, sr)
-            subprocess.run(
-                ["ffmpeg", "-y", "-loglevel", "error", "-i", tmp_wav,
-                 "-codec:a", "libmp3lame", "-b:a", "128k", mp3_abs],
-                check=True, timeout=300)
+            # 语速：模型无 speed 接口（见文件头 SPEED_MIN 注释），用 atempo 在
+            # 未压缩的 wav 上做一次——只经过一次 mp3 编码，且 atempo 变速不变调。
+            _cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", tmp_wav]
+            if abs(_speed - 1.0) > 1e-3:
+                _cmd += ["-filter:a", f"atempo={_speed:.3f}"]
+            _cmd += ["-codec:a", "libmp3lame", "-b:a", MP3_BITRATE, mp3_abs]
+            subprocess.run(_cmd, check=True, timeout=300)
         except Exception as e:
             log.warning("mp3 转码失败 %s: %s", mp3_abs, e)
         finally:
@@ -479,13 +497,15 @@ async def run_job(job):
                 os.remove(tmp_wav)
             except OSError:
                 pass
+        # 变速后实际时长 = 原时长 / speed，展示给员工和统计都要按这个值
+        _dur = (st.get("audio_seconds") or 0.0) / (_speed or 1.0)
         rel = f"{folder_name}/{mp3_name}"
         files.append({"name": mp3_name, "path": rel,
-                      "seconds": round(st.get("audio_seconds") or 0.0, 2),
+                      "seconds": round(_dur, 2),
                       "chars": st.get("chars") or 0,
                       "cer": res.get("cer") if not res.get("skipped") else None})
         chunk_info.append({"index": ci + 1, "chars": len(chunk_text),
-                           "seconds": round(st.get("audio_seconds") or 0.0, 2),
+                           "seconds": round(_dur, 2),
                            "cer": res.get("cer") if not res.get("skipped") else None,
                            "asr_skipped": bool(res.get("skipped"))})
         job["files"] = files
@@ -495,6 +515,15 @@ async def run_job(job):
     # 覆盖度自检：分段时空白/换行会被规整掉，正常落在 90%~100%。
     # 掉到 85% 以下说明有文本没被送进模型，必须在日志里暴露出来。
     _src_len = max(len(job.get("text") or ""), 1)
+    # ASR 全部跳过 = 这一单**根本没做内容校验**（乱音/跑飞完全裸奔）。
+    # 不能静默：2026-09-29 就是这么悄悄失效了很久，日志里只留一行 warning 被人忽略，
+    # 而 jobs.json 里 cer 全是 null 又被误读成"CER=0，内容没问题"。
+    if agg["asr_skipped"] >= n_chunk:
+        log.warning("⚠️ 任务 %s: ASR 内容回检 %d/%d 块全部被跳过，成品未做内容校验。"
+                    "请检查 faster-whisper 可用性（常见原因：模型缓存不在服务运行用户的 "
+                    "HOME 下，或语言码不被接受，见 app/asr_check.py）",
+                    jid, agg["asr_skipped"], n_chunk)
+
     _cov = agg["chars"] / _src_len
     if _cov < 0.85:
         log.warning("覆盖度异常 job=%s: 原文 %d 字，实际只生成 %d 字（%.1f%%），段数 %s",
@@ -790,6 +819,10 @@ async def meta(request: Request):
         "variants": list(MODEL_DIRS.keys()),
         "loaded": engine.variant,
         "voice_match_default": VOICE_MATCH_DEFAULT,
+        # 语速档位：模型无 speed 接口，靠 ffmpeg atempo 后处理（变速不变调）
+        "speeds": [0.8, 0.9, 1.0, 1.1, 1.2, 1.3],
+        "speed_default": 1.0,
+        "speed_min": SPEED_MIN, "speed_max": SPEED_MAX,
     }
 
 
@@ -805,11 +838,20 @@ async def create_job(request: Request,
                      max_chars: int = Form(60),
                      batch_size: int = Form(16),
                      seed: int = Form(42),
+                     speed: float = Form(1.0),
                      temperature: Optional[float] = Form(None),
+                     subtalker_temperature: Optional[float] = Form(None),
                      enhance: Optional[bool] = Form(None)):
     u = require(request)
     if temperature is not None and not (0.3 <= temperature <= 1.5):
         raise HTTPException(400, "temperature 需在 0.3~1.5 之间")
+    try:
+        speed = float(speed)
+    except (TypeError, ValueError):
+        speed = 1.0
+    if not (SPEED_MIN <= speed <= SPEED_MAX):
+        raise HTTPException(400, f"语速需在 {SPEED_MIN}~{SPEED_MAX} 之间")
+    speed = round(speed, 2)
     if not text.strip():
         raise HTTPException(400, "文本为空")
     if mode == "clone":
@@ -843,7 +885,11 @@ async def create_job(request: Request,
         "max_chars": max_chars,
         "batch_size": batch_size,
         "seed": seed,
+        "speed": speed,
         "temperature": temperature,
+        # 韵律细节采样温度（模型第二路采样）。默认不传=沿用官方 0.9；
+        # 只在实测确认不放大跑飞后才放开，见 tts_engine.GEN_SUBTALKER_TEMPERATURE。
+        "subtalker_temperature": subtalker_temperature,
         # 不传则跟随服务端默认开关；传 false 可产出老版本输出做 A/B 对照
         "enhance": VOICE_MATCH_DEFAULT if enhance is None else bool(enhance),
         "enhanced": False,

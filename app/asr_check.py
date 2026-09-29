@@ -40,6 +40,29 @@ _model_failed = False
 # 韩语分词差异会让逐词比对失真，按字符比对更稳。
 _KEEP = re.compile(r"[가-힣ㄱ-ㅎㅏ-ㅣa-zA-Z0-9]")
 
+# ⚠️ 2026-09-29 修 bug：业务层的 language 是 'korean' / 'japanese' 这种英文名，
+# 而 faster-whisper 只接受 ISO 639-1 两字母码（'ko' / 'ja'）。
+# 直接透传会抛 "'korean' is not a valid language code" → 转写失败 →
+# 静默降级为 skipped，回检等于没做。这个 bug 被"缓存找不到模型"掩盖了很久：
+# 修好缓存后它才第一次浮出水面。
+# 'auto' 映射为 None，让 Whisper 自己检测语言。
+_LANG_MAP = {
+    "auto": None,
+    "chinese": "zh", "english": "en", "french": "fr", "german": "de",
+    "italian": "it", "japanese": "ja", "korean": "ko",
+    "portuguese": "pt", "russian": "ru", "spanish": "es",
+    # 已经是正确的两字母码时原样保留
+    "zh": "zh", "en": "en", "fr": "fr", "de": "de", "it": "it",
+    "ja": "ja", "ko": "ko", "pt": "pt", "ru": "ru", "es": "es",
+}
+
+
+def lang_code(language: str):
+    """业务语言名 → Whisper 语言码。识别不出就返回 None（交给 Whisper 自动检测）。"""
+    if not language:
+        return None
+    return _LANG_MAP.get(str(language).strip().lower())
+
 
 def normalize(text: str) -> str:
     """归一化：去空白与标点，只留实质字符。"""
@@ -67,7 +90,7 @@ def transcribe(wav_path: str, language: str = "ko") -> str:
     if m is None:
         return ""
     try:
-        segs, _info = m.transcribe(wav_path, language=language,
+        segs, _info = m.transcribe(wav_path, language=lang_code(language),
                                    vad_filter=True, beam_size=1)
         return " ".join(s.text for s in segs).strip()
     except Exception as e:

@@ -7,6 +7,7 @@
 import re
 import random
 import numpy as np
+from scipy.signal import resample_poly
 
 # 句末标点：中英韩混排场景
 SENT_END = re.compile(r'(?<=[.!?。！？…])\s*')
@@ -271,16 +272,28 @@ def concat_segments(audios: list, segs: list, sr: int = 24000,
 def apply_speed_jitter(audio: np.ndarray, factor: float) -> np.ndarray:
     """轻微变速，打破 AI 语音过于恒定的节奏感。factor 建议 0.97~1.03。
 
-    注意：输出长度必须随 factor 变化（n/factor），否则 factor>1 时源索引越界
-    被 clip 到末尾，尾部会变成重复最后样本的常数段（拖尾/咔哒）。
+    ⚠️ 2026-09-29 重写：原实现用 np.interp 线性插值，实测会削掉高频
+    （16kHz 域、factor=1.022、LTAS 长时平均谱对比）：
+
+        np.interp（旧）    LTAS 误差 1.97dB，4-7k 能量保留 **0.584**（丢 42%）
+        resample_poly（新）LTAS 误差 1.41dB，4-7k 能量保留 1.018
+        ffmpeg atempo      LTAS 误差 0.05dB，4-7k 能量保留 1.005
+
+    4-7kHz 是齿音/气声所在，每段砍一遍就是"发闷 + 机器味"，
+    且与 voice_match（补高频的保真增强）目标相冲。
+    → 改用 resample_poly（多相滤波 + 抗混叠），高频基本无损。
+    注意该函数现已**默认不调用**（tts_engine.speed_jitter=0），
+    语速统一走 server.py 的 ffmpeg atempo，保留本函数仅供对照实验。
     """
     if abs(factor - 1.0) < 1e-4:
         return audio
     n = len(audio)
     n_out = max(int(round(n / factor)), 1)
-    src_idx = np.arange(n_out, dtype=np.float32) * factor
-    src_idx = np.clip(src_idx, 0, n - 1)
-    return np.interp(src_idx, np.arange(n, dtype=np.float32), audio).astype(np.float32)
+    if n_out == n:
+        return audio
+    from math import gcd
+    g = gcd(n, n_out)
+    return resample_poly(audio.astype(np.float64), n_out // g, n // g).astype(np.float32)
 
 
 def _energy_db(x: np.ndarray) -> float:

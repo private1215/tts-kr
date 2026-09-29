@@ -352,6 +352,10 @@ details.adv summary:hover{color:var(--txt2)}
 
         <label data-i18n="language">语言</label>
         <select id="language"></select>
+
+        <label data-i18n="speed">语速</label>
+        <select id="speed"></select>
+        <div class="hint" data-i18n="speedHint">1.0 为正常速度，调大更快（1.1 / 1.2 …）。变速不变调，生成后统一处理，不影响音色与清晰度。</div>
       </div>
     </div>
 
@@ -464,6 +468,7 @@ const I18N = {
     instructHint:'长语音强烈建议填 2-4 行（换行分隔）：系统会按段轮换使用，避免通篇一个语气一个语速——这是长音频 AI 味最主要的来源。留空则自动用中性朗读指令。',
     clearInstruct:'清空指令',
     savedVoices:'已录入音色', cloneNoInstruct:'克隆模式不支持语气指令，语气由参考音频本身的情绪决定。',
+    speed:'语速', speedHint:'1.0 为正常速度，调大更快（1.1 / 1.2 …）。变速不变调，生成后统一处理，不影响音色与清晰度。',
     language:'语言', params:'生成', segChars:'分段字数', batchSize:'批量大小',
     advanced:'高级设置（分段 / 批量）',
     paramHint:'保持默认即可：后端会按显存自动收敛到安全值（分段 ≤60、批量 ≤8）。调大不会更快，只会被自动压回。',
@@ -549,6 +554,7 @@ const I18N = {
     instructHint:'For long audio, enter 2-4 lines (one per line): they rotate across segments so the whole piece never sits on one tone and one speed — the biggest source of AI-sounding long-form narration.',
     clearInstruct:'Clear',
     savedVoices:'Enrolled voices', cloneNoInstruct:'Voice clone does not support style instructions — emotion comes from the reference audio.',
+    speed:'Speed', speedHint:'1.0 is normal; higher is faster (1.1 / 1.2 …). Tempo-only — pitch and timbre stay unchanged.',
     language:'Language', params:'Generate', segChars:'Chars per segment', batchSize:'Batch size',
     advanced:'Advanced (segment / batch)',
     paramHint:'Keep defaults: the backend auto-tunes a safe plan (seg ≤60, batch ≤8) from free VRAM. Larger values get clamped, not faster.',
@@ -633,6 +639,7 @@ const I18N = {
     instructHint:'긴 음성은 2-4줄(줄바꿈 구분)을 권장합니다: 구간마다 번갈아 적용되어 전체가 한 가지 톤과 속도로 흘러가지 않습니다. 비워두면 중성 낭독 지시가 자동 적용됩니다.',
     clearInstruct:'지우기',
     savedVoices:'등록된 음성', cloneNoInstruct:'음성 클론은 톤 지시문을 지원하지 않습니다. 톤은 참고 음성의 감정으로 결정됩니다.',
+    speed:'말하기 속도', speedHint:'1.0이 기본입니다. 값이 클수록 빨라집니다(1.1 / 1.2 …). 속도만 바뀌고 음높이·음색은 그대로입니다.',
     language:'언어', params:'생성', segChars:'분할 글자 수', batchSize:'배치 크기',
     advanced:'고급 설정 (분할 / 배치)',
     paramHint:'기본값 유지: 백엔드가 여유 VRAM에 따라 안전한 값(분할 ≤60, 배치 ≤8)으로 자동 조정합니다. 크게 해도 빨라지지 않습니다.',
@@ -717,6 +724,7 @@ const I18N = {
     instructHint:'長い音声には2〜4行（改行区切り）がおすすめです。区間ごとに交互に適用され、全体が同じトーン・同じ速度のままになりません。空欄なら中立的な朗読指示が自動適用されます。',
     clearInstruct:'クリア',
     savedVoices:'登録済みの音色', cloneNoInstruct:'ボイスクローンはスタイル指示に対応していません。感情は参照音声から引き継がれます。',
+    speed:'話速', speedHint:'1.0 が標準です。数値を上げると速くなります（1.1 / 1.2 …）。速度のみ変化し、音程と音色は保たれます。',
     language:'言語', params:'生成', segChars:'分割文字数', batchSize:'バッチサイズ',
     advanced:'詳細設定（分割 / バッチ）',
     paramHint:'既定値のまま：バックエンドが空き VRAM に応じて安全な値（分割 ≤60、バッチ ≤8）へ自動調整します。大きくしても速くなりません。',
@@ -987,7 +995,18 @@ async function loadMeta(){
   try{ META = await (await api('/api/meta')).json(); }catch(e){ return; }
   // 音色详情（时长/文字稿/截取来源）单独一份，用于右侧音色列表
   try{ META.info = await (await api('/api/voices')).json(); }catch(e){ META.info = META.info || {}; }
-  renderSpeakers(); renderLanguages(); renderVoices(); renderVoiceList();
+  renderSpeakers(); renderLanguages(); renderVoices(); renderVoiceList(); renderSpeeds();
+}
+/* 语速档位由后端 /api/meta 下发（模型本身没有 speed 接口，靠 atempo 后处理） */
+function renderSpeeds(){
+  const sp = $('#speed');
+  if(!sp) return;
+  const list = (META.speeds && META.speeds.length) ? META.speeds : [0.8,0.9,1.0,1.1,1.2,1.3];
+  const prev = sp.value;
+  sp.innerHTML = list.map(v=>`<option value="${v}">${Number(v).toFixed(1)}×</option>`).join('');
+  const strs = list.map(String);
+  const def  = String(META.speed_default != null ? META.speed_default : 1.0);
+  sp.value = (prev && strs.includes(prev)) ? prev : (strs.includes(def) ? def : strs[0]);
 }
 
 /* ---------- 已录入音色：可试听 / 查看文字稿 / 删除重录 ---------- */
@@ -1292,6 +1311,7 @@ $('#submit').onclick = async () => {
   fd.append('voice', $('#voice').value);
   fd.append('max_chars', $('#maxChars').value);
   fd.append('batch_size', $('#batchSize').value);
+  fd.append('speed', ($('#speed') && $('#speed').value) || '1.0');
   $('#submit').disabled = true;
   try{
     await api('/api/jobs', {method:'POST', body:fd});

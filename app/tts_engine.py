@@ -77,6 +77,14 @@ SLOW_CPS = 2.6
 # TTS_GEN_DO_SAMPLE=0 可切到贪心（保留开关，便于将来对照实验）
 GEN_DO_SAMPLE = os.environ.get("TTS_GEN_DO_SAMPLE", "1") not in ("0", "", "false", "False")
 GEN_REPETITION_PENALTY = float(os.environ.get("TTS_GEN_REPETITION_PENALTY", "1.1") or 0) or None
+# subtalker 是模型内部第二路采样（负责韵律/声学细节），与主 talker 采样**独立开关**
+# 且**独立温度**。源码 qwen_tts/inference/qwen3_tts_model.py::_merge_generate_kwargs
+# 的 hard_defaults 里 subtalker_temperature=0.9、subtalker_top_k=50、top_p=1.0。
+# 现实网只传了 subtalker_dosample，温度一直是官方默认的 0.9。
+# 提高它可以增加韵律细节的多样性，是对冲「全程一个调」的候选手段之一；
+# 但**会放大随机性**，历史上提高采样温度曾放大跑飞/乱音，
+# 所以默认 None（=沿用官方 0.9），只在实测确认 CER 不退化后才通过环境变量放开。
+GEN_SUBTALKER_TEMPERATURE = float(os.environ.get("TTS_SUBTALKER_TEMPERATURE", "") or 0) or None
 # 体检不达标的段，换随机种子最多重试几次（拒绝采样）。
 # 2 次而非 3 次：异常率约 25% 时，第 3 次的边际收益很低，但要多付 1/3 的重试时间
 # （现网 A 任务 RTF 2.49，其中重试是大头）。
@@ -530,6 +538,7 @@ class TTSEngine:
                     repetition_penalty: Optional[float] = None,
                     max_new_tokens: Optional[int] = None,
                     do_sample: Optional[bool] = None,
+                    subtalker_temperature: Optional[float] = None,
                     ) -> Tuple[List[np.ndarray], int]:
         """批量生成一批文本片段。返回 (音频数组列表, 采样率)。
 
@@ -560,6 +569,13 @@ class TTSEngine:
         rp = repetition_penalty if repetition_penalty is not None else GEN_REPETITION_PENALTY
         if rp:
             gen_kw["repetition_penalty"] = float(rp)
+        # 韵律细节采样温度：任务级参数优先，其次服务端环境变量，都没有就
+        # 不传（底层沿用官方 0.9）。源码里这个键走 _merge_generate_kwargs，
+        # 不支持时会被 _call 的降级逻辑吞掉，不会报错。
+        stt = subtalker_temperature if subtalker_temperature is not None \
+            else GEN_SUBTALKER_TEMPERATURE
+        if stt:
+            gen_kw["subtalker_temperature"] = float(stt)
         # max_new_tokens 上限：按语言语速反推（见 token_cap_for）。
         # 旧公式 字数*6.0+96 允许慢到 2.08 字/秒，退化循环能一路跑到上限被硬截断，
         # 员工听到的就是"呀呀呀呀"然后突然断掉。
@@ -609,12 +625,13 @@ class TTSEngine:
                    ref_text: Optional[str] = None, ref_key: Optional[str] = None,
                    max_chars: int = SEG_MAX_CHARS, batch_size: int = MAX_AUTO_BATCH,
                    pause_ms: float = 320.0, para_ms: float = 620.0,
-                   jitter: float = 0.18, speed_jitter: float = 0.02,
+                   jitter: float = 0.18, speed_jitter: float = 0.0,
                    seed: int = 42,
                    temperature: Optional[float] = None,
                    top_p: Optional[float] = None,
                    repetition_penalty: Optional[float] = None,
                    do_sample: Optional[bool] = None,
+                   subtalker_temperature: Optional[float] = None,
                    voice_match: Optional[np.ndarray] = None,
                    progress=None) -> Tuple[np.ndarray, int, dict]:
         """长文本分段生成 + 韵律拼接。
@@ -675,6 +692,7 @@ class TTSEngine:
                 ref_key=ref_key, seed=seed,
                 temperature=temperature, top_p=top_p,
                 repetition_penalty=repetition_penalty, do_sample=do_sample,
+                subtalker_temperature=subtalker_temperature,
             )
             sr_out = sr
             for k, w in zip(idxs, wavs):
@@ -710,16 +728,22 @@ class TTSEngine:
             ref_audio=ref_audio, ref_text=ref_text, ref_key=ref_key, seed=seed,
             temperature=temperature, top_p=top_p,
             repetition_penalty=repetition_penalty, do_sample=do_sample,
+            subtalker_temperature=subtalker_temperature,
         )
 
-        # 韵律起伏：语速走"呼吸曲线"（起句略慢→中段稍快→收尾放缓）+ 段落间轻微音量差。
-        # 单调的匀速朗读是长音频 AI 味最主要的来源。
+        # 段落间轻微音量差（纯增益，无损）。真人不会全程一个响度。
+        # ⚠️ 语速抖动已默认关闭（speed_jitter=0）：原实现用 np.interp 线性插值做
+        # 非整数倍重采样，实测会削掉 4~7kHz 频段 **42%** 的能量（LTAS 误差 1.97dB，
+        # 同条件 ffmpeg atempo 仅 0.05dB）。那段正是齿音/气声所在，每段砍一遍，
+        # 听感就是"发闷 + 机器味"。语速改由员工的手动 speed 在**成品 wav**上用
+        # atempo 处理（server.py），只做一次、且几乎无损。
+        # 保留开关仅为对照实验，日常不要开。
+        base_seed = seed or 0
+        rng2 = np.random.default_rng(base_seed + 13)
+        audios = [apply_gain(a, float(rng2.uniform(-0.9, 0.9))) for a in audios]
         if speed_jitter > 0:
-            base_seed = seed or 0
             factors = prosody_factors(len(audios), seed=base_seed + 7)
-            rng2 = np.random.default_rng(base_seed + 13)
             audios = [apply_speed_jitter(a, f) for a, f in zip(audios, factors)]
-            audios = [apply_gain(a, float(rng2.uniform(-0.9, 0.9))) for a in audios]
 
         # 保真增强：逐段把频谱对齐到该音色的原始录音，补回生成环节丢掉的 2~4kHz。
         # 原理与实测数据见 app/voice_match.py 模块头。放在拼接之前，
@@ -778,13 +802,14 @@ class TTSEngine:
 
     def _gen_one(self, texts, mode, language, speaker, instruct, ref_audio,
                  ref_text, ref_key, seed, temperature, top_p,
-                 repetition_penalty, do_sample):
+                 repetition_penalty, do_sample, subtalker_temperature=None):
         """生成一个 batch 并做边缘裁剪，返回 (音频数组列表, sr)。"""
         wavs, sr2 = self.synth_batch(
             texts, mode=mode, language=language, speaker=speaker,
             instruct=instruct, ref_audio=ref_audio, ref_text=ref_text,
             ref_key=ref_key, seed=seed, temperature=temperature, top_p=top_p,
             repetition_penalty=repetition_penalty, do_sample=do_sample,
+            subtalker_temperature=subtalker_temperature,
         )
         return [trim_edges(np.asarray(w, dtype=np.float32).flatten(), sr=sr2)
                 for w in wavs], sr2
@@ -793,7 +818,8 @@ class TTSEngine:
                                speaker=None, instruct="", ref_audio=None, ref_text=None,
                                ref_key=None, min_chars: int = 6, seed: Optional[int] = None,
                                temperature=None, top_p=None, repetition_penalty=None,
-                               do_sample=None) -> Tuple[int, int]:
+                               do_sample=None, subtalker_temperature=None
+                               ) -> Tuple[int, int]:
         """逐段语速体检，不达标的段换随机种子重试。返回 (修复数, 异常数)。
 
         双侧判据（旧版只看"慢"，且阈值 2.6 字/秒太松）：
@@ -879,7 +905,7 @@ class TTSEngine:
                     arrs, sr2 = self._gen_one(
                         parts, mode, language, speaker, instruct,
                         ref_audio, ref_text, ref_key, base, temperature, top_p,
-                        repetition_penalty, do_sample)
+                        repetition_penalty, do_sample, subtalker_temperature)
                     cand = np.concatenate(arrs) if len(arrs) > 1 else arrs[0]
                     if len(cand) == 0:
                         continue

@@ -186,6 +186,35 @@ Qwen3-TTS 克隆有个**官方已知的随机缺陷**（GitHub Issue #239 / #290
    会让模型从 prompt 里学到错误的语速，表现为拖长音、重复、生成耗时暴涨。
    录入时会给黄色告警，但代码纠正不了内容本身。
 
+## 语速调节（2026-09-29 起）
+
+前端「语速」下拉，档位 `0.8 / 0.9 / 1.0 / 1.1 / 1.2 / 1.3`（由 `/api/meta.speeds` 下发）。
+
+> **模型本身没有 speed 接口** —— `qwen_tts/inference/qwen3_tts_model.py` 里
+> `speed / length_scale / duration / prosody` **零命中**。
+> 所以语速是**后处理**：ffmpeg `atempo` 在成品 wav 上做一次，变速不变调，
+> 且只经过一次 mp3 编码。实测 speed=1.2 → 时长比 1.197（理论 1.2，误差 0.3%）。
+
+⚠️ 别用线性插值（如 `np.interp`）做变速：实测会削掉 4~7kHz **42%** 的能量
+（齿音/气声所在，听感就是发闷 + 机器味），而 atempo 几乎无损（LTAS 误差 0.05dB）。
+
+## 韵律与音质相关（2026-09-29 起，改前必看）
+
+| 主题 | 结论 | 位置 |
+|---|---|---|
+| 参考片段挑选 | 要挑**抑扬顿挫明显**的，不能只挑"音质最平最稳"的——那会教出"一个调" | `make_builtin_voices.pick_typical_window` |
+| 变速实现 | 用 `ffmpeg atempo`，禁用 `np.interp` | `pipeline.apply_speed_jitter` |
+| mp3 码率 | 160k（24kHz 采样率下 LAME 上限，请求 192k 会被钳） | `server.MP3_BITRATE` |
+| 韵律采样温度 | `subtalker_temperature` 已全链路透传，但**实测无效**，默认保持官方 0.9 | `tts_engine.GEN_SUBTALKER_TEMPERATURE` |
+| 克隆 + 语气指令 | **官方不支持**：CustomVoice 禁止跑 `generate_voice_clone`，Base 的克隆接口又没有 `instruct` | — |
+
+⚠️ **ASR 内容回检依赖两点，缺一个就静默失效**：
+① faster-whisper 权重必须在**服务运行用户的 HOME** 下（服务跑 root，
+缓存曾只在 `/home/zheng/.cache` → 回检长期空转）；
+② 语言要用 ISO 639-1 两字母码（业务层是 `korean`，Whisper 只认 `ko`）。
+巡检看 `asr_skipped` 字段，**不要只看 `cer`**——回检被跳过时 cer 是 null，
+容易被误读成"内容没问题"。服务日志在 `service.log`，不在 journalctl。
+
 ## 同步到服务端
 
 ```bash
