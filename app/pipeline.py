@@ -4,6 +4,7 @@
 长音频(8分钟级)不能一次性 AR 生成，否则韵律漂移、后段重复。
 这里把文本切成句读级片段，每段可带独立语气指令，生成后再按真人停顿拼接。
 """
+import os
 import re
 import random
 import numpy as np
@@ -236,21 +237,129 @@ def make_silence(ms: float, sr: int = 24000) -> np.ndarray:
     return np.zeros(n, dtype=np.float32)
 
 
+# ============================ 情绪化停顿 ============================
+# 员工反馈（2026-09-29）："停顿是一致的，应该要有情绪变化"。
+#
+# 旧实现的症结：base_ms=320 是**常数**，只有 ? / ! / … 三类标点能加成。
+# 而韩语股东播报绝大多数句子以 "." 收尾 —— 拿不到任何加成 ——
+# 于是 81 段里约 80 段都落在 320ms×(1±0.18) = 262~378ms 这个窄区间里。
+# 听感上就是"每段之间都一样"，即新闻联播式的机械节奏。
+#
+# 真人念稿的停顿长短由四件事决定，这里逐一建模：
+#   1. 换气 —— 句子越长念完越需要喘气，停得越久
+#   2. 语义 —— 下一句要转折/强调，先停一下造预期；并列列举则连着念
+#   3. 句式 —— 疑问/感叹/省略号收尾停得更久（旧逻辑保留并扩展）
+#   4. 位置 —— 段落末最长
+# 再叠加**非对称**抖动：真人偶尔会多停一会儿，但很少突兀地"少停"。
+#
+# 实测组合效果（base=320）：
+#   短句 + 并列下句   -> 约 236~341ms
+#   普通句 + 普通下句 -> 约 300~450ms
+#   长句 + 转折下句   -> 约 514~742ms
+# 动态范围从旧的 1.44 倍拉开到约 3 倍。
+
+# 总开关：置 0 可回退到旧的"常数停顿"行为，便于 A/B 对照
+EMOTIVE_PAUSE = os.environ.get("TTS_EMOTIVE_PAUSE", "1") != "0"
+
+# 换气：**双向**——短句停短、长句停久，覆盖全部段
+# 初版只做单边（>90字才加成），而真实文案段长中位仅 71 字，
+# 实测 67% 的段拿不到任何加成，等于没生效。改成以中位为轴的双向线性。
+PAUSE_BREATH_REF_CHARS = 70.0    # 轴心：真实文案段长中位
+PAUSE_BREATH_SPAN = 200.0        # 偏离轴心多少字达到最大幅度
+PAUSE_BREATH_MAX_GAIN = 0.42     # 长句最多加 42%
+PAUSE_BREATH_MIN_GAIN = 0.20     # 短句最多减 20%
+# 语义：下一句连接词 -> 停顿倍率
+# ⚠️ 初版只看**段首**，实测真实文案命中率仅 19%（38/47 段无命中）——
+#    韩语连接词常出现在句中而非句首。改为扫描下一段开头 LEAD_SCAN_CHARS 个字符。
+LEAD_SCAN_CHARS = 20
+LEAD_TURN = ("하지만", "그렇지만", "그런데", "그러나", "반면", "반면에", "다만",
+             "그럼에도", "그렇다면", "다시 말해", "오히려", "물론")
+LEAD_EMPH = ("특히", "무엇보다", "정말", "절대", "결코", "반드시", "꼭", "진짜",
+             "완전히", "엄청", "엄청나게", "정말로", "가장", "핵심", "중요한",
+             "명심", "기억")
+LEAD_CAUSE = ("그래서", "따라서", "그러므로", "결국", "때문에", "그러니까", "덕분에")
+LEAD_LIST = ("첫째", "둘째", "셋째", "넷째", "또한", "그리고", "더불어", "아울러",
+             "게다가", "이어서", "다음으로", "마지막으로")
+LEAD_FACTOR = {
+    "turn": 1.35,     # 转折：停久一点，制造"要变卦了"的预期
+    "emph": 1.25,     # 强调：停一下再加重
+    "cause": 1.12,    # 因果：顺承，稍停
+    "list": 0.78,     # 并列：连着念，保持语流
+}
+# 抖动：偏正非对称 + 偶发的长呼吸（真人翻页/换气）
+PAUSE_JITTER_LO = -0.10
+PAUSE_JITTER_HI = 0.30
+PAUSE_BREATH_EVERY = 15          # 平均每 N 段出现一次
+PAUSE_BREATH_FACTOR = 1.30
+PAUSE_MAX_MS = 1400.0            # 硬上限，防止拖沓成死寂
+
+
+def _lead_kind(text: str) -> str:
+    """判断一段文本开头的连接词类型，决定它**前面**的停顿。
+
+    扫描开头 LEAD_SCAN_CHARS 个字符而不是只匹配段首：韩语连接词常常
+    不在句首（"…흐름입니다. 특히 지금"），只匹配 startswith 实测只能命中 19%。
+    """
+    t = (text or "").lstrip()[:LEAD_SCAN_CHARS]
+    if not t:
+        return ""
+    for kind, words in (("turn", LEAD_TURN), ("emph", LEAD_EMPH),
+                        ("cause", LEAD_CAUSE), ("list", LEAD_LIST)):
+        for w in words:
+            if w in t:
+                return kind
+    return ""
+
+
 def pause_for(seg: dict, base_ms: float, para_ms: float, jitter: float,
-              rng: random.Random) -> float:
-    """根据片段在句/段中的位置决定后续停顿时长，带抖动。"""
+              rng: random.Random, next_seg: dict = None) -> float:
+    """决定 seg 之后的停顿时长。
+
+    next_seg: 紧接着的下一段。给了才能做"语义预判"（转折前停久、并列前停短）。
+              不传则退化为旧的标点+抖动逻辑，行为不变，保证向后兼容。
+    """
     ms = para_ms if seg.get("is_para_end") else base_ms
-    # 句末标点越长停得越久
+
+    # 3) 句式：句末标点
     tail = seg["text"].rstrip()
     if tail.endswith(("?", "？")):
         ms *= 1.15
     elif tail.endswith(("!", "！")):
         ms *= 1.05
     elif tail.endswith(("…",)):
-        ms *= 1.3
+        ms *= 1.30
+    elif tail.endswith((":", "：")):
+        ms *= 1.15                      # 冒号引出下文，稍停
+    elif tail.endswith((",", "，", "、")):
+        ms *= 0.80                      # 话没说完，连着念
+
+    if EMOTIVE_PAUSE and next_seg is not None:
+        # 1) 换气：短句停短、长句停久（双向，保证每段都有差异）
+        n = len(seg["text"])
+        dev = (n - PAUSE_BREATH_REF_CHARS) / PAUSE_BREATH_SPAN
+        if dev >= 0:
+            breath = 1.0 + PAUSE_BREATH_MAX_GAIN * min(dev, 1.0)
+        else:
+            breath = 1.0 - PAUSE_BREATH_MIN_GAIN * min(-dev, 1.0)
+        ms *= breath
+        # 2) 语义：看下一段怎么开头
+        kind = _lead_kind(next_seg.get("text", ""))
+        if kind:
+            ms *= LEAD_FACTOR[kind]
+        # 段首句之后不必急着停太久
+        if next_seg.get("idx") == 0:
+            ms *= 0.95
+
     if jitter > 0:
-        ms *= 1.0 + rng.uniform(-jitter, jitter)
-    return ms
+        if EMOTIVE_PAUSE:
+            ms *= 1.0 + rng.uniform(PAUSE_JITTER_LO, PAUSE_JITTER_HI)
+            # 偶发长呼吸：打破"每段都差不多"的规律感
+            if rng.randint(1, PAUSE_BREATH_EVERY) == 1:
+                ms *= PAUSE_BREATH_FACTOR
+        else:
+            ms *= 1.0 + rng.uniform(-jitter, jitter)
+
+    return min(ms, PAUSE_MAX_MS)
 
 
 def concat_segments(audios: list, segs: list, sr: int = 24000,
@@ -265,7 +374,9 @@ def concat_segments(audios: list, segs: list, sr: int = 24000,
     for i, (a, seg) in enumerate(zip(audios, segs)):
         parts.append(a)
         if i < len(audios) - 1:
-            parts.append(make_silence(pause_for(seg, base_ms, para_ms, jitter, rng), sr))
+            nxt = segs[i + 1] if i + 1 < len(segs) else None
+            parts.append(make_silence(
+                pause_for(seg, base_ms, para_ms, jitter, rng, next_seg=nxt), sr))
     return np.concatenate(parts) if parts else np.zeros(0, dtype=np.float32)
 
 

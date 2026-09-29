@@ -30,6 +30,7 @@ from voice_trim import trim_reference
 from voice_match import get_target
 from pipeline import CHUNK_MAX_CHARS, split_chunks
 import asr_check
+import cosy_client
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("server")
@@ -105,6 +106,22 @@ ASR_MAX_RETRY = int(os.environ.get("TTS_ASR_RETRY", "2") or 2)
 # 远优于此前 np.interp 的线性插值（丢 4-7k 42% 能量）。
 SPEED_MIN, SPEED_MAX = 0.5, 2.0          # atempo 单次支持的范围
 MP3_BITRATE = os.environ.get("TTS_MP3_BITRATE", "192k")   # 旧值 128k，对齐 elevenlabs
+
+# ---- 情感预设 → 引擎自动分流 --------------------------------------------
+# 员工只选「情感」，引擎/指令/参数全部由后端决定。依据（同文本 776 字实测）：
+#   Qwen3-TTS       CER 0.0542  —— 最准，但模型无 instruct，情感不可控
+#   CosyVoice3      CER 0.0829  —— 略逊，但有 instruct，情感可调，且更快更省显存
+# 所以「平稳/标准」走 Qwen 保准确度；要情绪的走 CosyVoice3。
+EMOTION_PRESETS = {
+    "standard": {"engine": "qwen",       "instruct": ""},
+    "excited":  {"engine": "cosyvoice3", "instruct": "excited"},
+    "warm":     {"engine": "cosyvoice3", "instruct": "warm"},
+    "serious":  {"engine": "cosyvoice3", "instruct": "serious"},
+}
+DEFAULT_EMOTION = "standard"
+# CosyVoice3 出片后仍走 ASR 内容回检；CER 超过这个阈值就自动回退 Qwen 重出，
+# 保证「加了情绪也不能把字念错」。
+COSY_FALLBACK_CER = float(os.environ.get("TTS_COSY_FALLBACK_CER", "0.15"))
 
 MODEL_DIRS = {
     "custom_voice": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-CustomVoice"),
@@ -208,6 +225,7 @@ def persist_jobs():
             "instruct", "status", "created_at", "started_at", "finished_at",
             "progress", "stats", "wav", "mp3", "error", "preview",
             "max_chars", "batch_size", "enhanced", "speed", "subtalker_temperature",
+            "emotion", "engine",
             # 分块输出：files 是每块的 mp3 清单，不落盘的话重启后
             # 员工就再也下载不到已生成的音频了
             "files", "chunks", "chunks_total", "chunk", "folder", "seed")}
@@ -340,7 +358,16 @@ async def run_job(job):
     ref_audio = None
     ref_text = None
     ref_key = None
+    ref_wav_path = None          # CosyVoice3 走 HTTP，需要的是路径而不是数组
     _match_target = None
+    # 情感 → 引擎自动分流：员工只选情感，引擎与指令由这里决定
+    _emotion = (job.get("emotion") or DEFAULT_EMOTION).strip()
+    _preset = EMOTION_PRESETS.get(_emotion) or EMOTION_PRESETS[DEFAULT_EMOTION]
+    _engine_name = (job.get("engine") or _preset["engine"]).strip()
+    _cosy_instruct = _preset.get("instruct") or "neutral"
+    job["engine"] = _engine_name
+    job["emotion"] = _emotion
+    log.info("任务 %s 情感=%s -> 引擎=%s", job["id"], _emotion, _engine_name)
     # 重启续跑的旧任务没有这个字段，补上服务端默认值，保证行为一致
     if "enhance" not in job:
         job["enhance"] = VOICE_MATCH_DEFAULT
@@ -361,6 +388,7 @@ async def run_job(job):
                 f"（超过 {REF_AUDIO_MAX_SEC:.0f}s，显存会暴涨）。"
                 f"请用原音频重新录入一次，系统会自动截取最佳片段")
         ref_audio = read_audio(v["path"])
+        ref_wav_path = v["path"]
         ref_key = job["voice"]
         # 保真增强：取该音色源录音的长时谱作为目标（详见 app/voice_match.py）
         if job.get("enhance"):
@@ -399,8 +427,39 @@ async def run_job(job):
                 job["stage"] = "generating"
         return _progress
 
+    def _synth_cosy(text_ci):
+        """CosyVoice3 分支：走独立服务的 HTTP 接口。
+
+        只有它有 instruct（情感指令），Qwen3-TTS Base 克隆模式没有这个入参。
+        """
+        audio, sr, meta = cosy_client.synth(
+            text=text_ci[1],
+            ref_wav=ref_wav_path,
+            ref_text=ref_text or "",
+            instruct=_cosy_instruct,
+            speed=float(job.get("speed") or 1.0),
+            seed=int(text_ci[2]),
+        )
+        if audio is None:
+            raise RuntimeError(f"CosyVoice3 生成失败: {meta.get('error')}")
+        # 已按模型原生 speed 变速，后续不要再叠 atempo
+        job["_cosy_speed_applied"] = True
+        st = {
+            "segments": meta.get("chunks") or 1,
+            "chars": meta.get("chars") or len(text_ci[1]),
+            "gen_seconds": meta.get("gen_seconds") or 0.0,
+            "audio_seconds": meta.get("audio_seconds") or 0.0,
+            "abnormal_segments": 0, "slow_fixed": 0, "voice_matched": 0,
+            "segments_detail": [],
+            "plan": {"engine": "cosyvoice3", "emotion": _emotion,
+                     "instruct": _cosy_instruct},
+        }
+        return audio, sr, st
+
     def _synth(text_ci):
         """单次块生成，返回 (audio, sr, stats)。"""
+        if _engine_name == "cosyvoice3" and ref_wav_path:
+            return _synth_cosy(text_ci)
         return engine.synth_long(
             text=text_ci[1],
             mode=job["mode"],
@@ -461,6 +520,31 @@ async def run_job(job):
             if res.get("ok"):
                 break
         audio, sr, st, res = best
+        # 质量闸门：CosyVoice3 带了情绪，但念错太多就必须退回 Qwen 重出一遍。
+        # 员工拿到手的永远是「念得对」的成品，情绪不能以牺牲准确度为代价。
+        if (_engine_name == "cosyvoice3"
+                and (res.get("cer") or 0.0) > COSY_FALLBACK_CER):
+            log.warning("任务 %s 第 %d 块 CosyVoice3 CER=%.4f 超过 %.2f，"
+                        "自动回退 Qwen 重出", jid, ci + 1,
+                        res.get("cer") or 0.0, COSY_FALLBACK_CER)
+            _engine_name = "qwen"
+            job["engine"] = "qwen"
+            job["fallback_from"] = "cosyvoice3"
+            job.pop("_cosy_speed_applied", None)
+            audio, sr, st = await loop.run_in_executor(
+                None, _synth, (ci, chunk_text, base_seed))
+            tmp_wav = os.path.join(folder_path, f".asr_{jid}_{ci}.wav")
+            sf.write(tmp_wav, audio, sr)
+            try:
+                res = asr_check.check_chunk(tmp_wav, chunk_text,
+                                            language=job["language"])
+            finally:
+                try:
+                    os.remove(tmp_wav)
+                except OSError:
+                    pass
+            _engine_name = "cosyvoice3"      # 下一块仍按原情感走
+            job["engine"] = "cosyvoice3"
         st = st or {}
         if st.get("plan"):
             last_plan = st["plan"]
@@ -475,8 +559,10 @@ async def run_job(job):
             agg["asr_skipped"] += 1
         detail_all.extend(st.get("segments_detail") or [])
 
-        # 只输出 mp3：wav 36MB/块太占磁盘，员工实际用的就是 mp3
-        _speed = float(job.get("speed") or 1.0)
+        # CosyVoice3 已在模型内部按 speed 变速（梅尔谱插值 + 声码器重合成），
+        # 这里不能再叠一次 atempo，否则会变两次速。
+        _speed = 1.0 if job.get("_cosy_speed_applied") else float(
+            job.get("speed") or 1.0)
         mp3_name = f"{base_name}-{ci + 1}.mp3"
         mp3_abs = os.path.join(folder_path, mp3_name)
         job["stage"] = "encoding"
@@ -823,6 +909,14 @@ async def meta(request: Request):
         "speeds": [0.8, 0.9, 1.0, 1.1, 1.2, 1.3],
         "speed_default": 1.0,
         "speed_min": SPEED_MIN, "speed_max": SPEED_MAX,
+        # 员工只需要选「情感」；引擎/指令/参数由后端自动分流
+        "emotions": [
+            {"key": "standard", "engine": "qwen"},
+            {"key": "excited", "engine": "cosyvoice3"},
+            {"key": "warm", "engine": "cosyvoice3"},
+            {"key": "serious", "engine": "cosyvoice3"},
+        ],
+        "emotion_default": DEFAULT_EMOTION,
     }
 
 
@@ -839,6 +933,7 @@ async def create_job(request: Request,
                      batch_size: int = Form(16),
                      seed: int = Form(42),
                      speed: float = Form(1.0),
+                     emotion: str = Form(DEFAULT_EMOTION),
                      temperature: Optional[float] = Form(None),
                      subtalker_temperature: Optional[float] = Form(None),
                      enhance: Optional[bool] = Form(None)):
@@ -852,6 +947,9 @@ async def create_job(request: Request,
     if not (SPEED_MIN <= speed <= SPEED_MAX):
         raise HTTPException(400, f"语速需在 {SPEED_MIN}~{SPEED_MAX} 之间")
     speed = round(speed, 2)
+    emotion = (emotion or DEFAULT_EMOTION).strip()
+    if emotion not in EMOTION_PRESETS:
+        raise HTTPException(400, f"情感需在 {list(EMOTION_PRESETS)} 之内")
     if not text.strip():
         raise HTTPException(400, "文本为空")
     if mode == "clone":
@@ -886,6 +984,8 @@ async def create_job(request: Request,
         "batch_size": batch_size,
         "seed": seed,
         "speed": speed,
+        "emotion": emotion,     # 员工只选情感，引擎由 EMOTION_PRESETS 自动分流
+        "engine": EMOTION_PRESETS[emotion]["engine"],
         "temperature": temperature,
         # 韵律细节采样温度（模型第二路采样）。默认不传=沿用官方 0.9；
         # 只在实测确认不放大跑飞后才放开，见 tts_engine.GEN_SUBTALKER_TEMPERATURE。

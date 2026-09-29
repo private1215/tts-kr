@@ -353,6 +353,10 @@ details.adv summary:hover{color:var(--txt2)}
         <label data-i18n="language">语言</label>
         <select id="language"></select>
 
+        <label data-i18n="emotion">情感</label>
+        <select id="emotion"></select>
+        <div class="hint" data-i18n="emotionHint">选一种语气即可，引擎和参数由系统自动匹配。「平稳」准确度最高；需要情绪起伏时选其它项。</div>
+
         <label data-i18n="speed">语速</label>
         <select id="speed"></select>
         <div class="hint" data-i18n="speedHint">1.0 为正常速度，调大更快（1.1 / 1.2 …）。变速不变调，生成后统一处理，不影响音色与清晰度。</div>
@@ -469,6 +473,7 @@ const I18N = {
     clearInstruct:'清空指令',
     savedVoices:'已录入音色', cloneNoInstruct:'克隆模式不支持语气指令，语气由参考音频本身的情绪决定。',
     speed:'语速', speedHint:'1.0 为正常速度，调大更快（1.1 / 1.2 …）。变速不变调，生成后统一处理，不影响音色与清晰度。',
+    emotion:'情感', emotionHint:'选一种语气即可，引擎和参数由系统自动匹配。「平稳」准确度最高；需要情绪起伏时选其它项。',
     language:'语言', params:'生成', segChars:'分段字数', batchSize:'批量大小',
     advanced:'高级设置（分段 / 批量）',
     paramHint:'保持默认即可：后端会按显存自动收敛到安全值（分段 ≤60、批量 ≤8）。调大不会更快，只会被自动压回。',
@@ -555,6 +560,7 @@ const I18N = {
     clearInstruct:'Clear',
     savedVoices:'Enrolled voices', cloneNoInstruct:'Voice clone does not support style instructions — emotion comes from the reference audio.',
     speed:'Speed', speedHint:'1.0 is normal; higher is faster (1.1 / 1.2 …). Tempo-only — pitch and timbre stay unchanged.',
+    emotion:'Emotion', emotionHint:'Pick a tone — engine and parameters are chosen automatically. Standard is most accurate; use the others when you want emotional colour.',
     language:'Language', params:'Generate', segChars:'Chars per segment', batchSize:'Batch size',
     advanced:'Advanced (segment / batch)',
     paramHint:'Keep defaults: the backend auto-tunes a safe plan (seg ≤60, batch ≤8) from free VRAM. Larger values get clamped, not faster.',
@@ -640,6 +646,7 @@ const I18N = {
     clearInstruct:'지우기',
     savedVoices:'등록된 음성', cloneNoInstruct:'음성 클론은 톤 지시문을 지원하지 않습니다. 톤은 참고 음성의 감정으로 결정됩니다.',
     speed:'말하기 속도', speedHint:'1.0이 기본입니다. 값이 클수록 빨라집니다(1.1 / 1.2 …). 속도만 바뀌고 음높이·음색은 그대로입니다.',
+    emotion:'감정', emotionHint:'톤만 고르면 엔진과 파라미터는 자동으로 맞춰집니다. 「차분」이 가장 정확하고, 감정 기복이 필요할 때 다른 항목을 고르세요.',
     language:'언어', params:'생성', segChars:'분할 글자 수', batchSize:'배치 크기',
     advanced:'고급 설정 (분할 / 배치)',
     paramHint:'기본값 유지: 백엔드가 여유 VRAM에 따라 안전한 값(분할 ≤60, 배치 ≤8)으로 자동 조정합니다. 크게 해도 빨라지지 않습니다.',
@@ -725,6 +732,7 @@ const I18N = {
     clearInstruct:'クリア',
     savedVoices:'登録済みの音色', cloneNoInstruct:'ボイスクローンはスタイル指示に対応していません。感情は参照音声から引き継がれます。',
     speed:'話速', speedHint:'1.0 が標準です。数値を上げると速くなります（1.1 / 1.2 …）。速度のみ変化し、音程と音色は保たれます。',
+    emotion:'感情', emotionHint:'トーンを選ぶだけで、エンジンとパラメータは自動で選ばれます。「標準」が最も正確です。感情の起伏が必要なときは他を選んでください。',
     language:'言語', params:'生成', segChars:'分割文字数', batchSize:'バッチサイズ',
     advanced:'詳細設定（分割 / バッチ）',
     paramHint:'既定値のまま：バックエンドが空き VRAM に応じて安全な値（分割 ≤60、バッチ ≤8）へ自動調整します。大きくしても速くなりません。',
@@ -995,8 +1003,33 @@ async function loadMeta(){
   try{ META = await (await api('/api/meta')).json(); }catch(e){ return; }
   // 音色详情（时长/文字稿/截取来源）单独一份，用于右侧音色列表
   try{ META.info = await (await api('/api/voices')).json(); }catch(e){ META.info = META.info || {}; }
-  renderSpeakers(); renderLanguages(); renderVoices(); renderVoiceList(); renderSpeeds();
+  renderSpeakers(); renderLanguages(); renderVoices(); renderVoiceList();
+  renderSpeeds(); renderEmotions();
 }
+/* 情感档位：员工只选语气，引擎/指令/参数由后端 EMOTION_PRESETS 自动分流 */
+function renderEmotions(){
+  const em = $('#emotion');
+  if(!em) return;
+  const list = (META.emotions && META.emotions.length)
+    ? META.emotions
+    : [{key:'standard'},{key:'excited'},{key:'warm'},{key:'serious'}];
+  const NAMES = {
+    standard:{zh:'平稳（最准）',en:'Standard (most accurate)',ko:'차분 (가장 정확)',ja:'標準（最も正確）'},
+    excited: {zh:'激昂',en:'Excited',ko:'격앙',ja:'熱烈'},
+    warm:    {zh:'亲切',en:'Warm',ko:'다정',ja:'親しみ'},
+    serious: {zh:'严肃',en:'Serious',ko:'엄숙',ja:'厳粛'}
+  };
+  const L = (window.UI && UI.lang) || 'zh';
+  const prev = em.value;
+  em.innerHTML = list.map(o=>{
+    const n = (NAMES[o.key] && NAMES[o.key][L]) || NAMES[o.key].en;
+    return `<option value="${o.key}">${n}</option>`;
+  }).join('');
+  const keys = list.map(o=>String(o.key));
+  const def  = String(META.emotion_default || 'standard');
+  em.value = (prev && keys.includes(prev)) ? prev : (keys.includes(def) ? def : keys[0]);
+}
+
 /* 语速档位由后端 /api/meta 下发（模型本身没有 speed 接口，靠 atempo 后处理） */
 function renderSpeeds(){
   const sp = $('#speed');
@@ -1312,6 +1345,7 @@ $('#submit').onclick = async () => {
   fd.append('max_chars', $('#maxChars').value);
   fd.append('batch_size', $('#batchSize').value);
   fd.append('speed', ($('#speed') && $('#speed').value) || '1.0');
+  fd.append('emotion', ($('#emotion') && $('#emotion').value) || 'standard');
   $('#submit').disabled = true;
   try{
     await api('/api/jobs', {method:'POST', body:fd});
