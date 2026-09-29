@@ -7,6 +7,7 @@
 import os
 import io
 import csv
+import re
 import json
 import time
 import uuid
@@ -27,6 +28,8 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, Response
 from tts_engine import TTSEngine
 from voice_trim import trim_reference
 from voice_match import get_target
+from pipeline import CHUNK_MAX_CHARS, split_chunks
+import asr_check
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("server")
@@ -86,11 +89,36 @@ REF_AUDIO_HARD_MAX_SEC = 900.0    # 超过 15 分钟直接拒（读进来太浪�
 VOICE_MATCH_DEFAULT = os.environ.get("TTS_VOICE_MATCH", "1").strip().lower() \
     not in ("0", "false", "no", "off")
 
+# 自动分块：整段文案按句子边界切成若干块，每块独立出一个 mp3。
+# 上限对齐员工在 elevenlabs 时代的习惯（单条 ≤2600 字）；实际块长会在上限
+# 上下浮动，因为断点必须落在句末——详见 pipeline.split_chunks。
+CHUNK_MAX_CHARS = int(os.environ.get("TTS_CHUNK_CHARS", "2600") or 2600)
+# ASR 内容回检不通过时最多重掷几次（0 = 只跑一次不重掷）
+ASR_MAX_RETRY = int(os.environ.get("TTS_ASR_RETRY", "2") or 2)
+
 MODEL_DIRS = {
     "custom_voice": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-CustomVoice"),
     "base": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-Base"),
 }
 MODEL_DIRS = {k: v for k, v in MODEL_DIRS.items() if os.path.isdir(v)}
+
+# 文件名里不能出现的字符（Windows 也拒绝这套），统一去掉
+_UNSAFE_CHARS = re.compile(r'[/\\:*?"<>|\r\n\t]')
+
+
+def _safe_name(s: str, limit: int = 40) -> str:
+    """把标题/文案片段整理成可用作文件名与目录名的字符串。"""
+    s = _UNSAFE_CHARS.sub("", (s or "").strip()).strip(". ").strip()
+    return s[:limit] or "output"
+
+
+def _unique_dir(name: str) -> str:
+    """在 OUTPUT_DIR 下取一个不重名的目录名（重名则追加 -2、-3 …）。"""
+    cand, i = name, 1
+    while os.path.exists(os.path.join(OUTPUT_DIR, cand)):
+        i += 1
+        cand = f"{name}-{i}"
+    return cand
 
 app = FastAPI(title="Qwen3-TTS 语音生成")
 engine = TTSEngine(MODEL_DIRS, default_variant="custom_voice")
@@ -169,7 +197,10 @@ def persist_jobs():
             "id", "title", "owner", "mode", "language", "speaker", "voice",
             "instruct", "status", "created_at", "started_at", "finished_at",
             "progress", "stats", "wav", "mp3", "error", "preview",
-            "max_chars", "batch_size", "enhanced")}
+            "max_chars", "batch_size", "enhanced",
+            # 分块输出：files 是每块的 mp3 清单，不落盘的话重启后
+            # 员工就再也下载不到已生成的音频了
+            "files", "chunks", "chunks_total", "chunk", "folder", "seed")}
         # 正文留着，失败时可一键重试
         slim[jid]["text"] = j.get("text") or ""
     save_json(JOBS_FILE, slim)
@@ -332,18 +363,36 @@ async def run_job(job):
                 log.warning("音色「%s」找不到可用的原声素材，本次不做保真增强",
                             job["voice"])
 
-    def _progress(done, total):
-        job["progress"] = {"done": done, "total": total}
-        # 分段刚算完是 preparing，出第一批结果后进入 generating，
-        # 最后一批完成即进入拼接阶段
-        if total and done >= total:
-            job["stage"] = "merging"
-        elif total:
-            job["stage"] = "generating"
+    # ---- 自动分块：整段文案按句子边界切成若干块，每块一个独立音频文件 ----
+    # 员工不用手动分段（elevenlabs 时代是手动截成两半的），代码在这里代劳。
+    # 块间不拼接，避免为了拼一个 769 秒的大文件白白多花时间。
+    chunks = split_chunks(job["text"], max_chars=CHUNK_MAX_CHARS)
+    n_chunk = max(len(chunks), 1)
+    jid = job["id"]
+    base_name = _safe_name((job.get("title") or "").strip()
+                           or (job["text"] or "").strip()[:6])
+    folder_name = _unique_dir(base_name)
+    folder_path = os.path.join(OUTPUT_DIR, folder_name)
+    os.makedirs(folder_path, exist_ok=True)
+    job["chunks_total"] = n_chunk
 
-    def _work():
+    def _mk_progress(ci):
+        def _progress(done, total):
+            job["chunk"] = {"index": ci + 1, "total": n_chunk,
+                            "seg_done": done, "seg_total": total}
+            # 全局进度按块折算成千分位，避免每换一块进度条就归零
+            frac = (ci + (done / total if total else 0)) / n_chunk
+            job["progress"] = {"done": int(frac * 1000), "total": 1000}
+            if total and done >= total and ci == n_chunk - 1:
+                job["stage"] = "merging"
+            elif total:
+                job["stage"] = "generating"
+        return _progress
+
+    def _synth(text_ci):
+        """单次块生成，返回 (audio, sr, stats)。"""
         return engine.synth_long(
-            text=job["text"],
+            text=text_ci[1],
             mode=job["mode"],
             language=job["language"],
             speaker=job.get("speaker"),
@@ -353,42 +402,116 @@ async def run_job(job):
             ref_key=ref_key,
             max_chars=job.get("max_chars", 60),
             batch_size=job.get("batch_size", 16),
-            seed=job.get("seed", 42),
+            seed=text_ci[2],
             temperature=job.get("temperature"),
             top_p=job.get("top_p"),
             repetition_penalty=job.get("repetition_penalty"),
             voice_match=_match_target,
-            progress=_progress,
+            progress=_mk_progress(text_ci[0]),
         )
 
-    audio, sr, stats = await loop.run_in_executor(None, _work)
+    files = []
+    agg = {"segments": 0, "chars": 0, "gen_seconds": 0.0, "audio_seconds": 0.0,
+           "abnormal_segments": 0, "slow_fixed": 0, "voice_matched": 0}
+    detail_all = []
+    chunk_info = []
+    base_seed = int(job.get("seed") or 42)
+    # 各块的 plan 内容一致，取最后一块的即可用于参数留痕
+    last_plan = {}
+
+    for ci, chunk_text in enumerate(chunks):
+        best = None
+        for attempt in range(ASR_MAX_RETRY + 1):
+            seed = base_seed + attempt * 7919
+            audio, sr, st = await loop.run_in_executor(
+                None, _synth, (ci, chunk_text, seed))
+            # 内容回检：语速体检抓不到「说着说着又笑又说奇怪的话」，
+            # 只能用 ASR 转写比对原文。详见 app/asr_check.py。
+            tmp_wav = os.path.join(folder_path, f".asr_{jid}_{ci}.wav")
+            sf.write(tmp_wav, audio, sr)
+            try:
+                res = asr_check.check_chunk(tmp_wav, chunk_text,
+                                            language=job["language"])
+            finally:
+                try:
+                    os.remove(tmp_wav)
+                except OSError:
+                    pass
+            cand = (audio, sr, st, res)
+            if res.get("ok") or best is None:
+                best = cand
+            elif (res.get("cer") or 1.0) < (best[3].get("cer") or 1.0):
+                best = cand
+            log.info("任务 %s 第 %d/%d 块 第 %d 次: CER=%.4f %s",
+                     jid, ci + 1, n_chunk, attempt + 1,
+                     res.get("cer") or 0.0,
+                     "通过" if res.get("ok") else "不通过->重掷")
+            if res.get("ok"):
+                break
+        audio, sr, st, res = best
+        st = st or {}
+        if st.get("plan"):
+            last_plan = st["plan"]
+        agg["segments"] += st.get("segments") or 0
+        agg["chars"] += st.get("chars") or 0
+        agg["gen_seconds"] += st.get("gen_seconds") or 0.0
+        agg["audio_seconds"] += st.get("audio_seconds") or 0.0
+        agg["abnormal_segments"] += st.get("abnormal_segments") or 0
+        agg["slow_fixed"] += st.get("slow_fixed") or 0
+        agg["voice_matched"] += st.get("voice_matched") or 0
+        detail_all.extend(st.get("segments_detail") or [])
+
+        # 只输出 mp3：wav 36MB/块太占磁盘，员工实际用的就是 mp3
+        mp3_name = f"{base_name}-{ci + 1}.mp3"
+        mp3_abs = os.path.join(folder_path, mp3_name)
+        job["stage"] = "encoding"
+        tmp_wav = os.path.join(folder_path, f".enc_{jid}_{ci}.wav")
+        try:
+            sf.write(tmp_wav, audio, sr)
+            subprocess.run(
+                ["ffmpeg", "-y", "-loglevel", "error", "-i", tmp_wav,
+                 "-codec:a", "libmp3lame", "-b:a", "128k", mp3_abs],
+                check=True, timeout=300)
+        except Exception as e:
+            log.warning("mp3 转码失败 %s: %s", mp3_abs, e)
+        finally:
+            try:
+                os.remove(tmp_wav)
+            except OSError:
+                pass
+        rel = f"{folder_name}/{mp3_name}"
+        files.append({"name": mp3_name, "path": rel,
+                      "seconds": round(st.get("audio_seconds") or 0.0, 2),
+                      "chars": st.get("chars") or 0,
+                      "cer": res.get("cer") if not res.get("skipped") else None})
+        chunk_info.append({"index": ci + 1, "chars": len(chunk_text),
+                           "seconds": round(st.get("audio_seconds") or 0.0, 2),
+                           "cer": res.get("cer") if not res.get("skipped") else None,
+                           "asr_skipped": bool(res.get("skipped"))})
+        job["files"] = files
+        job["chunks"] = chunk_info
+        persist_jobs()
 
     # 覆盖度自检：分段时空白/换行会被规整掉，正常落在 90%~100%。
     # 掉到 85% 以下说明有文本没被送进模型，必须在日志里暴露出来。
     _src_len = max(len(job.get("text") or ""), 1)
-    _cov = ((stats or {}).get("chars") or 0) / _src_len
+    _cov = agg["chars"] / _src_len
     if _cov < 0.85:
         log.warning("覆盖度异常 job=%s: 原文 %d 字，实际只生成 %d 字（%.1f%%），段数 %s",
-                    job["id"], _src_len, (stats or {}).get("chars") or 0,
-                    _cov * 100, (stats or {}).get("segments"))
+                    jid, _src_len, agg["chars"], _cov * 100, agg["segments"])
 
-    jid = job["id"]
-    job["stage"] = "encoding"
-    wav_path = os.path.join(OUTPUT_DIR, f"{jid}.wav")
-    mp3_path = os.path.join(OUTPUT_DIR, f"{jid}.mp3")
-    sf.write(wav_path, audio, sr)
-    try:
-        subprocess.run(
-            ["ffmpeg", "-y", "-loglevel", "error", "-i", wav_path,
-             "-codec:a", "libmp3lame", "-b:a", "128k", mp3_path],
-            check=True, timeout=300)
-        job["mp3"] = f"{jid}.mp3"
-    except Exception as e:
-        log.warning("mp3 转码失败: %s", e)
-
-    job["wav"] = f"{jid}.wav"
+    agg["rtf"] = round(agg["gen_seconds"] / agg["audio_seconds"], 4) \
+        if agg["audio_seconds"] else 0.0
+    agg["cps"] = round(agg["chars"] / agg["audio_seconds"], 2) \
+        if agg["audio_seconds"] else 0.0
+    agg["segments_detail"] = detail_all
+    agg["plan"] = last_plan
+    agg["chunks"] = n_chunk
+    stats = agg
+    # 兼容老前端/统计：mp3 指向第一个文件
+    job["mp3"] = files[0]["path"] if files else None
     job["stats"] = stats
-    job["enhanced"] = bool((stats or {}).get("voice_matched") or 0)
+    job["enhanced"] = bool(agg["voice_matched"])
     # 自适应生效值回写：前端提交的 max_chars/batch_size 可能不安全，
     # 这里记录引擎实际采用的值，便于在历史任务里核对。
     _plan = (stats or {}).get("plan") or {}
@@ -643,6 +766,13 @@ SPEAKER_DEFAULT = {
 async def meta(request: Request):
     require(request)
     spk = engine.speakers if engine.model else []
+    # 兜底：official 9 个发音人来自 CustomVoice 模型的 talker_config.spk_id，
+    # 若因为模型未加载 / 该字段读取为空而拿不到，界面上的「预设音色」会整个
+    # 消失（实测出现过 speakers=[] 的情况），员工会以为音色被删了。
+    # 这里用元数据里写死的 SPEAKER_LANG 键兜住，保证 9 个始终可用。
+    if not spk:
+        spk = list(SPEAKER_LANG.keys())
+        log.warning("模型未返回发音人列表，已用内置兜底列表（%d 个）", len(spk))
     return {
         "languages": engine.languages if engine.model else [],
         "speakers": spk,
@@ -807,6 +937,9 @@ async def list_jobs(request: Request, scope: str = "mine", q: str = "", owner: s
             "stats": j.get("stats"),
             "wav": j.get("wav"),
             "mp3": j.get("mp3"),
+            # 分块输出：同一任务可能产出 2~3 个独立 mp3，都在同一个子目录里
+            "files": j.get("files") or [],
+            "chunks": j.get("chunks") or [],
             "error": j.get("error"),
             "preview": (j.get("text") or "")[:60],
         })
@@ -822,10 +955,25 @@ async def delete_job(request: Request, jid: str):
         raise HTTPException(404, "任务不存在")
     if u["role"] != "admin" and j.get("owner") != u["username"]:
         raise HTTPException(403, "无权删除")
-    for f in (j.get("wav"), j.get("mp3")):
-        if f:
+    names = [f.get("path") for f in (j.get("files") or [])] \
+        or [f for f in (j.get("wav"), j.get("mp3")) if f]
+    for f in names:
+        if not f:
+            continue
+        p = os.path.realpath(os.path.join(OUTPUT_DIR, f))
+        root = os.path.realpath(OUTPUT_DIR)
+        if not (p == root or p.startswith(root + os.sep)):
+            continue
+        try:
+            os.remove(p)
+        except OSError:
+            pass
+    # 分块输出的任务独占一个子目录，文件删完就把空目录也收掉
+    if j.get("files"):
+        sub = os.path.dirname(os.path.join(OUTPUT_DIR, names[0])) if names else None
+        if sub and os.path.isdir(sub):
             try:
-                os.remove(os.path.join(OUTPUT_DIR, f))
+                os.rmdir(sub)
             except OSError:
                 pass
     jobs.pop(jid, None)
@@ -1109,6 +1257,13 @@ async def delete_voice(request: Request, name: str):
     if name not in voices:
         raise HTTPException(404, "音色不存在")
     v = voices[name]
+    if v.get("builtin"):
+        raise HTTPException(400, "内置音色不可删除")
+    # 内置音色是团队共用模板，误删会让所有人立刻无法生成，后端再拦一道
+    # （前端已禁用按钮，但接口可被直接调用）
+    if v.get("builtin"):
+        raise HTTPException(400, "内置音色不可删除")
+
     # 原音频路径：优先用元数据里的，没有就按约定路径兜底（早期录入可能没写 src_path）
     src = v.get("src_path") or os.path.join(VOICE_DIR, "sources", f"{name}__full.wav")
     removed = []
@@ -1130,29 +1285,45 @@ async def delete_voice(request: Request, name: str):
     return {"ok": True, "removed": removed}
 
 
-@app.get("/api/download/{fn}")
+@app.get("/api/download/{fn:path}")
 async def download(request: Request, fn: str):
     require(request)
-    path = os.path.join(OUTPUT_DIR, fn)
+    # 分块输出后成品放在「标题同名子目录」里，fn 会带斜杠，所以这里用
+    # path 转换器。必须校验解析后的真实路径仍在 OUTPUT_DIR 内，防目录穿越。
+    path = os.path.realpath(os.path.join(OUTPUT_DIR, fn))
+    root = os.path.realpath(OUTPUT_DIR)
+    if not (path == root or path.startswith(root + os.sep)):
+        raise HTTPException(400, "非法路径")
     if not os.path.exists(path):
         raise HTTPException(404, "文件不存在")
     u = current_user(request)
     # 权限：管理员可下载全部，员工只能下载自己的
     if u and u["role"] != "admin":
-        owner = next((j.get("owner") for j in jobs.values()
-                      if j.get("wav") == fn or j.get("mp3") == fn), None)
+        owner = _owner_of_file(fn)
         if owner and owner != u["username"]:
             raise HTTPException(403, "无权下载")
-    nice = fn
+    nice = os.path.basename(fn)
     for j in jobs.values():
-        if j.get("wav") == fn or j.get("mp3") == fn:
+        if _job_has_file(j, fn):
             t = (j.get("title") or "").strip()
             if t:
-                safe_t = "".join(c for c in t if c not in '/\\:*?"<>|')[:40]
-                nice = f"{safe_t}-{j['id']}.{'mp3' if fn.endswith('.mp3') else 'wav'}"
+                safe_t = _safe_name(t)
+                ext = "mp3" if fn.endswith(".mp3") else "wav"
+                nice = f"{safe_t}-{j['id']}.{ext}"
             break
     media = "audio/mpeg" if fn.endswith(".mp3") else "audio/wav"
     return FileResponse(path, media_type=media, filename=nice)
+
+
+def _job_has_file(j: dict, fn: str) -> bool:
+    """该任务是否持有这个文件（兼容老任务的 wav/mp3 单文件字段）。"""
+    if j.get("wav") == fn or j.get("mp3") == fn:
+        return True
+    return any(f.get("path") == fn for f in (j.get("files") or []))
+
+
+def _owner_of_file(fn: str):
+    return next((j.get("owner") for j in jobs.values() if _job_has_file(j, fn)), None)
 
 
 if __name__ == "__main__":

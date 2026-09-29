@@ -510,7 +510,13 @@ const I18N = {
           japanese:'日语',korean:'韩语',portuguese:'葡萄牙语',russian:'俄语',spanish:'西班牙语'},
     spk:{aiden:'English · 男声 · 阳光',dylan:'Chinese · 男声 · 北京腔',eric:'Chinese · 男声 · 四川口音',
          ono_anna:'Japanese · 女声 · 可爱',ryan:'English · 男声 · 节奏感强',serena:'Chinese · 女声 · 温暖',
-         sohee:'Korean · 女声 · 温暖',uncle_fu:'Chinese · 男声 · 沉稳',vivian:'Chinese · 女声 · 明亮'}
+         sohee:'Korean · 女声 · 温暖',uncle_fu:'Chinese · 男声 · 沉稳',vivian:'Chinese · 女声 · 明亮'},
+    // 内置克隆音色：用稳定 ID 存库，显示名随界面语言切换
+    bv:{builtin_male:'韩语克隆男声',builtin_female:'韩语克隆女声'},
+    builtinTag:'内置', builtinNoDel:'内置音色不可删除',
+    chunkLabel:(i,n,s)=>`第 ${i}/${n} 段 · ${Math.round(s)} 秒`,
+    dlChunk:(i)=>`下载第 ${i} 段`,
+    chunkHint:(n)=>`共 ${n} 段，按文案自动分块（句末断开，未拼接）`
   },
   en: {
     _name:'English',
@@ -589,7 +595,12 @@ const I18N = {
           japanese:'Japanese',korean:'Korean',portuguese:'Portuguese',russian:'Russian',spanish:'Spanish'},
     spk:{aiden:'English · male · bright',dylan:'Chinese · male · Beijing accent',eric:'Chinese · male · Sichuan accent',
          ono_anna:'Japanese · female · cute',ryan:'English · male · rhythmic',serena:'Chinese · female · warm',
-         sohee:'Korean · female · warm',uncle_fu:'Chinese · male · deep & steady',vivian:'Chinese · female · bright'}
+         sohee:'Korean · female · warm',uncle_fu:'Chinese · male · deep & steady',vivian:'Chinese · female · bright'},
+    bv:{builtin_male:'Korean Clone · Male',builtin_female:'Korean Clone · Female'},
+    builtinTag:'Built-in', builtinNoDel:'Built-in voices cannot be deleted',
+    chunkLabel:(i,n,s)=>`Part ${i}/${n} · ${Math.round(s)}s`,
+    dlChunk:(i)=>`Download part ${i}`,
+    chunkHint:(n)=>`${n} parts, auto-split at sentence ends (not merged)`
   },
   ko: {
     _name:'한국어',
@@ -668,7 +679,12 @@ const I18N = {
           japanese:'일본어',korean:'한국어',portuguese:'포르투갈어',russian:'러시아어',spanish:'스페인어'},
     spk:{aiden:'English · 남성 · 밝은',dylan:'Chinese · 남성 · 북경 억양',eric:'Chinese · 남성 · 사천 억양',
          ono_anna:'Japanese · 여성 · 귀여운',ryan:'English · 남성 · 리듬감',serena:'Chinese · 여성 · 따뜻한',
-         sohee:'Korean · 여성 · 따뜻한',uncle_fu:'Chinese · 남성 · 차분한',vivian:'Chinese · 여성 · 밝은'}
+         sohee:'Korean · 여성 · 따뜻한',uncle_fu:'Chinese · 남성 · 차분한',vivian:'Chinese · 여성 · 밝은'},
+    bv:{builtin_male:'한국어 클론 남성',builtin_female:'한국어 클론 여성'},
+    builtinTag:'내장', builtinNoDel:'내장 음성은 삭제할 수 없습니다',
+    chunkLabel:(i,n,s)=>`${i}/${n} 파트 · ${Math.round(s)}초`,
+    dlChunk:(i)=>`${i}파트 다운로드`,
+    chunkHint:(n)=>`총 ${n}개 파트, 문장 끝에서 자동 분할(병합 안 함)`
   },
   ja: {
     _name:'日本語',
@@ -747,7 +763,12 @@ const I18N = {
           japanese:'日本語',korean:'韓国語',portuguese:'ポルトガル語',russian:'ロシア語',spanish:'スペイン語'},
     spk:{aiden:'English · 男性 · 明るい',dylan:'Chinese · 男性 · 北京なまり',eric:'Chinese · 男性 · 四川なまり',
          ono_anna:'Japanese · 女性 · 可愛い',ryan:'English · 男性 · リズム感',serena:'Chinese · 女性 · 温かい',
-         sohee:'Korean · 女性 · 温かい',uncle_fu:'Chinese · 男性 · 落ち着いた',vivian:'Chinese · 女性 · 明るい'}
+         sohee:'Korean · 女性 · 温かい',uncle_fu:'Chinese · 男性 · 落ち着いた',vivian:'Chinese · 女性 · 明るい'},
+    bv:{builtin_male:'韓国語クローン・男性',builtin_female:'韓国語クローン・女性'},
+    builtinTag:'内蔵', builtinNoDel:'内蔵音声は削除できません',
+    chunkLabel:(i,n,s)=>`パート ${i}/${n} · ${Math.round(s)}秒`,
+    dlChunk:(i)=>`パート${i}をダウンロード`,
+    chunkHint:(n)=>`全${n}パート、文末で自動分割（結合なし）`
   }
 };
 
@@ -935,11 +956,19 @@ function addInstruct(v){
 }
 $('#insClear').onclick = ()=>{ $('#instruct').value=''; };
 const voiceOk = x => { const m = META.voices_ok || {}; return m[x] !== false; };
+// 内置音色用稳定 ID 存库（builtin_male / builtin_female），这里按界面语言
+// 换成对应显示名；员工自己录的音色直接显示原名。
+function voiceName(x){
+  const m = (I18N[UI] && I18N[UI].bv) || {};
+  return m[x] || x;
+}
+function isBuiltin(x){ return x === 'builtin_male' || x === 'builtin_female'; }
+
 function renderVoices(){
   const v = $('#voice'), list = META.voices || [], prev = v.value;
   // 缺文字稿 / 音频超长的音色在 ICL 模式下必崩，直接标出来，别让员工白等一轮排队
   v.innerHTML = list.length
-    ? list.map(x=>`<option value="${x}">${esc(x)}${voiceOk(x)?'':' '+t('voiceUnusable')}</option>`).join('')
+    ? list.map(x=>`<option value="${x}">${esc(voiceName(x))}${voiceOk(x)?'':' '+t('voiceUnusable')}</option>`).join('')
     : `<option value="">${t('emptyOpt')}</option>`;
   if(prev && list.includes(prev)) v.value = prev;
 }
@@ -973,7 +1002,8 @@ function renderVoiceList(){
     const txt = v.ref_text || '';
     return `<div class="vitem${ok ? '' : ' bad'}" data-v="${esc(n)}">
       <div class="vtop">
-        <span class="vname" title="${esc(n)}">${esc(n)}</span>
+        <span class="vname" title="${esc(n)}">${esc(voiceName(n))}</span>
+        ${isBuiltin(n) ? `<span class="vtag ok">${t('builtinTag')}</span>` : ''}
         <span class="vtag${ok ? ' ok' : ''}">${ok ? t('voiceReady') : t('voiceUnusable')}</span>
         <span class="vmeta">${v.dur != null ? v.dur + 's' : ''}</span>
       </div>
@@ -1006,7 +1036,16 @@ function renderVoiceList(){
       vt.dataset.open = open ? '0' : '1';
       vv.textContent = open ? t('vViewText') : t('vHideText');
     };
-    item.querySelector('.vdel').onclick = async () => {
+    const del = item.querySelector('.vdel');
+    if(isBuiltin(n)){
+      // 内置音色是团队共用模板，误删会让所有人立刻用不了
+      del.disabled = true;
+      del.title = t('builtinNoDel');
+      del.style.opacity = '.45';
+      del.style.cursor = 'not-allowed';
+    }
+    del.onclick = async () => {
+      if(isBuiltin(n)){ alert(t('builtinNoDel')); return; }
       if(!confirm(t('confirmDelVoice')(n))) return;
       try{
         await api('/api/voices/' + encodeURIComponent(n), {method:'DELETE'});
@@ -1428,13 +1467,30 @@ function updateJob(el, j){
   }
 
   const m = el.querySelector('.media');
-  if(j.wav && m.dataset.jid !== j.id + (j.mp3||'')){
-    m.dataset.jid = j.id + (j.mp3||'');
-    const play = j.mp3 || j.wav;
-    m.innerHTML = `<audio controls preload="metadata" src="/api/download/${play}"></audio>
+  // 分块输出：每块一个独立 mp3（块间不拼接），全部列出来可单独播放/下载
+  const files = j.files || [];
+  const sig = j.id + '|' + files.map(f=>f.path).join(',') + '|' + (j.wav||'') + (j.mp3||'');
+  if((j.wav || files.length) && m.dataset.jid !== sig){
+    m.dataset.jid = sig;
+    let mediaHtml = '';
+    if(files.length){
+      mediaHtml = files.map((f, i) => `
+        <div class="chunkRow" style="margin-bottom:8px">
+          <div class="stat">${t('chunkLabel')(i + 1, files.length, f.seconds || 0)}</div>
+          <audio controls preload="metadata" src="/api/download/${encodeURIComponent(f.path)}"></audio>
+          <a href="/api/download/${encodeURIComponent(f.path)}" download><button>${t('dlChunk')(i + 1)}</button></a>
+        </div>`).join('');
+    } else {
+      const play = j.mp3 || j.wav;
+      mediaHtml = `<audio controls preload="metadata" src="/api/download/${play}"></audio>`;
+    }
+    if(files.length > 1){
+      mediaHtml += `<div class="stat">${t('chunkHint')(files.length)}</div>`;
+    }
+    m.innerHTML = mediaHtml + `
       <div class="row" style="margin-top:6px">
-        <a href="/api/download/${j.wav}" download><button>${t('dlWav')}</button></a>
-        ${j.mp3?`<a href="/api/download/${j.mp3}" download><button>${t('dlMp3')}</button></a>`:''}
+        ${j.wav?`<a href="/api/download/${j.wav}" download><button>${t('dlWav')}</button></a>`:''}
+        ${(j.mp3 && !files.length)?`<a href="/api/download/${j.mp3}" download><button>${t('dlMp3')}</button></a>`:''}
         <button class="mini danger" data-deljob="${j.id}">${t('delJob')}</button>
         ${j.status==='error'?`<button class="mini" data-retry="${j.id}">${t('retry')}</button>`:''}
       </div>`;

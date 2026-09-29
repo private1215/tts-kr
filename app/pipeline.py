@@ -146,6 +146,89 @@ def split_for_retry(text: str, min_chars: int = 6) -> list:
     return [t[:mid].strip(), t[mid:].strip()]
 
 
+# ============================ 长文案自动分块 ============================
+
+CHUNK_MAX_CHARS = 2600      # 单块字数上限（对齐 elevenlabs 习惯）
+CHUNK_MIN_TAIL_RATIO = 0.30  # 尾块短于上限的这个比例时，改为均匀分块
+
+
+def split_chunks(text: str, max_chars: int = CHUNK_MAX_CHARS,
+                 min_tail_ratio: float = CHUNK_MIN_TAIL_RATIO) -> list:
+    """把整段长文案切成若干「块」，每块独立生成一个音频文件。
+
+    三条硬规则（员工原话：「不能固定按照字数，不能从语句中间截断，
+    要区分好断句，避免前后衔接不上」）：
+
+      1. 只在句末标点（. ! ? 。！？…）或段落边界（\\n\\n）处断开，
+         **绝不切在句子中间**。段落边界优先级高于句末——段落是天然的语义单元。
+      2. 2600 是**上限不是刻度**。累积到接近上限时，在上限之前最近的句末断开，
+         块长在 2600 上下浮动是正常结果，不是 bug。
+      3. 避免头重脚轻：最后一块若短于上限的 30%（<780 字），改为**均匀分块**，
+         避免出现 2600+2600+100 这种分布。
+
+    实测预期：
+      4091 字 -> ~2600 + ~1491      （尾块 1491 > 780，按上限切）
+      5300 字 -> ~1767 × 3          （尾块仅 100 < 780，触发均匀分块）
+
+    注意与 build_segments 的分工：本函数是**块级**（产出独立文件），
+    build_segments 是**段级**（块内按句切小段批量生成）。不要混用。
+    """
+    t = (text or "").strip()
+    if not t:
+        return []
+    if len(t) <= max_chars:
+        return [t]
+
+    # 单元列表：每项是 (句子文本, 所属段落序号)
+    units = []
+    for pi, para in enumerate(re.split(r'\n\s*\n', t)):
+        for s in split_sentences(para):
+            units.append((s, pi))
+    if len(units) <= 1:
+        # 全文没有句末标点（无换行无句号的粘贴文本），只能整块交给段级切分
+        return [t]
+
+    def _render(group):
+        """把一组 (句, 段号) 还原成文本：段内空格连，段间空行分隔。"""
+        out = []
+        prev_pi = None
+        for s, pi in group:
+            if prev_pi is None:
+                out.append(s)
+            elif pi == prev_pi:
+                out.append(" " + s)
+            else:
+                out.append("\n\n" + s)
+            prev_pi = pi
+        return "".join(out)
+
+    def _greedy(limit):
+        """贪心累积到 limit 就断，断点必然在句末。"""
+        chunks, buf = [], []
+        for s, pi in units:
+            cand = buf + [(s, pi)]
+            length = sum(len(x) for x, _ in cand) + len(cand) - 1
+            if buf and length > limit:
+                chunks.append(_render(buf))
+                buf = [(s, pi)]
+            else:
+                buf = cand
+        if buf:
+            chunks.append(_render(buf))
+        return [c for c in chunks if c.strip()]
+
+    chunks = _greedy(max_chars)
+    # 规则 3：尾块过短 -> 均匀分块重来一次
+    if len(chunks) >= 2 and len(chunks[-1]) < max_chars * min_tail_ratio:
+        n = len(chunks)
+        target = int(len(t) / n) + 1
+        balanced = _greedy(max(target, 1))
+        # 均匀分块必须仍满足上限，否则说明单块就装不下，保持原切法
+        if balanced and max(len(c) for c in balanced) <= max_chars:
+            chunks = balanced
+    return chunks
+
+
 def make_silence(ms: float, sr: int = 24000) -> np.ndarray:
     """生成静音片段。"""
     n = int(sr * ms / 1000.0)
