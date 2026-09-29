@@ -11,7 +11,10 @@
 import os
 import io
 import json
+import uuid
 import logging
+import threading
+import urllib.parse
 
 import numpy as np
 import soundfile as sf
@@ -38,10 +41,42 @@ def health(timeout: float = 5.0):
         return False, {"error": repr(e)[:200]}
 
 
+def _poll_progress(rid: str, stop: threading.Event, on_progress, interval=0.6):
+    """后台线程：轮询 CosyVoice3 的 /progress，把分段进度回传给调用方。
+
+    为什么需要线程：/synth 是一次性阻塞请求，返回前拿不到任何中间进度，
+    而 tts-kr 的 job["progress"] 必须持续更新，否则前端进度条会一直停在 0%
+    （2026-09-29 实测：走了 CosyVoice3 的任务几十秒都显示「正在分段 · 0%」）。
+    """
+    url = COSY_URL + "/progress?" + urllib.parse.urlencode({"rid": rid})
+    last = None
+    while not stop.is_set():
+        stop.wait(interval)
+        if stop.is_set():
+            break
+        try:
+            r = urllib.request.urlopen(url, timeout=3.0)
+            p = json.loads(r.read().decode("utf-8"))
+        except Exception:
+            continue
+        if not p.get("found"):
+            continue
+        cur = (p.get("done"), p.get("total"))
+        if cur != last and cur[1]:
+            last = cur
+            try:
+                on_progress(int(cur[0]), int(cur[1]))
+            except Exception:
+                pass
+
+
 def synth(text: str, ref_wav: str, ref_text: str,
           instruct: str = "neutral", speed: float = 1.0,
-          seed: int = 42, max_chars: int = None, timeout: float = None):
+          seed: int = 42, max_chars: int = None, timeout: float = None,
+          on_progress=None):
     """合成一段文本。
+
+    on_progress: 可选回调 (done:int, total:int)，合成期间由后台线程按分段进度调用。
 
     返回 (audio:np.float32|None, sr:int, meta:dict)
     audio 为 None 表示失败，meta["error"] 写明原因。
@@ -54,6 +89,7 @@ def synth(text: str, ref_wav: str, ref_text: str,
         meta["error"] = f"参考音频不存在: {ref_wav}"
         return None, 0, meta
 
+    rid = uuid.uuid4().hex[:12]
     body = json.dumps({
         "text": text,
         "ref_wav": ref_wav,
@@ -62,10 +98,20 @@ def synth(text: str, ref_wav: str, ref_text: str,
         "speed": float(speed or 1.0),
         "seed": int(seed or 42),
         "max_chars": int(max_chars or COSY_MAX_CHARS),
+        "rid": rid,
     }).encode("utf-8")
     req = urllib.request.Request(
         COSY_URL + "/synth", data=body,
         headers={"Content-Type": "application/json"})
+
+    # 进度回传线程：on_progress 为空就不启（省一次轮询开销）
+    stop = threading.Event()
+    poller = None
+    if on_progress:
+        poller = threading.Thread(target=_poll_progress,
+                                  args=(rid, stop, on_progress),
+                                  daemon=True)
+        poller.start()
 
     t0 = __import__("time").time()
     try:
@@ -79,16 +125,19 @@ def synth(text: str, ref_wav: str, ref_text: str,
             detail = ""
         meta["error"] = f"HTTP {e.code}: {detail}"
         log.warning("CosyVoice3 调用失败: %s", meta["error"])
+        stop.set()
         return None, 0, meta
     except Exception as e:
         meta["error"] = repr(e)[:200]
         log.warning("CosyVoice3 调用失败: %s", meta["error"])
+        stop.set()
         return None, 0, meta
 
     try:
         audio, sr = sf.read(io.BytesIO(raw), dtype="float32")
     except Exception as e:
         meta["error"] = f"wav 解析失败: {repr(e)[:200]}"
+        stop.set()
         return None, 0, meta
     if audio.ndim > 1:
         audio = audio.mean(axis=1)
@@ -100,6 +149,9 @@ def synth(text: str, ref_wav: str, ref_text: str,
         v = resp.headers.get(k)
         if v:
             meta[k[2:].lower()] = float(v) if "." in v else int(v)
+    stop.set()
+    if poller:
+        poller.join(timeout=2.0)
     return audio, sr, meta
 
 

@@ -516,7 +516,7 @@ const I18N = {
     statFmt:s=>`分段 ${s.segments} · 音频 ${s.audio_seconds}s · 耗时 ${s.gen_seconds}s · RTF ${s.rtf}`,
     progFmt:(d,t)=>`${d}/${t} 段`, dlWav:'下载 WAV', dlMp3:'下载 MP3',
     expand:'展开全文', collapse:'收起', almostDone:'即将完成', preparing:'准备中',
-    stagePreparing:'正在分段', stageGenerating:'正在生成', stageMerging:'正在拼接', stageEncoding:'正在转码',
+    stagePreparing:'正在分段', stageGenerating:'正在生成', stageMerging:'正在拼接', stageEncoding:'正在转码', stageLoading:'正在加载模型',
     batchFmt:(n,m)=>`第 ${n}/${m} 批`, pctFmt:(p)=>`${p}%`, elapsedFmt:(s)=>`已用 ${s}`,
     etaFmt:(s)=>`预计还需 ${s}`, queueAhead:(n)=> n>0?`排队中 · 前面还有 ${n} 个任务`:'排队中，即将开始',
     statsFmt:(td,n,h)=>`今日 ${td} 条 · 累计 ${n} 条 · 累计音频 ${h} 小时`,
@@ -606,7 +606,7 @@ const I18N = {
     statFmt:s=>`${s.segments} segments · audio ${s.audio_seconds}s · took ${s.gen_seconds}s · RTF ${s.rtf}`,
     progFmt:(d,t)=>`${d}/${t} segments`, dlWav:'Download WAV', dlMp3:'Download MP3',
     expand:'Expand', collapse:'Collapse', almostDone:'almost done', preparing:'preparing',
-    stagePreparing:'Splitting', stageGenerating:'Generating', stageMerging:'Joining', stageEncoding:'Encoding',
+    stagePreparing:'Splitting', stageGenerating:'Generating', stageMerging:'Joining', stageEncoding:'Encoding', stageLoading:'Loading model',
     batchFmt:(n,m)=>`batch ${n}/${m}`, pctFmt:(p)=>`${p}%`, elapsedFmt:(s)=>`${s} elapsed`,
     etaFmt:(s)=>`~${s} left`, queueAhead:(n)=> n>0?`queued · ${n} ahead`:'queued, starting soon',
     statsFmt:(td,n,h)=>`Today ${td} · total ${n} · ${h}h audio`,
@@ -695,7 +695,7 @@ const I18N = {
     statFmt:s=>`구간 ${s.segments} · 오디오 ${s.audio_seconds}초 · 소요 ${s.gen_seconds}초 · RTF ${s.rtf}`,
     progFmt:(d,t)=>`${d}/${t} 구간`, dlWav:'WAV 다운로드', dlMp3:'MP3 다운로드',
     expand:'전체 보기', collapse:'접기', almostDone:'곧 완료', preparing:'준비 중',
-    stagePreparing:'분할 중', stageGenerating:'생성 중', stageMerging:'연결 중', stageEncoding:'인코딩 중',
+    stagePreparing:'분할 중', stageGenerating:'생성 중', stageMerging:'연결 중', stageEncoding:'인코딩 중', stageLoading:'모델 로딩 중',
     batchFmt:(n,m)=>`${n}/${m} 배치`, pctFmt:(p)=>`${p}%`, elapsedFmt:(s)=>`${s} 경과`,
     etaFmt:(s)=>`약 ${s} 남음`, queueAhead:(n)=> n>0?`대기중 · 앞에 ${n}개`:'대기중, 곧 시작',
     statsFmt:(td,n,h)=>`오늘 ${td}건 · 누적 ${n}건 · 누적 오디오 ${h}시간`,
@@ -784,7 +784,7 @@ const I18N = {
     statFmt:s=>`セグメント ${s.segments} · 音声 ${s.audio_seconds}秒 · 処理 ${s.gen_seconds}秒 · RTF ${s.rtf}`,
     progFmt:(d,t)=>`${d}/${t} セグメント`, dlWav:'WAV をダウンロード', dlMp3:'MP3 をダウンロード',
     expand:'全文を表示', collapse:'折りたたむ', almostDone:'まもなく完了', preparing:'準備中',
-    stagePreparing:'分割中', stageGenerating:'生成中', stageMerging:'結合中', stageEncoding:'エンコード中',
+    stagePreparing:'分割中', stageGenerating:'生成中', stageMerging:'結合中', stageEncoding:'エンコード中', stageLoading:'モデル読み込み中',
     batchFmt:(n,m)=>`${n}/${m} バッチ`, pctFmt:(p)=>`${p}%`, elapsedFmt:(s)=>`経過 ${s}`,
     etaFmt:(s)=>`残り 約 ${s}`, queueAhead:(n)=> n>0?`待機中 · 前に ${n} 件`:'待機中、まもなく開始',
     statsFmt:(td,n,h)=>`本日 ${td}件 · 累計 ${n}件 · 音声 ${h}時間`,
@@ -1540,7 +1540,8 @@ function updateJob(el, j){
     if(eta > 0 && el2 > 0) pct = Math.max(pct, el2 / (el2 + eta) * 100);
     pct = Math.max(0, Math.min(96, pct));
     const stageKey = {preparing:'stagePreparing', generating:'stageGenerating',
-                      merging:'stageMerging', encoding:'stageEncoding'}[j.stage] || 'stageGenerating';
+                      merging:'stageMerging', encoding:'stageEncoding',
+                      loading:'stageLoading'}[j.stage] || 'stageGenerating';
     let etaTxt = '';
     if(eta > 0) etaTxt = t('etaFmt')(fmtDur(eta));
     else if(eta === 0) etaTxt = t('almostDone');

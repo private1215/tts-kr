@@ -10,10 +10,15 @@
 启动 venv：/mnt/tts/projects/cosy/venv
 模型：    /mnt/tts/models/Fun-CosyVoice3-0.5B
 
-对外只暴露三个接口（极简，参数不拼装）：
+对外暴露四个接口（极简，参数不拼装）：
     GET  /health   -> 健康检查 + 显存
     POST /synth    -> 输入文本与参考音频，直接返回 wav 二进制
     POST /voices   -> 注册/覆盖一个音色模板（存 spk2info，可复用）
+    GET  /progress -> 查询某次合成的进度（?rid=...）
+
+/synth 是一次性阻塞请求，没法把进度推回去，所以改成「拉」：调用方带一个 rid
+进来，本服务边生成边更新 _PROG[rid]，调用方另起线程轮询 /progress。
+没有这一步，走 CosyVoice3 的任务在前端会一直显示 0%（2026-09-29 实测症状）。
 """
 import os
 import sys
@@ -23,6 +28,7 @@ import gc
 import json
 import time
 import logging
+import threading
 
 # CosyVoice 的代码与 Matcha-TTS 子模块都要在 sys.path 里
 _COSY_ROOT = os.environ.get("COSY_ROOT", "/mnt/tts/projects/cosy/repo")
@@ -61,6 +67,11 @@ app = FastAPI(title="CosyVoice3 TTS Service")
 _model = None
 _sr = 24000
 _last_used = 0.0
+
+# 进度上报：rid -> {"done": int, "total": int}
+# /synth 是阻塞请求，返回值里带不了中间进度，只能让调用方拿 rid 来轮询。
+_PROG = {}
+_PROG_LOCK = threading.Lock()
 
 # 显存是共享资源：现网 Qwen3-TTS 常驻约 4.25 GiB，CosyVoice3 再常驻约 3.2 GiB。
 # 两个引擎同时常驻会挤压 Qwen 的生成峰值（实测峰值 6.97 GiB）。
@@ -166,6 +177,7 @@ class SynthReq(BaseModel):
                                        "故默认取 320")
     text_frontend: bool = Field(False,
                                 description="韩语必须 False，否则文本前端会切坏")
+    rid: str = Field("", description="调用方生成的请求 id，用于轮询 /progress")
 
 
 def _resolve_instruct(name: str) -> str:
@@ -219,6 +231,10 @@ def synth(req: SynthReq):
              len(req.text), len(chunks), req.instruct, req.speed, req.max_chars)
 
     outs, t0 = [], time.time()
+    n_chunk = len(chunks)
+    if req.rid:
+        with _PROG_LOCK:
+            _PROG[req.rid] = {"done": 0, "total": n_chunk}
     for i, c in enumerate(chunks):
         try:
             for o in cosy.inference_zero_shot(c, prompt_text, req.ref_wav,
@@ -227,6 +243,10 @@ def synth(req: SynthReq):
                 outs.append(o["tts_speech"])
         except Exception as e:
             log.warning("第 %d 块生成失败: %s", i, repr(e)[:200])
+        finally:
+            if req.rid:
+                with _PROG_LOCK:
+                    _PROG[req.rid] = {"done": i + 1, "total": n_chunk}
     if not outs:
         raise HTTPException(500, "全部片段生成失败")
 
@@ -241,6 +261,28 @@ def synth(req: SynthReq):
                  "X-Gen-Seconds": f"{time.time() - t0:.3f}",
                  "X-Chunks": str(len(chunks)),
                  "X-Sample-Rate": str(_sr)})
+
+
+@app.get("/progress")
+def progress(rid: str = ""):
+    """查询某次 /synth 的进度。返回 {found, done, total}；找不到返回 found=False。
+
+    调用方（cosy_client）在合成期间另起线程轮询这里，把进度推回 tts-kr 的 job，
+    前端进度条才会动。
+    """
+    if not rid:
+        return {"found": False}
+    with _PROG_LOCK:
+        p = _PROG.get(rid)
+    if not p:
+        return {"found": False}
+    return {"found": True, "done": p["done"], "total": p["total"]}
+
+
+def _drop_progress(rid: str):
+    if rid:
+        with _PROG_LOCK:
+            _PROG.pop(rid, None)
 
 
 class VoiceReq(BaseModel):

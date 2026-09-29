@@ -473,6 +473,8 @@ async def run_job(job):
             instruct=_cosy_instruct,
             speed=float(job.get("speed") or 1.0),
             seed=int(text_ci[2]),
+            # 进度回传：没有它，走 CosyVoice3 的任务前端会一直停在 0%
+            on_progress=_mk_progress(text_ci[0]),
         )
         if audio is None:
             raise RuntimeError(f"CosyVoice3 生成失败: {meta.get('error')}")
@@ -529,6 +531,9 @@ async def run_job(job):
     # 少了这一步，CosyVoice3 在加载阶段直接 CUDA OOM → HTTP 500 → 整个任务失败
     # （2026-09-29 实测失败两单：9d95858c / 2a8e4e31）。详见 app/vram.py。
     job["_used_cosy"] = False
+    # 换引擎/加载模型这段时间前端一直显示「正在分段」，容易让人以为卡住了。
+    # 标成 loading，等第一段产出后 _mk_progress 会自动改成 generating。
+    job["stage"] = "loading"
     if _engine_name == "cosyvoice3" and ref_wav_path:
         vram.switch_to("cosyvoice3", f"任务 {jid} ")
         job["_used_cosy"] = True
@@ -1119,14 +1124,13 @@ async def list_jobs(request: Request, scope: str = "mine", q: str = "", owner: s
             elapsed = max(now - st, 0.1)
             if total and 0 < done < total:
                 eta = round(elapsed / done * (total - done), 1)
-            elif total and done == 0:
-                # 第一批还没出结果，用历史速度粗估
-                # 用历史 RTF + 文本长度估算总时长，比"每段固定秒数"准得多
-                txt = j.get("text") or ""
-                est_audio = (len(txt) / CHARS_PER_SEC) if txt else total * 8.0
-                eta = round(max(est_audio * AVG_RTF - elapsed, 1.0), 1)
             else:
-                eta = 0
+                # 还没出第一批结果（含 CosyVoice3 路径还没回报进度的情形）：
+                # 用历史速度粗估 —— RTF + 文本长度，比"每段固定秒数"准得多。
+                # 少了这个兜底，走 CosyVoice3 的任务会一直显示 0%（2026-09-29 实测）。
+                txt = j.get("text") or ""
+                est_audio = (len(txt) / CHARS_PER_SEC) if txt else (total * 8.0)
+                eta = round(max(est_audio * AVG_RTF - elapsed, 1.0), 1) if est_audio else 0
         elif j["status"] == "queued":
             ahead = sum(1 for x in jobs.values()
                         if x["status"] == "queued" and x["created_at"] < j["created_at"])
