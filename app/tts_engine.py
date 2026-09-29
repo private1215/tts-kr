@@ -353,6 +353,22 @@ class TTSEngine:
         except Exception as e:
             log.warning("读取支持音色失败: %s", e)
 
+    def unload(self):
+        """把模型从显存彻底卸掉，让位给另一个引擎（自动选型串行占卡时用）。
+
+        12G 卡放不下 Qwen(常驻~4.2G/峰值6.9G) + CosyVoice3(3.2G)，并行必 OOM，
+        只能「先这个、后那个」串行跑。卸载后 variant=None，
+        下次 synth_long 会经 _ensure_variant 自动重载，无需手动恢复。
+        """
+        if self.model is None:
+            return
+        log.info("卸载模型变体: %s（显存让给另一引擎）", self.variant)
+        del self.model
+        self.model = None
+        self.variant = None
+        self._clone_prompt_cache.clear()
+        torch.cuda.empty_cache()
+
     @property
     def languages(self) -> List[str]:
         return self._languages or ["Korean", "Chinese", "English", "Japanese"]

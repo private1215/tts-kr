@@ -15,20 +15,30 @@
 
 候选集合来自 server.EMOTION_PRESETS（引擎 + 情感组合）。
 
-⚠️ 两个踩过的坑（改这里必看）：
+⚠️ 三个踩过的坑（改这里必看）：
   1) tts_engine.synth_long 的 ref_audio 必须是 **(audio, sr) 元组**，传裸数组会炸
   2) Qwen 必须复用 server.engine 全局实例，**不能 new TTSEngine()** ——
      那会把同一个模型再加载一份进显存（约 4.2 GiB）
+  3) **显存串行，绝不并行**：12G 卡放不下 Qwen(常驻~4.2G/峰值6.9G) + CosyVoice3(3.2G)，
+     实测两边同时驻留必 OOM(CUBLAS_STATUS_ALLOC_FAILED)。
+     正解是「先这个、后那个」：跑某引擎候选前，把另一个引擎从显存彻底卸掉
+     （Qwen 走 engine.unload()，CosyVoice3 走 cosy_client.unload()），
+     目标引擎由自身懒加载机制自动起。候选按引擎分组连跑，整轮只在边界切换一次。
 """
 import os
 import time
 import logging
 import tempfile
+import threading
 
 import numpy as np
 import soundfile as sf
 
 log = logging.getLogger("tts")
+
+# 全局互斥：同一时刻只允许一个选型在跑（两个选型并发会抢同一块显存）。
+# 录入音色时已有「队列空才跑」守卫，这里是兜底双保险（手动触发端点等）。
+_SELECT_LOCK = threading.Lock()
 
 # 试听文本：一段中性的韩语股东播报体。
 # ⚠️ 必须**明显长于**「情感指令 + 参考音频文字稿」（实测约 240 字），否则
@@ -50,6 +60,94 @@ CER_PASS = float(os.environ.get("TTS_SELECT_CER_PASS", "0.13"))
 # 打分权重：CER 越低越好，音高动态越高越好
 W_CER = float(os.environ.get("TTS_SELECT_W_CER", "10.0"))
 W_DYN = float(os.environ.get("TTS_SELECT_W_DYN", "1.0"))
+
+
+# 选型收尾后是否立即把 Qwen 重新加载回显存（恢复常驻稳态）。
+# 1=立即重载（ health 保持 loaded、下个生成任务零加载等待，代价是选型多耗一次加载时间）
+# 0=保持卸载，下次生成经 _ensure_variant 懒加载（选型返回更快）
+TTS_SELECT_RELOAD_QWEN = os.environ.get("TTS_SELECT_RELOAD_QWEN", "1") == "1"
+
+
+def _wait_free_vram(min_free_gib=6.0, timeout=90.0):
+    """等整卡空闲显存真正达标再往下走（验证式等待）。
+
+    为什么需要：跨进程 unload 是「请求返回 ≠ 显存已释放」——
+    cosy 的 /unload 返回后 nvidia-smi 仍显示其进程持有 5~7.6G
+    （torch 缓存引用环未回收），立刻加载另一个引擎直接 OOM（实测）。
+    所以以 torch.cuda.mem_get_info() 的整卡空闲量为判据轮询；
+    超时只告警不阻断（懒加载/候选失败兜底，不能让选型卡死）。
+    返回达标时的空闲 GiB，拿不到信息返回 None。
+    """
+    try:
+        import torch
+        t0 = time.time()
+        free_gib = 0.0
+        while time.time() - t0 < timeout:
+            free_b, _total = torch.cuda.mem_get_info()
+            free_gib = free_b / 1024 ** 3
+            if free_gib >= min_free_gib:
+                return free_gib
+            time.sleep(2.0)
+        log.warning("等待空闲显存 >= %.1f GiB 超时（%.0fs，当前 %.1f GiB），仍继续",
+                    min_free_gib, timeout, free_gib)
+        return free_gib
+    except Exception:
+        return None
+
+
+def _switch_engine(engine_name):
+    """显存串行核心：跑某引擎前，把另一个引擎从显存彻底赶出去并**等显存真释放**。
+
+    - 目标引擎 Qwen    -> 卸 CosyVoice3（HTTP /unload，已同步释放）+ 等整卡空闲 ≥ 6G
+      （Qwen base 加载需 ~4.2G，留余量），Qwen 由 _ensure_variant 懒加载/复用
+    - 目标引擎 CosyVoice3 -> 卸 Qwen（进程内 unload，del+empty_cache 即真释放）
+      + 等整卡空闲 ≥ 4.5G（CosyVoice3 fp32 加载需 ~3.2G）
+    卸载都是幂等的，重复调用无副作用。
+    """
+    try:
+        import torch
+        torch.cuda.empty_cache()
+    except Exception:
+        pass
+    if engine_name == "cosyvoice3":
+        try:
+            import server
+            eng = getattr(server, "engine", None)
+            if eng is not None:
+                eng.unload()
+        except Exception as e:
+            log.warning("卸载 Qwen 失败（继续跑 CosyVoice3，可能 OOM）: %s", repr(e)[:120])
+        free = _wait_free_vram(4.5)
+        if free is not None:
+            log.info("切换引擎 -> CosyVoice3，整卡空闲显存 %.1f GiB", free)
+    else:
+        try:
+            import cosy_client
+            cosy_client.unload()
+        except Exception as e:
+            log.warning("卸载 CosyVoice3 失败（继续跑 Qwen，可能 OOM）: %s", repr(e)[:120])
+        free = _wait_free_vram(6.0)
+        if free is not None:
+            log.info("切换引擎 -> Qwen，整卡空闲显存 %.1f GiB", free)
+
+
+def _finish_benchmark():
+    """收尾：卸掉 CosyVoice3，按需把 Qwen 恢复到常驻稳态。"""
+    try:
+        import cosy_client
+        cosy_client.unload()
+    except Exception:
+        pass
+    if TTS_SELECT_RELOAD_QWEN:
+        try:
+            import server
+            eng = getattr(server, "engine", None)
+            if eng is not None:
+                log.info("选型收尾：重新加载 Qwen 恢复常驻稳态")
+                eng.warmup()
+        except Exception as e:
+            # 重载失败不致命：下次生成会懒加载兜底
+            log.warning("选型收尾重载 Qwen 失败（下次生成将懒加载）: %s", repr(e)[:160])
 
 
 def _sentence_windows(x, sr, min_len=0.6, max_len=30.0, min_sil=0.25):
@@ -189,56 +287,57 @@ def benchmark_voice(ref_wav, ref_text, language="Korean",
     tmp_dir = tmp_dir or tempfile.gettempdir()
     results = []
 
-    # ⚠️ 显存互斥：12G 卡放不下「Qwen 常驻 6.9 GiB + CosyVoice 3.2 GiB」同时存在。
-    # 实测两边会互相 OOM。所以每个候选开跑前，先把对方从显存里赶出去。
-    def _release_other(engine_name):
-        try:
-            import torch
-            torch.cuda.empty_cache()
-        except Exception:
-            pass
-        if engine_name != "cosyvoice3":
+    # 候选按引擎分组连跑：同引擎的相邻执行，整轮只在引擎边界切换一次显存，
+    # 符合「先这个、后那个」的串行原则（12G 卡放不下两个引擎并行）。
+    _ENGINE_ORDER = {"qwen": 0, "cosyvoice3": 1}
+    presets = sorted(presets, key=lambda p: _ENGINE_ORDER.get(p["engine"], 9))
+
+    # 全局互斥：已有选型在跑就直接跳过（两个选型并发抢显存必 OOM）
+    if not _SELECT_LOCK.acquire(blocking=False):
+        log.warning("已有选型任务在跑，本次跳过")
+        return []
+    try:
+        for p in presets:
+            t0 = time.time()
+            _switch_engine(p["engine"])
+            wav = os.path.join(tmp_dir, f".sel_{p['key']}_{int(t0 * 1000)}.wav")
             try:
-                import cosy_client
-                cosy_client.unload()
-            except Exception:
-                pass
-
-    for p in presets:
-        t0 = time.time()
-        _release_other(p["engine"])
-        wav = os.path.join(tmp_dir, f".sel_{p['key']}_{int(t0 * 1000)}.wav")
-        try:
-            err = _make_wav(p["engine"], text, ref_wav, ref_text,
-                            p.get("instruct") or "", language, wav)
-            if err:
-                log.warning("候选 %s 生成失败: %s", p["key"], err)
+                err = _make_wav(p["engine"], text, ref_wav, ref_text,
+                                p.get("instruct") or "", language, wav)
+                if err:
+                    log.warning("候选 %s 生成失败: %s", p["key"], err)
+                    results.append(dict(p, cer=None, dyn=None, score=None, ok=False,
+                                        error=err[:120]))
+                    continue
+            except Exception as e:
+                log.warning("候选 %s 异常: %s", p["key"], repr(e)[:200])
                 results.append(dict(p, cer=None, dyn=None, score=None, ok=False,
-                                    error=err[:120]))
+                                    error=repr(e)[:120]))
                 continue
-        except Exception as e:
-            log.warning("候选 %s 异常: %s", p["key"], repr(e)[:200])
-            results.append(dict(p, cer=None, dyn=None, score=None, ok=False,
-                                error=repr(e)[:120]))
-            continue
 
-        cer = _cer(wav, text, language)
-        dyn = prosody_score(wav)
+            cer = _cer(wav, text, language)
+            dyn = prosody_score(wav)
+            try:
+                os.remove(wav)
+            except OSError:
+                pass
+            ok = (cer is not None) and (cer <= CER_PASS)
+            score = None
+            if cer is not None:
+                score = -W_CER * cer + W_DYN * (dyn or 0.0)
+            results.append(dict(p, cer=cer, dyn=dyn, score=score, ok=ok,
+                                seconds=round(time.time() - t0, 1)))
+            log.info("选型候选 %-9s 引擎=%-10s CER=%s 动态=%s score=%s",
+                     p["key"], p["engine"],
+                     "None" if cer is None else round(cer, 4),
+                     "None" if dyn is None else round(dyn, 2),
+                     "None" if score is None else round(score, 3))
+    finally:
         try:
-            os.remove(wav)
-        except OSError:
-            pass
-        ok = (cer is not None) and (cer <= CER_PASS)
-        score = None
-        if cer is not None:
-            score = -W_CER * cer + W_DYN * (dyn or 0.0)
-        results.append(dict(p, cer=cer, dyn=dyn, score=score, ok=ok,
-                            seconds=round(time.time() - t0, 1)))
-        log.info("选型候选 %-9s 引擎=%-10s CER=%s 动态=%s score=%s",
-                 p["key"], p["engine"],
-                 "None" if cer is None else round(cer, 4),
-                 "None" if dyn is None else round(dyn, 2),
-                 "None" if score is None else round(score, 3))
+            _finish_benchmark()
+        except Exception as e:
+            log.warning("选型收尾异常（不影响已产出结果）: %s", repr(e)[:160])
+        _SELECT_LOCK.release()
 
     results.sort(key=lambda r: (r.get("score") is not None,
                                 r.get("score") or -1e9), reverse=True)

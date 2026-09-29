@@ -19,6 +19,7 @@ import os
 import sys
 import re
 import io
+import gc
 import json
 import time
 import logging
@@ -67,21 +68,38 @@ _last_used = 0.0
 IDLE_UNLOAD_SEC = float(os.environ.get("COSY_IDLE_UNLOAD_SEC", "600"))
 
 
+def _release_model():
+    """把模型从显存彻底释放。注意必须是「重释放」：
+    del + empty_cache 不够 —— 跨进程场景（自动选型先卸 Cosy 再加载 Qwen）
+    实测 unload 返回后 nvidia-smi 仍显示本进程持有 5~7.6G，
+    立刻加载 Qwen 直接 OOM。gc.collect() 清引用环 + synchronize 等 CUDA 收尾
+    + 二次 empty_cache，才能把显存真正还给驱动器。
+    """
+    global _model
+    if _model is None:
+        return
+    try:
+        del _model
+    except Exception:
+        pass
+    _model = None
+    if torch.cuda.is_available():
+        gc.collect()
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+        gc.collect()
+        torch.cuda.empty_cache()
+
+
 def _maybe_unload():
     """空闲超过阈值就把模型从显存释放，把显存让回给 Qwen。"""
-    global _model, _last_used
+    global _last_used
     if _model is None or IDLE_UNLOAD_SEC <= 0:
         return
     if time.time() - _last_used > IDLE_UNLOAD_SEC:
         log.info("空闲 %.0fs 超过阈值 %.0fs，卸载 CosyVoice3 释放显存",
                  time.time() - _last_used, IDLE_UNLOAD_SEC)
-        try:
-            del _model
-        except Exception:
-            pass
-        _model = None
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        _release_model()
 
 
 def get_model():
@@ -116,19 +134,21 @@ def health():
 
 @app.post("/unload")
 def unload():
-    """手动卸载，立即把显存让回给 Qwen。"""
-    global _model
-    if _model is None:
-        return {"ok": True, "msg": "模型未加载"}
-    try:
-        del _model
-    except Exception:
-        pass
-    _model = None
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
+    """手动卸载，立即把显存让回给 Qwen。
+
+    同步释放：返回时显存已真正还给驱动器（gc + synchronize + 二次 empty_cache），
+    并携带 gpu_free_gib（整卡空闲显存），方便调用方确认可以再加载另一个引擎。
+    """
+    was_loaded = _model is not None
+    _release_model()
     vram = torch.cuda.memory_allocated() / 1024 ** 3 if torch.cuda.is_available() else 0.0
-    return {"ok": True, "vram_gib": round(vram, 2)}
+    try:
+        free_b, _ = torch.cuda.mem_get_info()
+        gpu_free = round(free_b / 1024 ** 3, 2)
+    except Exception:
+        gpu_free = None
+    return {"ok": True, "was_loaded": was_loaded,
+            "vram_gib": round(vram, 2), "gpu_free_gib": gpu_free}
 
 
 class SynthReq(BaseModel):

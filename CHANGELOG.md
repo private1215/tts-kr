@@ -4,6 +4,61 @@
 > 当前生效的行为以 `README.md` 与 `docs/` 为准；早期条目里的部分验收结论
 > 可能已被后续改动推翻，这类地方都有 ⚠️ 标注，不要照抄早期结论排查问题。
 
+## 2026-09-29 晚 双引擎显存串行（选型路径）＋ 生成路径 P0
+
+### 背景：12G 卡放不下两个引擎，任何「并行驻留」都 OOM
+
+两个引擎必须独立进程（torch 版本冲突），但共用一张 12G 卡：
+Qwen 常驻 ~4.2 GiB / 峰值实测 **10.52 GiB**（开启保真增强时，旧基线 6.97 已过时），
+CosyVoice3 加载需 ~3.2 GiB。只要 Qwen 跑过一轮，CosyVoice3 再加载必炸：
+
+```
+_pickle.UnpicklingError: Weights only load failed ... WeightsUnpickler error:
+CUDA out of memory. Tried to allocate 20.00 MiB. GPU
+```
+
+### 改动（选型路径，已部署生效）
+
+1. **`app/cosy_server.py`**：新增 `_release_model()` —— 单纯的 `del + empty_cache`
+   **不够**，`/unload` 返回后 nvidia-smi 仍显示本进程持有 5~7.6 GiB（torch 缓存引用环）。
+   必须 `gc.collect() → synchronize → empty_cache → gc.collect() → empty_cache`。
+   `/unload` 响应新增 `was_loaded` 与 `gpu_free_gib`（整卡空闲显存）。
+2. **`app/tts_engine.py`**：新增 `TTSEngine.unload()`，卸载后置 `variant=None`，
+   下次生成经 `_ensure_variant` 自动重载，无需手动恢复。
+3. **`app/engine_select.py`**：`_switch_engine()` 跑某引擎前先卸另一个；
+   `_wait_free_vram()` 以 `torch.cuda.mem_get_info()` **轮询验证**整卡空闲量
+   （超时只告警不阻断）；`_SELECT_LOCK` 防并发选型；候选**按引擎分组连跑**，
+   整轮只在引擎边界切换一次；收尾 `_finish_benchmark()` 卸 Cosy 并重载 Qwen 恢复常驻。
+4. **`app/server.py`**：`/api/voices/{name}/auto-select` 加 409 守卫，
+   队列里有 running/queued 时拒绝跑选型（选型要独占整卡）。
+
+### 实测验收（builtin_female，2026-09-29 14:01~14:08 服务器时间）
+
+| 候选 | 引擎 | CER | 句内动态 | score |
+|---|---|---|---|---|
+| standard | qwen | **0.0047** | **9.36** | **9.318** |
+| warm | cosyvoice3 | 0.0351 | 8.68 | 8.334 |
+| excited | cosyvoice3 | 0.0790 | 9.02 | 8.225 |
+| serious | cosyvoice3 | 0.0790 | 8.59 | 7.800 |
+
+修复前四个候选**全部 `cer=None, ok=False`**（CosyVoice3 加载即 OOM）；
+修复后四个候选全部拿到真实 CER，整轮耗时 430s。
+期间日志出现两次「等待空闲显存超时（2.9 / 1.9 GiB）仍继续」——轮询是**兜底而非硬门槛**，
+超时不阻断，最终仍成功。
+
+### ⚠️ 仍然存在的 P0（本轮**未修**，待确认后处理）
+
+**生成路径切 CosyVoice3 时没有先卸 Qwen。** `run_job → _synth_cosy` 直接调
+`cosy_client.synth()`；显存串行目前只写在选型路径（`engine_select`）里。
+→ Qwen 任务结束后进程仍持 8.2 GiB，紧接着的 excited/warm/serious 任务让
+CosyVoice3 加载 → OOM → HTTP 500 → **整个任务失败**（无兜底回退，异常直接冒泡）。
+
+今日已失败两单：`9d95858c`（12:55 RemoteDisconnected）、`2a8e4e31`（14:11 HTTP 500）。
+另：cosy 进程当前残留 3676 MiB 半加载模型（加载失败留下的），
+GPU 占用 11903/12288 MiB，接近饱和。
+
+---
+
 ## 2026-09-29（第四轮 E）双引擎并存：员工只选「情感」，引擎自动分流
 
 ### 背景

@@ -133,9 +133,46 @@ CosyVoice3 出片后仍走 ASR 内容回检；**CER > `TTS_COSY_FALLBACK_CER`（
 → **最终裁决权在人耳。** 情感选项就是给员工这个旋钮，
 听完用脚投票；不要拿上表的指标当验收标准。
 
-## 7. 已知遗留
+## 7. 显存串行（12G 卡上唯一的活法）
 
-- `engine_select.py`（音色级自动选型：新增音色时自动 A/B 打分绑定引擎）
-  已写好但**尚未接入音色创建流程**，当前生效的是静态 `EMOTION_PRESETS` 映射。
+两个引擎**不能同时驻留**：Qwen 常驻 ~4.2 GiB / 峰值实测 **10.52 GiB**（开启保真增强时），
+CosyVoice3 加载需 ~3.2 GiB。原则是「**先这个、后那个**」：跑某引擎前把另一个
+从显存彻底赶出去，并且**等显存真的释放**。
+
+关键坑：`del + empty_cache` **不够**。跨进程场景（`/unload` HTTP 返回后）
+nvidia-smi 仍显示该进程持有 5~7.6 GiB（torch 缓存引用环未回收），立即加载另一个引擎必 OOM。
+正确姿势：
+
+```
+gc.collect() → torch.cuda.synchronize() → empty_cache() → gc.collect() → empty_cache()
+再以 torch.cuda.mem_get_info() 轮询整卡空闲量做验证（超时只告警，不阻断）
+```
+
+已实现位置：
+
+| 位置 | 作用 |
+|---|---|
+| `cosy_server._release_model()` | CosyVoice3 侧重释放，`/unload` 回 `gpu_free_gib` |
+| `TTSEngine.unload()`（`tts_engine.py`） | Qwen 侧卸载，置 `variant=None`，下次生成懒加载自恢复 |
+| `engine_select._switch_engine()` / `_wait_free_vram()` | 跑候选前卸对方 + 轮询验证空闲显存 |
+| `engine_select._SELECT_LOCK` | 防两个选型并发抢同一块显存 |
+| `engine_select._finish_benchmark()` | 收尾卸 Cosy、重载 Qwen 恢复常驻稳态 |
+| `server.py` `/api/voices/{name}/auto-select` | 队列有 running/queued 时返回 409（选型要独占整卡） |
+
+验收（builtin_female，2026-09-29 14:01~14:08 服务器时间）：修复前四个候选全部
+`cer=None / ok=False`（CosyVoice3 加载即 OOM）；修复后全部拿到真实 CER
+（qwen 0.0047 / warm 0.0351 / excited 0.0790 / serious 0.0790），整轮 430s。
+
+## 8. ⚠️ 已知遗留 / 未修
+
+- **P0：生成路径切 CosyVoice3 时没有先卸 Qwen。** 显存串行目前只写在选型路径，
+  `run_job → _synth_cosy` 直接调 `cosy_client.synth()`，没调 `engine.unload()`。
+  → Qwen 跑完后进程仍持 ~8 GiB，紧接着的 excited/warm/serious 任务让 CosyVoice3
+  加载 → OOM → HTTP 500 → **整个任务失败**（无兜底回退）。
+  今日已失败两单：`9d95858c`（12:55）、`2a8e4e31`（14:11）。
+- ~~`engine_select.py` 未接入音色创建流程~~ **已解决**：录入音色后自动跑选型，
+  并有 `POST /api/voices/{name}/auto-select` 手动补跑；`run_job` 在默认情感时读 `voice["auto"]`。
+- 选型打分 `score = -10×CER + dyn`：Qwen 的 CER 极低（0.0047），动态稍低也总是赢，
+  两个内置音色最终都选了 qwen/standard。**员工显式选情感时不受影响**（尊重员工选择）。
 - CosyVoice3 未启用 fp16 / TensorRT / vLLM，速度还有优化空间。
-- 两个引擎同时常驻时峰值约 7.5 GiB，靠空闲卸载规避；若并发任务增多需复核。
+- 两个引擎同时常驻时峰值约 7.5 GiB —— **该数字已被 10.52 GiB 实测值取代**，靠空闲卸载规避不再够用。

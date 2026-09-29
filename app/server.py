@@ -1433,6 +1433,12 @@ async def rerun_voice_auto_select(request: Request, name: str):
     v = voices.get(name)
     if not v:
         raise HTTPException(404, "音色不存在")
+    # 和录入路径同一道守卫：队列里有任务在跑时不能跑选型 ——
+    # 选型要独占整卡（先卸 Qwen 跑 CosyVoice3，再卸 Cosy 恢复 Qwen），
+    # 与正在生成的任务并行必 OOM。
+    _busy = any(j.get("status") in ("running", "queued") for j in jobs.values())
+    if _busy:
+        raise HTTPException(409, "队列里有正在生成/排队的任务，选型需要独占显卡，请等队列空了再试")
     try:
         loop = asyncio.get_running_loop()
         t0 = time.time()

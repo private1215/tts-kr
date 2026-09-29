@@ -13,7 +13,10 @@
 | 本 README | 环境、部署、核心机制速览、同步方式、待办 |
 | `CHANGELOG.md` | 按次记录每次改动的背景 / 改动 / **实测验收数据** |
 | `docs/声音克隆机制与排障.md` | 克隆链路完整机制、参数表、已踩过的坑与判读方法 |
+| **`docs/CosyVoice3双引擎方案.md`** | **双引擎（Qwen + CosyVoice3）架构、情感分流、显存串行、遗留问题** |
 | `docs/产能与排障分析报告-2026-09-27.md` | 7 人团队产能模型、排队论、错峰规范 |
+| `docs/语感优化分析-2026-09-29.md` | 韵律六维体检与对齐 ElevenLabs 的实测结论 |
+| `docs/内置音色与自动分块方案.md` | 内置克隆音色、自动分块独立输出 |
 | **`docs/从零部署与迁移.md`** | **换新服务器时照这个走**（含 torch CPU 版陷阱、模型下载、数据迁移、验收清单） |
 | `docs/bench_result.json` | batch 选型 benchmark 原始数据 |
 
@@ -311,6 +314,12 @@ env -u HTTPS_PROXY -u https_proxy -u HTTP_PROXY -u http_proxy \
 
 ### 功能
 
+- [ ] **P0（2026-09-29 发现，未修）**：生成路径切 CosyVoice3 时**没有先卸 Qwen 模型**。
+      显存串行目前只写在选型路径（`engine_select`），`run_job → _synth_cosy` 直接调
+      `cosy_client.synth()`。→ Qwen 跑完进程仍持 ~8 GiB，紧接着的 excited/warm/serious
+      任务让 CosyVoice3 加载 → OOM → HTTP 500 → **整个任务失败且无兜底回退**。
+      今日已失败两单：`9d95858c`（12:55）、`2a8e4e31`（14:11）。
+      详见 `docs/CosyVoice3双引擎方案.md` 第 8 节
 - [ ] 参考音频无 ASR 校验：文字稿是否真的对应音频，只能靠录入时的语速告警（4.5~12 字/秒）
       间接判断。若后续发现克隆质量不稳，可考虑接 ASR 做强制对齐。
       **2026-09-28 已用 Whisper small 手工核验过现网唯一音色**：转录结果与 `ref_text`
