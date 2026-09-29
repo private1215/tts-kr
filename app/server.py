@@ -126,7 +126,11 @@ COSY_FALLBACK_CER = float(os.environ.get("TTS_COSY_FALLBACK_CER", "0.15"))
 # 新增音色时是否自动跑「引擎 + 情感」选型，把最优组合绑到这个音色上。
 # 之后员工选默认情感（standard）生成时不再写死走 Qwen，而是走该音色的最优组合。
 # 置 0 可退回上面的静态映射，便于 A/B 对照。
-AUTO_SELECT_ON_CREATE = os.environ.get("TTS_AUTO_SELECT_ON_CREATE", "1") != "0"
+# ⚠️ 默认关闭。原因（2026-09-29 实测）：选型要连着跑 Qwen + CosyVoice3 两个模型，
+# 而 Qwen 常驻 6.89 GiB、CosyVoice 还要 3.2 GiB，12G 卡放不下 —— 两边互相 OOM。
+# 在做出「GPU 串行锁 + 选型前先卸载对方模型」之前，不能开着它跑生产，
+# 否则员工录入音色时会挤爆正在生成的任务。
+AUTO_SELECT_ON_CREATE = os.environ.get("TTS_AUTO_SELECT_ON_CREATE", "0") != "0"
 
 MODEL_DIRS = {
     "custom_voice": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-CustomVoice"),

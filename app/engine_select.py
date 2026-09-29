@@ -30,12 +30,19 @@ import soundfile as sf
 
 log = logging.getLogger("tts")
 
-# 试听文本：一段中性的韩语股东播报体，足够长才能测出语调和可懂度
+# 试听文本：一段中性的韩语股东播报体。
+# ⚠️ 必须**明显长于**「情感指令 + 参考音频文字稿」（实测约 240 字），否则
+#   CosyVoice3 会报 `too short than prompt text` 并直接失败 —— 这是踩过的坑。
 PREVIEW_TEXT = (
     "안녕하세요. 주주 여러분, 반갑습니다. "
     "오늘 시장은 생각보다 훨씬 더 강한 흐름을 보여주고 있습니다. "
     "외인 창구에서는 순매도를 기록하고 있지만, 개인과 기관은 매집 흐름을 이어가고 있습니다. "
-    "지금 구간에서는 절대 섣불리 판단하시면 안 됩니다."
+    "투매가 끝났다, 세력 매집이 끝났다, 이렇게 확정 지을 순 없습니다. "
+    "수급 창을 한번 보실까요? 지금 구간에서는 절대 섣불리 판단하시면 안 됩니다. "
+    "무엇보다 중요한 건 시나리오 매매의 뼈대를 세우는 겁니다. "
+    "첫째, 이탈하면 손절입니다. 둘째, 뚫어주면 홀딩입니다. "
+    "셋째, 거래량이 실리지 않으면 관망입니다. "
+    "이 원칙은 어떤 종목에도 그대로 적용됩니다."
 )
 
 # CER 及格线：超过就认为念错太多，直接淘汰
@@ -182,8 +189,24 @@ def benchmark_voice(ref_wav, ref_text, language="Korean",
     tmp_dir = tmp_dir or tempfile.gettempdir()
     results = []
 
+    # ⚠️ 显存互斥：12G 卡放不下「Qwen 常驻 6.9 GiB + CosyVoice 3.2 GiB」同时存在。
+    # 实测两边会互相 OOM。所以每个候选开跑前，先把对方从显存里赶出去。
+    def _release_other(engine_name):
+        try:
+            import torch
+            torch.cuda.empty_cache()
+        except Exception:
+            pass
+        if engine_name != "cosyvoice3":
+            try:
+                import cosy_client
+                cosy_client.unload()
+            except Exception:
+                pass
+
     for p in presets:
         t0 = time.time()
+        _release_other(p["engine"])
         wav = os.path.join(tmp_dir, f".sel_{p['key']}_{int(t0 * 1000)}.wav")
         try:
             err = _make_wav(p["engine"], text, ref_wav, ref_text,
