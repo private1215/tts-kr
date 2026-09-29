@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """音色级「引擎 + 情感」自动选型。
 
 设计目标：员工只选「音色 + 语速」，引擎和情感一律由后端决定。
@@ -15,9 +14,13 @@
   这样既保证念得对，又尽量不平淡。
 
 候选集合来自 server.EMOTION_PRESETS（引擎 + 情感组合）。
+
+⚠️ 两个踩过的坑（改这里必看）：
+  1) tts_engine.synth_long 的 ref_audio 必须是 **(audio, sr) 元组**，传裸数组会炸
+  2) Qwen 必须复用 server.engine 全局实例，**不能 new TTSEngine()** ——
+     那会把同一个模型再加载一份进显存（约 4.2 GiB）
 """
 import os
-import re
 import time
 import logging
 import tempfile
@@ -91,6 +94,9 @@ def prosody_score(path):
             x = x.mean(axis=1)
         if len(x) < sr:
             return None
+        if sr != 24000:
+            x = librosa.resample(x, orig_sr=sr, target_sr=24000)
+            sr = 24000
         segs = _sentence_windows(x, sr)
         if not segs:
             segs = [(0, len(x))]
@@ -125,6 +131,41 @@ def _cer(wav_path, text, language="Korean"):
     return r.get("cer")
 
 
+def _qwen_engine():
+    """复用 server 的全局引擎实例，避免重复加载模型占显存。"""
+    import server
+    eng = getattr(server, "engine", None)
+    if eng is None:                      # 独立脚本调用时兜底
+        from tts_engine import TTSEngine
+        eng = TTSEngine()
+    return eng
+
+
+def _make_wav(engine_name, text, ref_wav, ref_text, instruct, language, wav):
+    """跑一个候选，把结果写成 wav。返回错误信息字符串，成功返回 ''。"""
+    if engine_name == "cosyvoice3":
+        import cosy_client
+        audio, sr, meta = cosy_client.synth(
+            text=text, ref_wav=ref_wav, ref_text=ref_text or "",
+            instruct=instruct or "neutral")
+        if audio is None:
+            return (meta.get("error") or "合成失败")[:160]
+        sf.write(wav, audio, sr)
+        return ""
+
+    # Qwen：ref_audio 必须是 (audio, sr) 元组
+    data, sr = sf.read(ref_wav, dtype="float32")
+    if data.ndim > 1:
+        data = data.mean(axis=1)
+    eng = _qwen_engine()
+    audio, out_sr, _st = eng.synth_long(
+        text=text, mode="clone", language=language, speaker=None,
+        instruct="", ref_audio=(data, sr), ref_text=ref_text,
+        max_chars=60, batch_size=8, seed=42)
+    sf.write(wav, audio, out_sr)
+    return ""
+
+
 def benchmark_voice(ref_wav, ref_text, language="Korean",
                     presets=None, text=None, tmp_dir=None):
     """对一组「引擎+情感」候选各跑一次，返回打分后的排序结果。
@@ -141,35 +182,19 @@ def benchmark_voice(ref_wav, ref_text, language="Korean",
     tmp_dir = tmp_dir or tempfile.gettempdir()
     results = []
 
-    import cosy_client
     for p in presets:
         t0 = time.time()
-        wav = os.path.join(tmp_dir, f".sel_{p['key']}_{int(t0)}.wav")
+        wav = os.path.join(tmp_dir, f".sel_{p['key']}_{int(t0 * 1000)}.wav")
         try:
-            if p["engine"] == "cosyvoice3":
-                audio, sr, meta = cosy_client.synth(
-                    text=text, ref_wav=ref_wav, ref_text=ref_text or "",
-                    instruct=p["instruct"] or "neutral")
-                if audio is None:
-                    log.warning("候选 %s 生成失败: %s", p["key"], meta.get("error"))
-                    results.append(dict(p, cer=None, dyn=None, score=None, ok=False,
-                                        error=(meta.get("error") or "")[:120]))
-                    continue
-                sf.write(wav, audio, sr)
-            else:
-                # Qwen 走本地引擎
-                from tts_engine import TTSEngine
-                eng = TTSEngine()
-                _a, _ = sf.read(ref_wav, dtype="float32")
-                if _a.ndim > 1:
-                    _a = _a.mean(axis=1)
-                audio, sr, _st = eng.synth_long(
-                    text=text, mode="clone", language=language, speaker=None,
-                    instruct="", ref_audio=_a, ref_text=ref_text,
-                    max_chars=60, batch_size=8, seed=42)
-                sf.write(wav, audio, sr)
+            err = _make_wav(p["engine"], text, ref_wav, ref_text,
+                            p.get("instruct") or "", language, wav)
+            if err:
+                log.warning("候选 %s 生成失败: %s", p["key"], err)
+                results.append(dict(p, cer=None, dyn=None, score=None, ok=False,
+                                    error=err[:120]))
+                continue
         except Exception as e:
-            log.warning("候选 %s 异常: %s", p["key"], repr(e)[:160])
+            log.warning("候选 %s 异常: %s", p["key"], repr(e)[:200])
             results.append(dict(p, cer=None, dyn=None, score=None, ok=False,
                                 error=repr(e)[:120]))
             continue
@@ -208,3 +233,51 @@ def pick_best(results):
     if withcer:
         return min(withcer, key=lambda r: r["cer"])
     return results[0]
+
+
+def select_for_voice(name, voice, language="Korean", save=True):
+    """为一个已录入的音色跑选型，把最优组合写回 voices。
+
+    voice: voices[name] 字典，至少含 path / ref_text
+    返回写入的 auto 字典（失败返回 None）。
+    """
+    ref_wav = voice.get("path") or ""
+    ref_text = voice.get("ref_text") or ""
+    if not ref_wav or not os.path.exists(ref_wav):
+        log.warning("音色 %s 参考音频不存在，跳过选型", name)
+        return None
+    t0 = time.time()
+    results = benchmark_voice(ref_wav, ref_text, language=language)
+    best = pick_best(results)
+    if not best:
+        log.warning("音色 %s 选型无可用结果", name)
+        return None
+
+    auto = {
+        "engine": best.get("engine"),
+        "emotion": best.get("key"),
+        "instruct": best.get("instruct") or "",
+        "cer": best.get("cer"),
+        "dyn": best.get("dyn"),
+        "score": best.get("score"),
+        "selected_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "elapsed": round(time.time() - t0, 1),
+        "candidates": [
+            {k: r.get(k) for k in ("key", "engine", "cer", "dyn", "score", "ok")}
+            for r in results
+        ],
+    }
+    log.info("音色 %s 自动选型 -> 引擎=%s 情感=%s (CER=%s 动态=%s)，候选 %d 个，耗时 %.0fs",
+             name, auto["engine"], auto["emotion"], auto["cer"], auto["dyn"],
+             len(results), time.time() - t0)
+    if save:
+        try:
+            import server
+            v = server.voices.get(name)
+            if v is not None:
+                v["auto"] = auto
+                server.save_voices(server.voices)
+        except Exception as e:
+            # 落盘失败不能让整个选型白跑：结果照样返回，调用方本次仍用得上
+            log.warning("音色 %s 选型结果写盘失败: %s", name, repr(e)[:160])
+    return auto

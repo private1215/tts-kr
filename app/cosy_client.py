@@ -23,8 +23,10 @@ log = logging.getLogger("tts")
 COSY_URL = os.environ.get("TTS_COSY_URL", "http://127.0.0.1:8100")
 # 单块生成 RTF 约 1.2，一篇 3700 字约需 10 分钟，超时给足
 COSY_TIMEOUT = float(os.environ.get("TTS_COSY_TIMEOUT", "2400"))
-# 单块最大字数：实测块越长越容易念串/幻觉（CER 显著变差）
-COSY_MAX_CHARS = int(os.environ.get("TTS_COSY_MAX_CHARS", "80"))
+# 单块最大字数。实测（同文本 776 字韩语）块越长 ASR 字错率越低、速度也越快：
+#   80→CER 0.0892/RTF 1.276 | 160→0.0829/1.075 | 240→0.0850/1.229 | 320→0.0727/1.057
+# 最初定 80 是照抄 Qwen 的「短段保 shipment」经验，被数据推翻。
+COSY_MAX_CHARS = int(os.environ.get("TTS_COSY_MAX_CHARS", "320"))
 
 
 def health(timeout: float = 5.0):

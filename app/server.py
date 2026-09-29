@@ -31,6 +31,7 @@ from voice_match import get_target
 from pipeline import CHUNK_MAX_CHARS, split_chunks
 import asr_check
 import cosy_client
+import engine_select
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("server")
@@ -122,6 +123,10 @@ DEFAULT_EMOTION = "standard"
 # CosyVoice3 出片后仍走 ASR 内容回检；CER 超过这个阈值就自动回退 Qwen 重出，
 # 保证「加了情绪也不能把字念错」。
 COSY_FALLBACK_CER = float(os.environ.get("TTS_COSY_FALLBACK_CER", "0.15"))
+# 新增音色时是否自动跑「引擎 + 情感」选型，把最优组合绑到这个音色上。
+# 之后员工选默认情感（standard）生成时不再写死走 Qwen，而是走该音色的最优组合。
+# 置 0 可退回上面的静态映射，便于 A/B 对照。
+AUTO_SELECT_ON_CREATE = os.environ.get("TTS_AUTO_SELECT_ON_CREATE", "1") != "0"
 
 MODEL_DIRS = {
     "custom_voice": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-CustomVoice"),
@@ -225,7 +230,7 @@ def persist_jobs():
             "instruct", "status", "created_at", "started_at", "finished_at",
             "progress", "stats", "wav", "mp3", "error", "preview",
             "max_chars", "batch_size", "enhanced", "speed", "subtalker_temperature",
-            "emotion", "engine",
+            "emotion", "engine", "auto_applied", "effective_emotion",
             # 分块输出：files 是每块的 mp3 清单，不落盘的话重启后
             # 员工就再也下载不到已生成的音频了
             "files", "chunks", "chunks_total", "chunk", "folder", "seed")}
@@ -390,6 +395,20 @@ async def run_job(job):
         ref_audio = read_audio(v["path"])
         ref_wav_path = v["path"]
         ref_key = job["voice"]
+        # 音色级自适应选型：员工用默认情感（「平稳/standard」）时，
+        # 走录入那一刻测出来的最优「引擎+情感」组合，而不是写死用 Qwen。
+        # 员工显式选了其它情感时，一律尊重员工的选择。
+        _auto = v.get("auto")
+        if _auto and _emotion == DEFAULT_EMOTION:
+            _eff_engine = (_auto.get("engine") or _engine_name).strip()
+            if _eff_engine in ("qwen", "cosyvoice3"):
+                _engine_name = _eff_engine
+                _cosy_instruct = _auto.get("instruct") or "neutral"
+                job["engine"] = _engine_name
+                job["auto_applied"] = True
+                job["effective_emotion"] = _auto.get("emotion") or _emotion
+                log.info("音色「%s」自适应选型生效: 情感=%s -> 引擎=%s",
+                         job["voice"], job["effective_emotion"], _engine_name)
         # 保真增强：取该音色源录音的长时谱作为目标（详见 app/voice_match.py）
         if job.get("enhance"):
             try:
@@ -1362,6 +1381,27 @@ async def upload_voice(request: Request,
     save_voices(voices)
     log.info("录入音色 %s: 原 %.1fs -> 成品 %.2fs, ref_text %d 字, 分析 %.2fs, %s",
              safe, dur, out_dur, len(used_text), info["analyze_seconds"], info)
+
+    # 自动选型：给这个音色实测一遍「哪个引擎 + 哪种情感」最合适，
+    # 结果写回音色，之后员工用默认情感生成时自动走最优组合（零额外操作）。
+    # 选型失败不能连累录入本身 —— 音色必须能用，选型只是锦上添花。
+    # 队列里有任务在跑时不抢 GPU：两个模型同时推理 + 正在生成的任务会 OOM。
+    auto_info = None
+    if AUTO_SELECT_ON_CREATE:
+        _busy = any(j.get("status") in ("running", "queued") for j in jobs.values())
+        if _busy:
+            log.info("队列非空，音色 %s 暂缓自动选型（可在音色列表手动触发）", safe)
+        else:
+            try:
+                loop = asyncio.get_running_loop()
+                t1 = time.time()
+                auto_info = await loop.run_in_executor(
+                    None, engine_select.select_for_voice, safe, voices[safe])
+                log.info("音色 %s 自动选型完成，耗时 %.0fs", safe, time.time() - t1)
+            except Exception as e:
+                log.warning("音色 %s 自动选型失败（不影响使用）: %s", safe, repr(e)[:200])
+                auto_info = None
+
     return {
         "name": safe,
         "dur": round(out_dur, 2),
@@ -1372,7 +1412,34 @@ async def upload_voice(request: Request,
         "clip_end": info.get("clip_end"),
         "ref_text": used_text,
         "warn": warn,
+        "auto": auto_info,
     }
+
+
+@app.post("/api/voices/{name}/auto-select")
+async def rerun_voice_auto_select(request: Request, name: str):
+    """手动重跑某个音色的「引擎 + 情感」自动选型。
+
+    用途：
+      - 老音色（录入早于该功能）补跑一次，让它们也享受自适应路由
+      - 上传时队列忙被跳过，事后补测
+      - 换了模型/参数后重新标定
+    """
+    require(request)
+    v = voices.get(name)
+    if not v:
+        raise HTTPException(404, "音色不存在")
+    try:
+        loop = asyncio.get_running_loop()
+        t0 = time.time()
+        auto = await loop.run_in_executor(
+            None, engine_select.select_for_voice, name, v)
+    except Exception as e:
+        raise HTTPException(500, f"选型失败: {repr(e)[:200]}")
+    if not auto:
+        raise HTTPException(500, "选型无可用结果（参考音频缺失或全部候选失败）")
+    auto["elapsed_total"] = round(time.time() - t0, 1)
+    return {"ok": True, "name": name, "auto": auto}
 
 
 @app.get("/api/voices")

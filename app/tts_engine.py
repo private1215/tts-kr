@@ -174,7 +174,17 @@ def token_cap_for(text: str, language: str = "Korean") -> int:
 # batch_size 上限取 8：本机 bench 实测 batch_8 的 RTF 最优（0.49），
 # batch_4 反而退化到 1.07；同时也是上述预算在 max_chars=60 下的自然解。
 # ---------------------------------------------------------------------------
-SEG_MAX_CHARS = 60          # 单段字数硬上限：超过会韵律漂移、越读越慢
+# 段长为什么值得重新审视：60 字这个值是当年为了「避免韵律漂移、越读越慢」定的，
+# 但它有个副作用一直没被评估 —— **每段都会重新注入一次 ICL 参考前缀**，
+# 模型每 ~10 秒就把韵律重置回同一个基线。这正是员工描述的
+# 「每句一个调 / 像读课本 / 十年前的新闻联播」。放大段长能否换来韵律连贯，
+# 必须实测（见 docs/韵律连续性与分段长度.md）。显存不必担心：
+# plan_generation 会按 seg_token_cap 自动把 batch 缩回来。
+#   ↓ 硬上限：调用方无论传多大都会被压回来（防 OOM 的最后一道闸）
+SEG_MAX_CHARS = int(os.environ.get("TTS_SEG_MAX_CHARS", "") or 60)
+# 调用方不指定时的默认段长。与上限分开，是为了能在现网上按任务做 A/B：
+# 上限放开到 240 但默认仍是 60，旧行为不变，新测试通过任务参数指定。
+SEG_DEFAULT_CHARS = int(os.environ.get("TTS_SEG_DEFAULT_CHARS", "") or 60)
 SEG_MIN_CHARS = 20
 MAX_AUTO_BATCH = 8
 MIN_AUTO_BATCH = 1
@@ -406,9 +416,9 @@ class TTSEngine:
         不传时按普通模式处理（前缀为 0）。
         """
         try:
-            req_mc = int(max_chars) if max_chars else SEG_MAX_CHARS
+            req_mc = int(max_chars) if max_chars else SEG_DEFAULT_CHARS
         except Exception:
-            req_mc = SEG_MAX_CHARS
+            req_mc = SEG_DEFAULT_CHARS
         try:
             req_bs = int(batch_size) if batch_size else MAX_AUTO_BATCH
         except Exception:
@@ -623,7 +633,7 @@ class TTSEngine:
                    speaker: Optional[str] = None, instruct: Optional[str] = None,
                    ref_audio: Optional[Tuple[np.ndarray, int]] = None,
                    ref_text: Optional[str] = None, ref_key: Optional[str] = None,
-                   max_chars: int = SEG_MAX_CHARS, batch_size: int = MAX_AUTO_BATCH,
+                   max_chars: int = SEG_DEFAULT_CHARS, batch_size: int = MAX_AUTO_BATCH,
                    pause_ms: float = 320.0, para_ms: float = 620.0,
                    jitter: float = 0.18, speed_jitter: float = 0.0,
                    seed: int = 42,

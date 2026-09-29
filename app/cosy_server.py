@@ -139,9 +139,11 @@ class SynthReq(BaseModel):
                           description="情感指令；可为 preset 名或自定义文本")
     speed: float = Field(1.0, ge=0.5, le=2.0)
     seed: int = Field(42)
-    max_chars: int = Field(80, ge=20, le=400,
-                           description="按句切分后单块的最大字数；"
-                                       "实测块越长越容易念串/幻觉，默认 80")
+    max_chars: int = Field(320, ge=20, le=400,
+                           description="按句切分后单块的最大字数。"
+                                       "实测（同文本 776 字韩语）块越长 CER 越低："
+                                       "80→0.0892 / 160→0.0829 / 240→0.0850 / 320→0.0727，"
+                                       "故默认取 320")
     text_frontend: bool = Field(False,
                                 description="韩语必须 False，否则文本前端会切坏")
 
