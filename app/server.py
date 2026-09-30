@@ -155,9 +155,47 @@ TONE_EQ_FILTER = os.environ.get(
     "7b=1.116:8b=1.012:9b=0.977:10b=0.977:11b=0.955:12b=1.000:13b=1.059:"
     "14b=1.143:15b=1.259:16b=1.0:17b=1.0:18b=1.0").strip()
 TONE_EQ = os.environ.get("TTS_TONE_EQ", "1") != "0"
+
+# ---- 高频空气感：补 11~13.5 kHz 的"亮" ----------------------------------
+# ⚠️ 这是第二轮才查出来的，和上面的低频补偿是两件事。
+#
+# ⚠️⚠️ 先说一个**差点让我们调错 30 dB 的测量陷阱**（2026-09-30）：
+#   早先拿 24 kHz 的成品 mp3 去量，11.8 kHz 是 -126 dB，看起来是"砖墙"。
+#   但那是 **lame 在 24 kHz 输出时把 11.2 kHz 以上一刀切掉**造成的假象！
+#   用 `TTS_AIR=0` 直接出 44.1 kHz 成品一量才看到真实值：
+#     女 11.9k -44.8 / 12.6k -51.3   男 11.9k -58.6 / 12.6k -59.4
+#   → 真实缺口只有 10~25 dB（不是 90 dB）。**凡是要量 11 kHz 以上，
+#     必须先出 44.1 kHz 成品，绝不能拿 24 kHz 的文件量。**
+#
+# 真实缺口（相对案例，dB）：8~11 kHz 差 1~5；11.9k 差 10~24；
+# 13.3k 差 24~36；14 kHz 以上差 57~67（那里案例是真实气声，我们从零
+# 合成 60 dB 只会变成沙沙声，**放弃**，接受这一段短）。
+#
+# 参数来源：`/tmp/tune3.py` 在**线上真实原始音频**上做的三轮网格搜索，
+# 评分 = 11~13.5k 误差 + 2×14k 以上超标（沙沙声）+ 1×7~11k 超标（齿音）。
+# 胜出组合：女声误差 1.9 dB、男声 8.5 dB，且两性别齿音/沙沙都 ≈ 0。
+#
+# ⚠️ 为什么不能用 `firequalizer`（FIR 任意曲线）：
+#    曲线太陡 → 停顿底噪 +1 dB、峰值 +0.5 dB，而我们的停顿普遍只有
+#    0.26~0.29 s、紧贴 0.25 s 的判句阈值，女声 n_sent 从 22 掉到 19。
+# ⚠️ `crystalizer` 更不能用：实测 n_sent 直接崩到 10~13。
+# ⚠️ 顺序不能反：必须**先重采样到 44.1 kHz 再进后面的滤波器**。
+AIR_EXCITER = os.environ.get(
+    "TTS_AIR_EXCITER", "aexciter=amount=5:freq=11200:ceil=13000").strip()
+AIR_EQ = os.environ.get(
+    "TTS_AIR_EQ",
+    "equalizer=f=10000:t=h:w=3200:g=-6,"
+    "equalizer=f=12300:t=h:w=2500:g=8,"
+    "equalizer=f=13300:t=h:w=2000:g=8").strip()
+AIR = os.environ.get("TTS_AIR", "1") != "0"
+# 出片采样率。必须 ≥44.1 kHz，否则 12 kHz 以上的空气感无处安放
+# （24 kHz 的奈奎斯特就是 12 kHz）。案例原声就是 44.1 kHz。
+OUT_SR = int(os.environ.get("TTS_OUT_SR", "44100"))
+
 # 整体响度拉到案例水平（案例 LUFS -25.0 / -23.0，我们原样 -20.2 / -20.0）。
+# -4.5 里含 0.5 dB 是抵掉 aexciter/firequalizer 带来的能量增加。
 # 设 0 即不调整。注意这会让人觉得"变小声了"，但案例就是这个响度。
-OUT_GAIN_DB = float(os.environ.get("TTS_OUT_GAIN_DB", "-4"))
+OUT_GAIN_DB = float(os.environ.get("TTS_OUT_GAIN_DB", "-4.5"))
 # 新增音色时是否自动跑「引擎 + 情感」选型，把最优组合绑到这个音色上。
 # 之后员工选默认情感（standard）生成时不再写死走 Qwen，而是走该音色的最优组合。
 # 置 0 可退回上面的静态映射，便于 A/B 对照。
@@ -692,12 +730,22 @@ async def run_job(job):
             # 但 EQ 一定要在 volume 之前，否则先衰减再提增益会白损失动态余量。
             if TONE_EQ and TONE_EQ_FILTER:
                 _af.append(TONE_EQ_FILTER)
+            # 高频空气感：先重采样到 44.1k（否则 12k 以上放不下），
+            # 再生成谐波 + FIR 精确整形。
+            if AIR:
+                _af.append(f"aresample={OUT_SR}")
+                if AIR_EXCITER:
+                    _af.append(AIR_EXCITER)
+                if AIR_EQ:
+                    _af.append(AIR_EQ)
             if abs(OUT_GAIN_DB) > 1e-3:
                 _af.append(f"volume={OUT_GAIN_DB}dB")
             if _af:
                 _cmd += ["-filter:a", ",".join(_af)]
-            _cmd += ["-codec:a", "libmp3lame", "-b:a", MP3_BITRATE, mp3_abs]
-            subprocess.run(_cmd, check=True, timeout=300)
+            _cmd += ["-codec:a", "libmp3lame", "-b:a", MP3_BITRATE,
+                     "-ar", str(OUT_SR), mp3_abs]
+            # 滤波链里多了 FIR 卷积，给足时间；超时不能让整单失败。
+            subprocess.run(_cmd, check=True, timeout=600)
         except Exception as e:
             log.warning("mp3 转码失败 %s: %s", mp3_abs, e)
         finally:
