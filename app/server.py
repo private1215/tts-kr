@@ -238,6 +238,66 @@ OUT_SR = int(os.environ.get("TTS_OUT_SR", "44100"))
 # -4.5 里含 0.5 dB 是抵掉 aexciter/firequalizer 带来的能量增加。
 # 设 0 即不调整。注意这会让人觉得"变小声了"，但案例就是这个响度。
 OUT_GAIN_DB = float(os.environ.get("TTS_OUT_GAIN_DB", "-4.5"))
+# ---- 分性别响度偏移：修男声「像吵架」--------------------------------------
+# 2026-09-30 员工听后感：「男声前半段有点跟吵架似的，女声的还算好点」。
+# 逐 20s 窗测有声段 RMS（/tmp/win.py），案例男声是**全程都比我们小**：
+#
+#     有声段响度    案例男 -9.8 dB    我们 r10 -7.5 dB  （+2.3 dB，偏吵）
+#     有声段响度    案例女 -8.5 dB    我们 r10 -8.9 dB  （-0.4 dB，正常）
+#     2~8k 锐度     案例男 0.1216     我们 0.1602（+32%）   ← 男女都偏，不是主因
+#     attack/s      案例男 7.93       我们 8.33（+5%）
+#
+# 锐度男女都高 25~32% 但只有男声被投诉 → **主因是响度，不是音色**。
+# 而且案例男声的响度在 -8~-11 之间起伏，我们恒定在 -6~-8 ——「全程满音量」
+# 本身就听着像在嚷。
+#
+# ⚠️ 这是两点拟合（男 -24.9 / 女 -22.9 LUFS），不是定理；用 f0 判性别，
+#    判不出来就用 0 dB。想关掉设 TTS_GAIN_GENDER=0。
+GAIN_GENDER = os.environ.get("TTS_GAIN_GENDER", "1") != "0"
+GAIN_MALE_DB = float(os.environ.get("TTS_GAIN_MALE_DB", "-1.7"))
+GAIN_FEMALE_DB = float(os.environ.get("TTS_GAIN_FEMALE_DB", "0.5"))
+F0_SPLIT_HZ = float(os.environ.get("TTS_F0_SPLIT_HZ", "220"))
+
+# ---- 块尾分段停顿 ----------------------------------------------------------
+# 案例（ElevenLabs）的段落之间是 0.45~0.66 s 的真换气；我们两块 mp3 拼起来
+# 中间只有编码残留的 0.1~0.2 s 数字零，员工听起来就是"没有分段"。
+# 给非最后一块补到 600 ms（与 pipeline.para_ms=620 同一量级），置 0 可关。
+CHUNK_TAIL_PAUSE_MS = float(os.environ.get("TTS_CHUNK_TAIL_PAUSE_MS", "600"))
+CHUNK_TAIL_SIL_DB = float(os.environ.get("TTS_CHUNK_TAIL_SIL_DB", "-45"))
+
+
+def est_f0_hz(y, sr, sec=20.0, fmin=60.0, fmax=400.0):
+    """估基频中位数，只用来判男女。判不出返回 None。
+
+    ⚠️ 别用「纯 numpy 自相关」那版：实测女声会系统性读低
+       （案例女 pyin 269Hz / 自相关 221Hz，我们女声 287/209 —— 209 已经
+       跌破 210 的男女分界，会把女声误判成男声砍掉 1.7 dB）。
+       改用与 `pros.py` 同口径的 `librosa.pyin`，只跑中间 20 秒，约 1~2 s。
+    """
+    try:
+        import librosa
+        y = np.asarray(y, dtype=np.float32).flatten()
+        if y.size < 16000:
+            return None
+        y16 = librosa.resample(y, orig_sr=sr, target_sr=16000) if sr != 16000 \
+            else y
+        n = len(y16)
+        a = int(n * 0.25)
+        b = min(n, a + int(sec * 16000))
+        seg = y16[a:b]
+        if len(seg) < 16000:
+            seg = y16[:min(n, int(sec * 16000))]
+        f0 = librosa.pyin(seg, fmin=fmin, fmax=fmax, sr=16000,
+                          frame_length=1024)[0]
+        v = f0[~np.isnan(f0)] if f0 is not None else np.array([])
+        if len(v) < 20:
+            return None
+        return float(np.median(v))
+    except Exception as e:
+        log.warning("est_f0_hz 失败（%s）", repr(e)[:120])
+        return None
+
+
 # 新增音色时是否自动跑「引擎 + 情感」选型，把最优组合绑到这个音色上。
 # 之后员工选默认情感（standard）生成时不再写死走 Qwen，而是走该音色的最优组合。
 # 置 0 可退回上面的静态映射，便于 A/B 对照。
@@ -780,6 +840,59 @@ async def run_job(job):
         # PBA 削掉的静音时间靠这一档 atempo 补回来：最终时长 = 原时长 / speed，
         # 与不开 PBA 时一致，员工侧的时长预估和统计都不受影响。
         _atempo = _speed * _pba_ratio
+        # ---- 块尾分段停顿：修「听着没有分段」--------------------------------
+        # split_chunks 只在句末/段末断开，但两块是**两个独立 mp3**，拼起来时
+        # 接缝处只有 mp3 编码留下的约 0.1~0.2 s 数字零（实测块1 尾部从 -33dB
+        # 直接掉到 -165dB），远短于段落级停顿 → 听感上"两段粘成一条"。
+        # 这里给**非最后一块**补一段静音，补到 CHUNK_TAIL_PAUSE_MS 为止
+        # （先量已有尾部静音，不够才补），员工把几个 mp3 顺序拼起来就是
+        # 自然的换气/分段。
+        if CHUNK_TAIL_PAUSE_MS > 0 and ci < len(chunks) - 1:
+            try:
+                _fr = max(int(sr * 0.02), 1)
+                _n = len(audio) // _fr
+                if _n >= 4:
+                    _e = np.sqrt((audio[:_n * _fr].reshape(_n, _fr) ** 2)
+                                 .mean(axis=1))
+                    _db = 20 * np.log10(_e + 1e-9)
+                    _tail = 0
+                    for _v in _db[::-1]:
+                        if _v < CHUNK_TAIL_SIL_DB:
+                            _tail += 1
+                        else:
+                            break
+                    _have = _tail * _fr / float(sr) * 1000.0
+                    _need = CHUNK_TAIL_PAUSE_MS - _have
+                    if _need > 20:
+                        # atempo 会把这段一起拉长，先除回去
+                        _pad = np.zeros(int(sr * _need / 1000.0 / max(
+                            _atempo, 0.25)), dtype=audio.dtype)
+                        audio = np.concatenate([audio, _pad])
+                        log.info("任务 %s 第 %d 块 补分段停顿 %.0fms"
+                                 "（原有尾部静音 %.0fms）", jid, ci + 1,
+                                 _need, _have)
+            except Exception as _e:
+                log.warning("任务 %s 第 %d 块 补分段停顿失败（跳过）: %r",
+                            jid, ci + 1, _e)
+        # 分性别响度偏移：整段只判一次（同一个音色不会有男女混着的情况），
+        # 判不出来就退回 0 dB。
+        if "_gain_off" not in job:
+            _off = 0.0
+            if GAIN_GENDER:
+                try:
+                    _f0 = est_f0_hz(audio, sr)
+                except Exception:
+                    _f0 = None
+                if _f0 is None:
+                    log.info("任务 %s 性别判定失败（f0 测不出），响度偏移 0 dB",
+                             jid)
+                else:
+                    _male = _f0 < F0_SPLIT_HZ
+                    _off = GAIN_MALE_DB if _male else GAIN_FEMALE_DB
+                    log.info("任务 %s 性别判定 f0=%.0fHz -> %s，响度偏移 %+.1f dB",
+                             jid, _f0, "男" if _male else "女", _off)
+            job["_gain_off"] = _off
+        _gain_db = OUT_GAIN_DB + float(job.get("_gain_off") or 0.0)
         mp3_name = f"{base_name}-{ci + 1}.mp3"
         mp3_abs = os.path.join(folder_path, mp3_name)
         job["stage"] = "encoding"
@@ -804,8 +917,8 @@ async def run_job(job):
                     _af.append(AIR_EXCITER)
                 if AIR_EQ:
                     _af.append(AIR_EQ)
-            if abs(OUT_GAIN_DB) > 1e-3:
-                _af.append(f"volume={OUT_GAIN_DB}dB")
+            if abs(_gain_db) > 1e-3:
+                _af.append(f"volume={_gain_db:.2f}dB")
             if _af:
                 _cmd += ["-filter:a", ",".join(_af)]
             _cmd += ["-codec:a", "libmp3lame", "-b:a", MP3_BITRATE,
