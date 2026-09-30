@@ -33,6 +33,7 @@ import asr_check
 import cosy_client
 import vram
 import engine_select
+import pba
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("server")
@@ -124,6 +125,13 @@ DEFAULT_EMOTION = "standard"
 # CosyVoice3 出片后仍走 ASR 内容回检；CER 超过这个阈值就自动回退 Qwen 重出，
 # 保证「加了情绪也不能把字念错」。
 COSY_FALLBACK_CER = float(os.environ.get("TTS_COSY_FALLBACK_CER", "0.15"))
+# 停顿预算对齐（PBA）：把 AR 模型涌现的冗余停顿按比例压缩，再用 atempo 把
+# 总时长拉回。α=0.8 是 2026-09-30 全篇（男 1999 字 / 女 1773 字）网格搜索
+# 定下来的：男声句数 96→72（案例 70）、女声 42→24（案例 23），9 项韵律指标
+# 里 8 项改善。设成 1.0 即完全关闭（等价于旧行为）。详见 app/pba.py 文件头。
+PBA_ALPHA = float(os.environ.get("TTS_PBA_ALPHA", "0.8"))
+# 低于这个字数不值得做（太短的片段本来就没有几句，压缩了反而显得赶）。
+PBA_MIN_CHARS = int(os.environ.get("TTS_PBA_MIN_CHARS", "120"))
 # 新增音色时是否自动跑「引擎 + 情感」选型，把最优组合绑到这个音色上。
 # 之后员工选默认情感（standard）生成时不再写死走 Qwen，而是走该音色的最优组合。
 # 置 0 可退回上面的静态映射，便于 A/B 对照。
@@ -628,10 +636,20 @@ async def run_job(job):
             agg["asr_skipped"] += 1
         detail_all.extend(st.get("segments_detail") or [])
 
+        # 停顿预算对齐（PBA）：只切静音，不动任何有声样本，无音质损失。
+        # 丢掉的静音时间在下面用 atempo 拉回，总时长与发音速率一起回到
+        # 案例原声的水平。放在 ASR 回检之后——CER 要量的是模型的原始输出。
+        _pba_ratio = 1.0
+        if PBA_ALPHA < 0.999 and len(chunk_text) >= PBA_MIN_CHARS:
+            audio, _pba_ratio = pba.align(audio, sr, PBA_ALPHA)
+
         # CosyVoice3 已在模型内部按 speed 变速（梅尔谱插值 + 声码器重合成），
         # 这里不能再叠一次 atempo，否则会变两次速。
         _speed = 1.0 if job.get("_cosy_speed_applied") else float(
             job.get("speed") or 1.0)
+        # PBA 削掉的静音时间靠这一档 atempo 补回来：最终时长 = 原时长 / speed，
+        # 与不开 PBA 时一致，员工侧的时长预估和统计都不受影响。
+        _atempo = _speed * _pba_ratio
         mp3_name = f"{base_name}-{ci + 1}.mp3"
         mp3_abs = os.path.join(folder_path, mp3_name)
         job["stage"] = "encoding"
@@ -641,8 +659,8 @@ async def run_job(job):
             # 语速：模型无 speed 接口（见文件头 SPEED_MIN 注释），用 atempo 在
             # 未压缩的 wav 上做一次——只经过一次 mp3 编码，且 atempo 变速不变调。
             _cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", tmp_wav]
-            if abs(_speed - 1.0) > 1e-3:
-                _cmd += ["-filter:a", f"atempo={_speed:.3f}"]
+            if abs(_atempo - 1.0) > 1e-3:
+                _cmd += ["-filter:a", f"atempo={_atempo:.4f}"]
             _cmd += ["-codec:a", "libmp3lame", "-b:a", MP3_BITRATE, mp3_abs]
             subprocess.run(_cmd, check=True, timeout=300)
         except Exception as e:
@@ -984,7 +1002,9 @@ async def meta(request: Request):
         "voice_match_default": VOICE_MATCH_DEFAULT,
         # 语速档位：模型无 speed 接口，靠 ffmpeg atempo 后处理（变速不变调）
         "speeds": [0.8, 0.9, 1.0, 1.1, 1.2, 1.3],
-        "speed_default": 1.0,
+        # 2026-09-30 全量实测（男 1999 字 / 女 1773 字，与案例原声逐项对比）：
+        # 默认 1.0 生成的语速比原声快 11.5~11.9%，降到 0.9 后偏差缩到 +0.4% / +0.7%。
+        "speed_default": 0.9,
         "speed_min": SPEED_MIN, "speed_max": SPEED_MAX,
         # 员工只需要选「情感」；引擎/指令/参数由后端自动分流
         "emotions": [
