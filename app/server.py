@@ -132,6 +132,32 @@ COSY_FALLBACK_CER = float(os.environ.get("TTS_COSY_FALLBACK_CER", "0.15"))
 PBA_ALPHA = float(os.environ.get("TTS_PBA_ALPHA", "0.8"))
 # 低于这个字数不值得做（太短的片段本来就没有几句，压缩了反而显得赶）。
 PBA_MIN_CHARS = int(os.environ.get("TTS_PBA_MIN_CHARS", "120"))
+
+# ---- 音色对齐：修「空旷感 / 薄 / 贴脸」--------------------------------
+# 2026-09-30 全篇实测，我们比案例原声（ElevenLabs 44.1kHz）薄且响：
+#     100~300Hz 占比   男 13.75% vs 25.44%（-46%）  女 9.61% vs 14.45%（-33%）
+#     1000~3000Hz 占比 男 28.32% vs 20.87%（+36%）  女 17.58% vs 11.57%（+52%）
+#     整体 LUFS        男 -20.2 vs -25.0            女 -20.0 vs -23.0
+# 低频（胸腔感）少一半、中高频多三到五成、整体还响 3~4.8dB ——
+# 三者合起来就是员工说的「空旷感」：薄、飘、贴脸、没有实体感。
+#
+# 下面是 18 段图形 EQ（superequalizer），中心频率依次为
+# 65/92/131/185/262/370/523/740/1047/1480/2093/2960/4186/5920/8372/11840/
+# 16744/20000 Hz。⚠️ 取值是**线性倍数**不是 dB（ffmpeg 的定义如此）。
+# 由 1/3 倍频程功率差拟合而来，只保留「男声和女声同向」的那部分（系统性偏差）；
+# 11840Hz 以上一律归 1 —— 我们 24kHz 输出在 12kHz 就截止了，
+# 案例 44.1k mp3 在那里的能量只是编码噪声，照搬会变成沙沙声。
+# 效果（修正后 vs 案例）：男 100-300Hz 21.72 vs 25.44、1-3k 21.65 vs 20.87、
+# LUFS -23.4 vs -25.0；女 15.20 vs 14.45、14.40 vs 11.57、-23.5 vs -23.0。
+TONE_EQ_FILTER = os.environ.get(
+    "TTS_TONE_EQ_FILTER",
+    "superequalizer=1b=1.585:2b=1.778:3b=1.638:4b=1.428:5b=1.393:6b=1.283:"
+    "7b=1.116:8b=1.012:9b=0.977:10b=0.977:11b=0.955:12b=1.000:13b=1.059:"
+    "14b=1.143:15b=1.259:16b=1.0:17b=1.0:18b=1.0").strip()
+TONE_EQ = os.environ.get("TTS_TONE_EQ", "1") != "0"
+# 整体响度拉到案例水平（案例 LUFS -25.0 / -23.0，我们原样 -20.2 / -20.0）。
+# 设 0 即不调整。注意这会让人觉得"变小声了"，但案例就是这个响度。
+OUT_GAIN_DB = float(os.environ.get("TTS_OUT_GAIN_DB", "-4"))
 # 新增音色时是否自动跑「引擎 + 情感」选型，把最优组合绑到这个音色上。
 # 之后员工选默认情感（standard）生成时不再写死走 Qwen，而是走该音色的最优组合。
 # 置 0 可退回上面的静态映射，便于 A/B 对照。
@@ -659,8 +685,17 @@ async def run_job(job):
             # 语速：模型无 speed 接口（见文件头 SPEED_MIN 注释），用 atempo 在
             # 未压缩的 wav 上做一次——只经过一次 mp3 编码，且 atempo 变速不变调。
             _cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", tmp_wav]
+            _af = []
             if abs(_atempo - 1.0) > 1e-3:
-                _cmd += ["-filter:a", f"atempo={_atempo:.4f}"]
+                _af.append(f"atempo={_atempo:.4f}")
+            # 音色对齐放在变速之后：atempo 只改时长不改频谱，顺序无副作用，
+            # 但 EQ 一定要在 volume 之前，否则先衰减再提增益会白损失动态余量。
+            if TONE_EQ and TONE_EQ_FILTER:
+                _af.append(TONE_EQ_FILTER)
+            if abs(OUT_GAIN_DB) > 1e-3:
+                _af.append(f"volume={OUT_GAIN_DB}dB")
+            if _af:
+                _cmd += ["-filter:a", ",".join(_af)]
             _cmd += ["-codec:a", "libmp3lame", "-b:a", MP3_BITRATE, mp3_abs]
             subprocess.run(_cmd, check=True, timeout=300)
         except Exception as e:
