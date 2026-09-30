@@ -34,6 +34,7 @@ import cosy_client
 import vram
 import engine_select
 import pba
+import envshape
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("server")
@@ -132,6 +133,47 @@ COSY_FALLBACK_CER = float(os.environ.get("TTS_COSY_FALLBACK_CER", "0.15"))
 PBA_ALPHA = float(os.environ.get("TTS_PBA_ALPHA", "0.8"))
 # 低于这个字数不值得做（太短的片段本来就没有几句，压缩了反而显得赶）。
 PBA_MIN_CHARS = int(os.environ.get("TTS_PBA_MIN_CHARS", "120"))
+# ---- 停顿重排：修「卡顿」的另一半（等长停顿 = 机械感）------------------
+# α=0.8 把句数修对了，但把 69 个停顿压成了同一个长度（sd 0.066 vs 案例 0.109、
+# ≥0.45s 的长停顿 2 个 vs 案例 27 个），听起来像节拍器。reshuffle 按对数正态
+# 做保序分位映射，把停顿拉回「有长有短」，目标均值由句均时长回归给出
+# （mu = 0.463 - 0.0143×句均时长），所以只修男声、女声基本不动。
+# 详见 app/pba.py 的 reshuffle() 文件头。
+PBA_RESHAPE = os.environ.get("TTS_PBA_RESHAPE", "1") != "0"
+PBA_CV = float(os.environ.get("TTS_PBA_CV", "0.28"))
+
+# ---- 包络整形：修「咬字含糊（舌头没展开）」--------------------------------
+# 2026-09-30 员工反馈「听着跟舌头没展开似的」，用调制谱定位到真因：
+#     8~16Hz 调制能量（音节内瞬态 = 咬字清晰度）
+#         案例男 0.1328  我们 0.0562  **-57%**
+#         案例女 0.1099  我们 0.0967  -12%
+#   声码器把辅音爆破/送气的瞬态抹平了，字就"糊"在一起。这跟频谱无关，
+#   所以前面那套 EQ 完全管不到——必须到**时间维的包络**上去修。
+#
+# 强度是**自适应**的（二分求最小 sharp 使 8~16Hz 达标）：男女声差距很大
+# （男声差 57%、女声只差 12%），写死一个强度必然有一个性别过度。
+#   实测：男 sharp 0.72 -> 8~16Hz 0.0562→0.1272，n_sent 67→70（案例 70）
+#         女 sharp 0.16 -> 8~16Hz 0.0967→0.1165，n_sent 22 不变（案例 23）
+#
+# ⚠️ `ENV_COMP`（压 1~4Hz 顿挫）默认 0：它能把男声 1~4Hz 从 0.55 降到 0.43，
+#    但代价是 n_sent 掉到 63。先把最要紧的"咬字"修了，顿挫留待试听后再定。
+ENV_SHAPE = os.environ.get("TTS_ENV_SHAPE", "1") != "0"
+# ⚠️ 0.15 是**过补偿**值，不是案例值（案例男 0.1328 / 女 0.1099）。
+# 原因：整形在 mp3 之前，而 lame 会把 8~16Hz 削掉一部分
+#   （实测：整形后原始 0.2531 -> 成品 0.1769；0.1232 -> 0.0813）。
+#   案例之所以 mp3 零损失（wav 0.1328 / mp3 0.1327），是因为它的瞬态是
+#   **真实的频谱突变**，lame 会切短块保护；我们改的是全带包络，骗不过它，
+#   只能靠过补偿把 mp3 削完剩下的部分抬到案例水平。
+#
+# ⚠️⚠️ 0.20 定得太大，r9 全篇实测**过冲**（调制深度绝对值，dB）：
+#       案例男 -50.86 / r9 男 -47.71（+3.15dB）  案例女 -48.14 / r9 女 -48.07
+#   按两点线性外推，0.15 时男 ≈ -49.85（+1.0dB）、女 ≈ -49.76（-1.6dB），
+#   男女各偏 1.5dB 且方向相反 —— 这是单一全局目标能拿到的最好折中：
+#   男女声的「原始瞬态量」和「案例目标量」都不同，写死一个值必然一个性别过。
+#   宁可偏脆也别偏糊（员工原话是「舌头没展开」），所以取 +1/-1.6 而不是 -3/+3。
+ENV_TARGET = float(os.environ.get("TTS_ENV_TARGET", "0.15"))
+ENV_COMP = float(os.environ.get("TTS_ENV_COMP", "0.0"))
+ENV_MIN_CHARS = int(os.environ.get("TTS_ENV_MIN_CHARS", "120"))
 
 # ---- 音色对齐：修「空旷感 / 薄 / 贴脸」--------------------------------
 # 2026-09-30 全篇实测，我们比案例原声（ElevenLabs 44.1kHz）薄且响：
@@ -706,6 +748,30 @@ async def run_job(job):
         _pba_ratio = 1.0
         if PBA_ALPHA < 0.999 and len(chunk_text) >= PBA_MIN_CHARS:
             audio, _pba_ratio = pba.align(audio, sr, PBA_ALPHA)
+        # 停顿重排（在压缩之后）：压缩只管句数，这里把停顿长度重新分布，
+        # 改掉的时长同样由下面的 atempo 拉回。
+        if PBA_RESHAPE and len(chunk_text) >= PBA_MIN_CHARS:
+            try:
+                audio, _rs_ratio = pba.reshuffle(audio, sr, PBA_CV)
+                _pba_ratio *= _rs_ratio
+            except Exception as _e:
+                log.warning("任务 %s 第 %d 块 停顿重排失败（跳过）: %r",
+                            jid, ci + 1, _e)
+
+        # 包络整形：补音节瞬态（修「舌头没展开」）。放在 PBA 之后——
+        # PBA 靠 VAD 判静音，先整形会改变 VAD 结果。不动频谱、不动时长。
+        if ENV_SHAPE and len(chunk_text) >= ENV_MIN_CHARS:
+            try:
+                audio, _es_sharp, _es_before, _es_after = envshape.fit(
+                    audio, sr, ENV_TARGET, ENV_COMP)
+                if _es_sharp:
+                    log.info("任务 %s 第 %d 块 包络整形 sharp=%.3f "
+                             "8~16Hz %.4f -> %.4f（目标 %.4f）",
+                             jid, ci + 1, _es_sharp, _es_before,
+                             _es_after, ENV_TARGET)
+            except Exception as _e:
+                log.warning("任务 %s 第 %d 块 包络整形失败（跳过）: %r",
+                            jid, ci + 1, _e)
 
         # CosyVoice3 已在模型内部按 speed 变速（梅尔谱插值 + 声码器重合成），
         # 这里不能再叠一次 atempo，否则会变两次速。

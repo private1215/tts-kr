@@ -87,6 +87,125 @@ def _intervals(y16):
     return [(s, e) for s, e in out if (e - s) / SR_A >= MIN_SENT]
 
 
+def _fit_seg(seg, need):
+    """把静音片段 seg 裁/补到 need 个样本。
+
+    裁短时保留**能量最低的那一段**（真正的静音核心），否则会把句末的
+    尾音或呼吸声留在边界上，听起来像被硬切了一刀。
+    补长时重复最安静的 20ms（原本就是 -55dBFS 以下的底噪，听不出来）。
+    """
+    n = len(seg)
+    if need <= 0:
+        return seg[:0]
+    if n >= need:
+        if n == need:
+            return seg
+        e = np.cumsum(np.concatenate([[0.0], np.abs(seg).astype(np.float64)]))
+        w = n - need + 1
+        tot = e[need:need + w] - e[:w]
+        i = int(np.argmin(tot))
+        return seg[i:i + need]
+    core = max(1, min(n, int(0.02 * _SR_HINT)))
+    e = np.cumsum(np.concatenate([[0.0], np.abs(seg).astype(np.float64)]))
+    if n > core:
+        tot = e[core:core + (n - core + 1)] - e[:n - core + 1]
+        i = int(np.argmin(tot))
+    else:
+        i = 0
+    unit = seg[i:i + core]
+    if len(unit) == 0:
+        return seg
+    reps = int(need // len(unit)) + 2
+    return np.tile(unit, reps)[:need]
+
+
+_SR_HINT = 44100
+
+
+def reshuffle(y, sr, cv=0.28, a=0.463, b=0.0143, lo=0.26, hi=0.65):
+    """停顿重排（Pause Reshuffle）——修「卡顿」的另一半。
+
+    ## 为什么需要它
+    α=0.8 把句数修对了（男 96→~70，案例 70），但代价是**所有停顿被压成
+    同一个长度**：2026-09-30 全篇实测
+
+        指标          案例男    我们 r9    案例女    我们 r9
+        停顿均值      0.416    0.330      0.312    0.324
+        停顿标准差    0.109    0.066      0.098    0.084
+        变异系数 CV   0.26     0.20       0.31     0.26
+        ≥0.45s 长停顿 27       2          2        3
+
+    我们 69 个停顿里有 66 个挤在 0.25~0.45s，像节拍器一样等长；案例男声
+    有 27 个 ≥0.45s 的长停顿。等长停顿 = 机械感 = 员工说的「卡顿」。
+
+    ## 目标均值从哪来（只有两个样本点，是拟合不是定理）
+    案例的停顿均值跟**句均时长**强相关，两点正好定一条直线：
+
+        男声 句均 3.32s -> 停顿均值 0.416s
+        女声 句均 10.6s -> 停顿均值 0.312s
+
+        mu = 0.463 - 0.0143 * sent_dur      （clamp 到 [0.26, 0.65]）
+
+    代进去：男 3.44s -> 0.414s（要 +25%），女 9.65s -> 0.325s（+0.3%，
+    基本不用动）。**正好只修男声**，女声不受影响 —— 这就是为什么不能直接
+    写死一个停顿倍数，而要用句均时长回归。
+
+    ## 分布形状
+    CV 固定 0.28（男 0.26 / 女 0.31 的中点），用对数正态做**保序分位映射**：
+    原来偏长的停顿映射后依然偏长，只是整体拉开成案例那种有长有短的形状。
+    """
+    y = np.asarray(y)
+    if y.size < SR_A:
+        return y, 1.0
+    try:
+        y16 = _to16(y, sr)
+        ss = _intervals(y16)
+    except Exception as e:
+        log.warning("PBA reshuffle: VAD 失败，跳过（%s）", repr(e)[:120])
+        return y, 1.0
+    if len(ss) < 2:
+        return y, 1.0
+    k = float(sr) / SR_A
+    ss_o = [(int(round(s * k)), int(round(e * k))) for s, e in ss]
+    ps_o = [(ss_o[i][1], ss_o[i + 1][0]) for i in range(len(ss_o) - 1)]
+    ps_o = [(s, e) for s, e in ps_o if e > s]
+    if len(ps_o) < 3:
+        return y, 1.0
+
+    global _SR_HINT
+    _SR_HINT = int(sr)
+    durs = np.array([(e - s) / float(sr) for s, e in ps_o], dtype=np.float64)
+    sent = np.array([(e - s) / float(sr) for s, e in ss_o], dtype=np.float64)
+    mu = float(np.clip(a - b * float(sent.mean()), lo, hi))
+    s2 = float(np.log1p(cv * cv))
+    try:
+        from statistics import NormalDist
+        nd = NormalDist()
+        q = (np.arange(len(ps_o)) + 0.5) / len(ps_o)
+        z = np.array([nd.inv_cdf(float(t)) for t in q])
+    except Exception:
+        z = np.zeros(len(ps_o))
+    tgt = np.exp(np.log(mu) - s2 / 2.0 + np.sqrt(s2) * z)
+    tgt = np.clip(tgt, lo, hi)
+    rank = np.argsort(np.argsort(durs))
+    new = tgt[rank]
+
+    floor = int(FLOOR_MS / 1000.0 * sr)
+    pieces = [y[ss_o[0][0]:ss_o[0][1]]]
+    for i in range(1, len(ss_o)):
+        gs, ge = ps_o[i - 1]
+        pieces.append(_fit_seg(y[gs:ge], max(floor, int(new[i - 1] * sr))))
+        pieces.append(y[ss_o[i][0]:ss_o[i][1]])
+    y2 = np.concatenate(pieces)
+    ratio = len(y2) / float(len(y))
+    log.info("PBA reshuffle: 停顿 %d 处 均值 %.3fs->%.3fs sd %.3f->%.3f "
+             "(目标 mu=%.3f cv=%.2f)，时长 %.2fs -> %.2fs (ratio %.4f)",
+             len(ps_o), float(durs.mean()), float(new.mean()),
+             float(durs.std()), float(new.std()), mu, cv,
+             len(y) / float(sr), len(y2) / float(sr), ratio)
+    return y2, ratio
+
+
 def align(y, sr, alpha=0.8):
     """压缩停顿。返回 (新音频, restore_ratio)。
 
