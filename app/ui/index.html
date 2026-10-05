@@ -90,6 +90,21 @@ button.danger{color:var(--err)}
 .chip{font-size:12px;padding:5px 11px;border:1px solid var(--line2);border-radius:20px;
   cursor:pointer;color:var(--txt2);background:var(--panel2);transition:all .16s var(--ease)}
 .chip:hover{border-color:var(--accent);color:var(--txt);background:rgba(91,159,255,.10)}
+.chip.on{border-color:var(--accent);color:var(--accent);background:rgba(91,159,255,.14);font-weight:600}
+/* 案例反馈：星级 + 案例行 */
+.stars{display:flex;gap:6px;margin-top:6px}
+.star{font-size:20px;line-height:1;cursor:pointer;color:var(--line2);transition:color .12s var(--ease)}
+.star.on{color:#f5b83d}
+.crow{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--line);
+  border-radius:9px;margin-bottom:7px;cursor:pointer;transition:all .16s var(--ease)}
+.crow:hover{border-color:var(--line2);background:var(--panel2)}
+.crow.on{border-color:var(--accent);background:rgba(91,159,255,.08)}
+.crow .nm{font-size:13.5px;font-weight:500}
+.crow .mt{font-size:11.5px;color:var(--dim);margin-top:2px}
+.crow .rt{margin-left:auto;text-align:right;font-size:12px;color:var(--dim);white-space:nowrap}
+.casehdr{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px}
+.fbtags{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.fbtag{font-size:11px;padding:2px 8px;border-radius:11px;background:var(--panel3);color:var(--txt2)}
 .hint{font-size:12px;color:var(--dim);margin-top:7px;line-height:1.55}
 
 /* ---- 2026-09-30 易用性微调：只加样式，不动结构 ---- */
@@ -292,6 +307,45 @@ details.adv summary:hover{color:var(--txt2)}
   </div>
 </div>
 
+<!-- 标杆案例试听 + 员工反馈：指标只证明"差多少"，员工一句话才说明"差在哪" -->
+<div class="mask" id="caseMask" style="display:none">
+  <div class="modal wide">
+    <h3 data-i18n="caseTitle">标杆案例</h3>
+    <div class="msub" data-i18n="caseSub">听一遍对标目标，勾选你觉得好听的地方。攒够反馈后按标签排序，就知道下一步该修哪一项。</div>
+
+    <div id="caseList"><span class="hint" data-i18n="loading">加载中...</span></div>
+
+    <div id="caseDetail" style="display:none">
+      <div class="casehdr">
+        <div class="row" style="align-items:center">
+          <h3 style="font-size:14px;margin:0" id="csName">-</h3>
+          <button class="mini" id="csBack" data-i18n="caseBack" style="margin-left:auto">← 返回列表</button>
+        </div>
+        <div class="hint" id="csMeta" style="margin-top:4px"></div>
+        <div style="margin-top:10px">
+          <audio id="csAudio" controls style="width:100%"></audio>
+        </div>
+      </div>
+
+      <label data-i18n="fbLike">喜欢哪些地方（可多选）</label>
+      <div class="chips" id="csTags"></div>
+
+      <label style="margin-top:14px" data-i18n="fbRating">整体打分</label>
+      <div class="stars" id="csStars"></div>
+
+      <label style="margin-top:14px" data-i18n="fbNote">补充说明（选填）</label>
+      <textarea id="csNote" rows="3" data-i18n-ph="fbNotePh" style="width:100%;resize:vertical"></textarea>
+
+      <div class="hint" id="csSummary" style="margin-top:10px"></div>
+      <div class="err" id="csErr"></div>
+      <div class="acts">
+        <button id="csClose" data-i18n="close">关闭</button>
+        <button class="primary" id="csSubmit" data-i18n="fbSubmit">提交反馈</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="wrap">
   <div class="head">
     <div>
@@ -432,6 +486,7 @@ details.adv summary:hover{color:var(--txt2)}
     <div class="stat" style="margin:0 0 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span id="statsLine"></span>
       <button class="mini" id="btnReport" data-i18n="report">产出明细</button>
+      <button class="mini" id="btnCases" data-i18n="caseBtn">标杆案例</button>
     </div>
     <div class="filters">
       <input id="q" data-i18n-ph="searchPh">
@@ -542,7 +597,19 @@ const I18N = {
     builtinTag:'内置', builtinNoDel:'内置音色不可删除',
     chunkLabel:(i,n,s)=>`第 ${i}/${n} 段 · ${Math.round(s)} 秒`,
     dlChunk:(i)=>`下载第 ${i} 段`,
-    chunkHint:(n)=>`共 ${n} 段，按文案自动分块（句末断开，未拼接）`
+    chunkHint:(n)=>`共 ${n} 段，按文案自动分块（句末断开，未拼接）`,
+    caseBtn:'标杆案例', caseTitle:'标杆案例',
+    caseSub:'听一遍对标目标，勾选你觉得好听的地方。攒够反馈后按标签排序，就知道下一步该修哪一项。',
+    caseBack:'← 返回列表', caseEmpty:'还没有标杆案例', caseFail:'案例加载失败',
+    caseNosrc:'（无音频）',
+    fbLike:'喜欢哪些地方（可多选）', fbRating:'整体打分',
+    fbNote:'补充说明（选填）', fbNotePh:'比如：开头那句的气口很像真人',
+    fbSubmit:'提交反馈', fbSaved:'反馈已提交，谢谢', fbNeed:'至少勾一项、打个分或写点备注',
+    fbMine:'你已提交过，可改完重新提交', fbFail:'提交失败',
+    fbSummary:(n,r)=>`已有 ${n} 人反馈${r?` · 平均 ${r} 分`:''}`,
+    fbTag:{pace:'语速节奏',intonation:'语调起伏',emotion:'情绪感染力',clarity:'咬字清晰度',
+           pausing:'停顿换气',timbre:'音色质感',natural:'整体自然度',other:'其它'},
+    caseMeta:(g,s,d)=>`${g==='male'?'男声':'女声'} · ${s||'-'} · ${d?Math.round(d)+' 秒':'-'}`
   },
   en: {
     _name:'English',
@@ -631,7 +698,19 @@ const I18N = {
     builtinTag:'Built-in', builtinNoDel:'Built-in voices cannot be deleted',
     chunkLabel:(i,n,s)=>`Part ${i}/${n} · ${Math.round(s)}s`,
     dlChunk:(i)=>`Download part ${i}`,
-    chunkHint:(n)=>`${n} parts, auto-split at sentence ends (not merged)`
+    chunkHint:(n)=>`${n} parts, auto-split at sentence ends (not merged)`,
+    caseBtn:'Benchmarks', caseTitle:'Benchmark cases',
+    caseSub:'Listen to the reference clips and tick what you like. Once enough votes land in, sorting by tag tells us what to fix next.',
+    caseBack:'← Back to list', caseEmpty:'No benchmark cases yet', caseFail:'Failed to load cases',
+    caseNosrc:'(no audio)',
+    fbLike:'What do you like (multi-select)', fbRating:'Overall rating',
+    fbNote:'Anything else (optional)', fbNotePh:'e.g. the breath at the opening sounds really human',
+    fbSubmit:'Submit', fbSaved:'Thanks, feedback saved', fbNeed:'Tick a tag, give a rating, or leave a note',
+    fbMine:'You already submitted — edit and resubmit any time', fbFail:'Submit failed',
+    fbSummary:(n,r)=>`${n} response${n===1?'':'s'}${r?` · avg ${r}`:''}`,
+    fbTag:{pace:'Pacing',intonation:'Intonation',emotion:'Emotion',clarity:'Clarity',
+           pausing:'Pausing',timbre:'Timbre',natural:'Naturalness',other:'Other'},
+    caseMeta:(g,s,d)=>`${g==='male'?'Male':'Female'} · ${s||'-'} · ${d?Math.round(d)+' s':'-'}`
   },
   ko: {
     _name:'한국어',
@@ -720,7 +799,19 @@ const I18N = {
     builtinTag:'내장', builtinNoDel:'내장 음성은 삭제할 수 없습니다',
     chunkLabel:(i,n,s)=>`${i}/${n} 파트 · ${Math.round(s)}초`,
     dlChunk:(i)=>`${i}파트 다운로드`,
-    chunkHint:(n)=>`총 ${n}개 파트, 문장 끝에서 자동 분할(병합 안 함)`
+    chunkHint:(n)=>`총 ${n}개 파트, 문장 끝에서 자동 분할(병합 안 함)`,
+    caseBtn:'标杆案例', caseTitle:'标杆案例',
+    caseSub:'对标 목소리를 한 번 들어보고, 좋았던 부분을 골라 주세요. 의견이 쌓이면 태그별로 정렬해서 다음에 고칠 항목을 알 수 있습니다.',
+    caseBack:'← 목록으로', caseEmpty:'아직标杆案例가 없습니다', caseFail:'案例 불러오기 실패',
+    caseNosrc:'(오디오 없음)',
+    fbLike:'어떤 점이 좋았나요 (복수 선택)', fbRating:'전체 평점',
+    fbNote:'추가 설명 (선택)', fbNotePh:'예: 첫 문장의 숨소리가 사람 같아요',
+    fbSubmit:'의견 보내기', fbSaved:'의견 감사합니다', fbNeed:'태그를 고르거나, 점수를 주거나, 메모를 남겨 주세요',
+    fbMine:'이미 보냈습니다 — 수정해서 다시 보낼 수 있어요', fbFail:'전송 실패',
+    fbSummary:(n,r)=>`${n}명 참여${r?` · 평균 ${r}점`:''}`,
+    fbTag:{pace:'속도·리듬',intonation:'억양',emotion:'감정',clarity:'발음',
+           pausing:'쉼·호흡',timbre:'음색',natural:'자연스러움',other:'기타'},
+    caseMeta:(g,s,d)=>`${g==='male'?'남성':'여성'} · ${s||'-'} · ${d?Math.round(d)+'초':'-'}`
   },
   ja: {
     _name:'日本語',
@@ -809,7 +900,19 @@ const I18N = {
     builtinTag:'内蔵', builtinNoDel:'内蔵音声は削除できません',
     chunkLabel:(i,n,s)=>`パート ${i}/${n} · ${Math.round(s)}秒`,
     dlChunk:(i)=>`パート${i}をダウンロード`,
-    chunkHint:(n)=>`全${n}パート、文末で自動分割（結合なし）`
+    chunkHint:(n)=>`全${n}パート、文末で自動分割（結合なし）`,
+    caseBtn:'标杆案例', caseTitle:'标杆案例',
+    caseSub:'目標音声を一度聴いて、良いと思った点にチェックを入れてください。票数が溜まったらタグ順に並べ、次に直す項目が分かります。',
+    caseBack:'← 一覧へ', caseEmpty:'标杆案例はまだありません', caseFail:'読み込みに失敗しました',
+    caseNosrc:'（音声なし）',
+    fbLike:'どこが良かったか（複数選択）', fbRating:'総合評価',
+    fbNote:'補足（任意）', fbNotePh:'例：冒頭の息づかいが人間っぽい',
+    fbSubmit:'送信', fbSaved:'ご意見ありがとうございます', fbNeed:'タグ・評価・メモのいずれかを入力してください',
+    fbMine:'送信済みです — 修正して再送信できます', fbFail:'送信に失敗しました',
+    fbSummary:(n,r)=>`${n}件の回答${r?` · 平均 ${r}`:''}`,
+    fbTag:{pace:'速度・リズム',intonation:'抑揚',emotion:'感情',clarity:'明瞭さ',
+           pausing:'間・息継ぎ',timbre:'音色',natural:'自然さ',other:'その他'},
+    caseMeta:(g,s,d)=>`${g==='male'?'男性':'女性'} · ${s||'-'} · ${d?Math.round(d)+'秒':'-'}`
   }
 };
 
@@ -1328,6 +1431,100 @@ async function loadReport(){
   }
   $('#rpTable').innerHTML = h;
 }
+
+/* ---------- 标杆案例试听 + 反馈 ---------- */
+/* 为什么放这里：韵律六维/CER 只证明"差多少"，证明不了"差在哪、值不值得修"。
+   员工每天在听，把"好听"拆成可勾选的维度，攒够后按标签排序就知道先修哪一项。 */
+let CASES = [], CUR_CASE = null, CUR_FB = null;
+const FB_TAGS = ['pace','intonation','emotion','clarity','pausing','timbre','natural','other'];
+const fbTagName = k => (I18N[UI].fbTag && I18N[UI].fbTag[k]) || k;
+
+$('#btnCases').onclick = ()=>{ $('#caseMask').style.display='flex'; loadCases(); };
+$('#csClose').onclick  = ()=>{ $('#caseMask').style.display='none'; stopCaseAudio(); };
+$('#csBack').onclick   = ()=>{ stopCaseAudio(); $('#caseDetail').style.display='none'; $('#caseList').style.display=''; };
+$('#caseMask').onclick = e =>{ if(e.target.id === 'caseMask'){ $('#caseMask').style.display='none'; stopCaseAudio(); } };
+function stopCaseAudio(){ const a = $('#csAudio'); if(a){ a.pause(); a.removeAttribute('src'); a.load(); } }
+
+async function loadCases(){
+  $('#caseDetail').style.display='none'; $('#caseList').style.display='';
+  $('#caseList').innerHTML = `<span class="hint">${esc(t('loading'))}</span>`;
+  let list;
+  try{ list = await (await api('/api/cases')).json(); }
+  catch(e){ $('#caseList').innerHTML = `<span class="hint">${esc(t('caseFail'))}</span>`; return; }
+  CASES = Array.isArray(list) ? list : [];
+  if(!CASES.length){ $('#caseList').innerHTML = `<div class="empty">${esc(t('caseEmpty'))}</div>`; return; }
+  $('#caseList').innerHTML = CASES.map(c=>{
+    const n = c.fb_count || 0, r = c.fb_rating;
+    const top = Object.entries(c.fb_tags || {}).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    const tg = top.map(([k,v])=>`<span class="fbtag">${esc(fbTagName(k))} ${v}</span>`).join('');
+    return `<div class="crow" data-cid="${esc(c.id)}">
+      <div>
+        <div class="nm">${esc(c.name || c.id)}</div>
+        <div class="mt">${esc(t('caseMeta')(c.gender||'-', c.source, c.total_dur))}
+          ${c.seg_count?` · ${c.seg_count} 段`:''}${c.cps?` · ${c.cps} 字/秒`:''}</div>
+        <div class="fbtags">${tg}</div>
+      </div>
+      <div class="rt">${n ? esc(t('fbSummary')(n, r)) : ''}</div>
+    </div>`;
+  }).join('');
+  $$('#caseList .crow').forEach(el => el.onclick = ()=>openCase(el.dataset.cid));
+}
+
+async function openCase(cid){
+  const c = CASES.find(x=>x.id === cid);
+  if(!c) return;
+  CUR_CASE = c;
+  $('#caseList').style.display='none'; $('#caseDetail').style.display='';
+  $('#csName').textContent = c.name || cid;
+  $('#csMeta').textContent = t('caseMeta')(c.gender||'-', c.source, c.total_dur);
+  $('#csErr').textContent = ''; $('#csNote').value = ''; $('#csSummary').textContent = '';
+  $('#csAudio').src = `/api/cases/${encodeURIComponent(cid)}/audio`;
+  renderFbTags([], null);
+  try{
+    CUR_FB = await (await api(`/api/cases/${encodeURIComponent(cid)}/feedback`)).json();
+  }catch(e){ CUR_FB = null; }
+  if(CUR_FB){
+    const mine = CUR_FB.mine;
+    renderFbTags(mine ? (mine.tags||[]) : [], mine ? mine.rating : null);
+    if(mine && mine.note) $('#csNote').value = mine.note;
+    $('#csSummary').textContent = (CUR_FB.fb_count ? t('fbSummary')(CUR_FB.fb_count, CUR_FB.fb_rating) + ' · ' : '')
+      + (mine ? t('fbMine') : '');
+  }
+}
+
+function renderFbTags(sel, rating){
+  $('#csTags').innerHTML = FB_TAGS.map(k=>
+    `<div class="chip ${sel.includes(k)?'on':''}" data-tag="${k}">${esc(fbTagName(k))}</div>`).join('');
+  $$('#csTags .chip').forEach(el => el.onclick = ()=> el.classList.toggle('on'));
+  $('#csStars').innerHTML = [1,2,3,4,5].map(i=>
+    `<span class="star ${rating && i<=rating?'on':''}" data-star="${i}">★</span>`).join('');
+  $$('#csStars .star').forEach(el => el.onclick = ()=>{
+    const v = +el.dataset.star;
+    $$('#csStars .star').forEach(s => s.classList.toggle('on', +s.dataset.star <= v));
+    $('#csStars').dataset.rating = v;
+  });
+  $('#csStars').dataset.rating = rating || '';
+}
+
+$('#csSubmit').onclick = async ()=>{
+  if(!CUR_CASE) return;
+  const tags = $$('#csTags .chip.on').map(e=>e.dataset.tag);
+  const rating = $('#csStars').dataset.rating ? +$('#csStars').dataset.rating : null;
+  const note = $('#csNote').value.trim();
+  if(!tags.length && !rating && !note){ $('#csErr').textContent = t('fbNeed'); return; }
+  try{
+    const r = await api(`/api/cases/${encodeURIComponent(CUR_CASE.id)}/feedback`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({tags, rating, note})
+    });
+    if(!r.ok){ const j = await r.json().catch(()=>({detail:t('fbFail')})); $('#csErr').textContent = j.detail || t('fbFail'); return; }
+    $('#csErr').textContent = '';
+    toast(t('fbSaved'));
+    CASES = [];
+    loadCases();                       /* 回到列表，票数立刻更新 */
+  }catch(e){ if(e.message !== '401') $('#csErr').textContent = t('fbFail'); }
+};
+
 $('#nuCreate').onclick = async ()=>{
   const name = $('#nuName').value.trim(), pwd = $('#nuPwd').value;
   if(!name || pwd.length < 6){ $('#nuErr').textContent = pwd.length < 6 ? t('pwShort') : t('needName'); return; }

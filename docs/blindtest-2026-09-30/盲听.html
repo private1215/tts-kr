@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>韩语 TTS 盲听验收 · 2026-09-30</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+  --txt:#e6e9ef; --dim:#9aa3b2; --accent:#5b9cff; --ok:#4ec9a0; --warn:#e8b04b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);
+  font:15px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;}
+.wrap{max-width:920px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:22px;margin:0 0 6px}
+h2{font-size:17px;margin:34px 0 12px;padding-left:10px;border-left:3px solid var(--accent)}
+.sub{color:var(--dim);font-size:13px;margin-bottom:20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:14px}
+.row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.code{font-size:26px;font-weight:700;width:44px;height:44px;flex:0 0 44px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--accent)}
+.name{flex:1;min-width:180px}
+.name b{font-size:15px}
+.name small{display:block;color:var(--dim);font-size:12px;margin-top:2px}
+audio{width:100%;margin:10px 0 0;height:36px}
+.field{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--dim)}
+.stars{display:inline-flex;gap:3px}
+.stars button{background:var(--panel2);border:1px solid var(--line);color:var(--dim);
+  border-radius:5px;padding:2px 7px;cursor:pointer;font-size:12px}
+.stars button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+input[type=text]{flex:1;min-width:160px;background:var(--panel2);border:1px solid var(--line);
+  color:var(--txt);border-radius:6px;padding:6px 9px;font-size:13px}
+.reveal{margin-top:10px;font-size:12px;color:var(--warn);display:none}
+.reveal.show{display:block}
+button.act{background:var(--accent);color:#fff;border:0;border-radius:7px;padding:9px 16px;
+  cursor:pointer;font-size:14px;margin-right:8px}
+button.act.ghost{background:transparent;border:1px solid var(--line);color:var(--dim)}
+.pick{margin-top:20px}
+.pick label{margin-right:14px;font-size:14px;cursor:pointer}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:14px}
+th,td{border:1px solid var(--line);padding:7px 9px;text-align:left}
+th{background:var(--panel2);color:var(--dim);font-weight:600}
+.tgt{color:var(--ok)}
+pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+  padding:14px;overflow:auto;font-size:12px;color:var(--dim);display:none}
+pre.show{display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>韩语 TTS 盲听验收</h1>
+  <div class="sub">
+    每个分组里有 1 个「目标原声」和若干「我们合成的」版本，已随机打乱并隐藏身份。<br>
+    建议顺序：先随便听几段找感觉 → 再逐段打分 → 最后选「最像目标的那一个」。<br>
+    重点听：<b>起句有没有力气</b>、<b>句尾有没有往下掉</b>、<b>整段听着累不累</b>。
+  </div>
+
+  <div class="card">
+    <button class="act" onclick="toggleAll()">显示 / 隐藏真实身份</button>
+    <button class="act ghost" onclick="exportMd()">导出打分结果（Markdown）</button>
+  </div>
+
+  <div id="groups"></div>
+  <pre id="out"></pre>
+</div>
+
+<script>
+const GROUPS = [
+  { key:'male', title:'男声 · 292 字 · 约 37 秒', items:[
+    {f:'male_1_target.mp3',  label:'目标原声（ElevenLabs 生成，我们要追的对象）', tgt:true},
+    {f:'male_2_current.mp3', label:'现网基线：员工现在听到的版本'},
+    {f:'male_3_dynref.mp3',  label:'换成「高动态」参考音频后'},
+    {f:'male_4_final.mp3',   label:'高动态参考 + 音高对齐后处理（最终）'},
+  ]},
+  { key:'female', title:'女声 · 338 字 · 约 56 秒', items:[
+    {f:'female_1_target.mp3',  label:'目标原声（ElevenLabs 生成）', tgt:true},
+    {f:'female_2_current.mp3', label:'现网基线'},
+    {f:'female_3_dynref.mp3',  label:'换成「高动态」参考音频后'},
+    {f:'female_4_final.mp3',   label:'最终版 A（含句内动态精调）'},
+    {f:'female_5_finalB.mp3',  label:'最终版 B（不含句内动态精调）'},
+  ]},
+];
+
+const CODES = ['A','B','C','D','E','F'];
+const state = {};   // key -> {order:[], rate:{}, pick:''}
+
+function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
+
+function build(){
+  const box = document.getElementById('groups');
+  box.innerHTML = '';
+  GROUPS.forEach(g=>{
+    const order = shuffle(g.items.map((_,i)=>i));
+    state[g.key] = {order, rate:{}, pick:''};
+    let h = '<h2>'+g.title+'</h2>';
+    order.forEach((idx,pos)=>{
+      const it = g.items[idx];
+      const code = CODES[pos];
+      state[g.key].rate[code] = {nat:0, sim:0, note:''};
+      h += '<div class="card" data-g="'+g.key+'" data-code="'+code+'">'
+        + '<div class="row"><div class="code">'+code+'</div>'
+        + '<div class="name"><b>样本 '+code+'</b>'
+        + '<small class="reveal" data-rev="'+code+'">真实身份：'+it.label+'</small></div></div>'
+        + '<audio controls preload="none" src="'+it.f+'"></audio>'
+        + '<div class="field"><span>自然度</span><span class="stars" data-k="nat">'
+        +   [1,2,3,4,5].map(v=>'<button onclick="rate(\''+g.key+'\',\''+code+'\',\'nat\','+v+')">'+v+'</button>').join('')
+        + '</span></div>'
+        + '<div class="field"><span>像目标</span><span class="stars" data-k="sim">'
+        +   [1,2,3,4,5].map(v=>'<button onclick="rate(\''+g.key+'\',\''+code+'\',\'sim\','+v+')">'+v+'</button>').join('')
+        + '</span></div>'
+        + '<div class="field"><span>备注</span><input type="text" placeholder="听感（可选）" '
+        +   'oninput="note(\''+g.key+'\',\''+code+'\',this.value)"></div>'
+        + '</div>';
+    });
+    h += '<div class="card pick"><b>这一组里，最像目标原声的是：</b><br><br>'
+      + CODES.slice(0, order.length).map(c=>'<label><input type="radio" name="pick_'+g.key+'" value="'+c+'" '
+        + 'onchange="pick(\''+g.key+'\',\''+c+'\')"> '+c+'</label>').join('')
+      + '</div>';
+    box.innerHTML += h;
+  });
+}
+
+function rate(g, code, k, v){
+  state[g].rate[code][k] = v;
+  const card = document.querySelector('.card[data-g="'+g+'"][data-code="'+code+'"]');
+  card.querySelectorAll('.stars[data-k="'+k+'"] button').forEach((b,i)=>{
+    b.classList.toggle('on', i < v);
+  });
+}
+function note(g, code, v){ state[g].rate[code].note = v; }
+function pick(g, c){ state[g].pick = c; }
+
+let shown = false;
+function toggleAll(){
+  shown = !shown;
+  document.querySelectorAll('.reveal').forEach(e=>e.classList.toggle('show', shown));
+}
+
+function labelOf(g, code){
+  const pos = CODES.indexOf(code);
+  const idx = state[g.key].order[pos];
+  return g.items[idx].label;
+}
+
+function exportMd(){
+  let md = '# 盲听打分结果 · '+new Date().toLocaleString('zh-CN')+'\n\n';
+  GROUPS.forEach(g=>{
+    md += '## '+g.title+'\n\n';
+    md += '| 编号 | 真实身份 | 自然度 | 像目标 | 备注 |\n|---|---|---|---|---|\n';
+    CODES.slice(0, g.items.length).forEach(c=>{
+      const r = state[g.key].rate[c];
+      md += '| '+c+' | '+labelOf(g,c)+' | '+(r.nat||'-')+' | '+(r.sim||'-')+' | '+(r.note||'')+' |\n';
+    });
+    md += '\n**最像目标：** '+(state[g.key].pick||'未选')
+       + (state[g.key].pick ? '（'+labelOf(g, state[g.key].pick)+'）' : '')+'\n\n';
+  });
+  const pre = document.getElementById('out');
+  pre.textContent = md;
+  pre.classList.add('show');
+  navigator.clipboard && navigator.clipboard.writeText(md);
+  pre.scrollIntoView({behavior:'smooth'});
+}
+
+build();
+</script>
+</body>
+</html>

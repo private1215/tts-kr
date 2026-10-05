@@ -30,13 +30,15 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, Response
 from tts_engine import TTSEngine
 from voice_trim import trim_reference
 from voice_match import get_target
-from pipeline import CHUNK_MAX_CHARS, split_chunks
+from pipeline import (CHUNK_MAX_CHARS, split_chunks, chunk_limit_chars,
+                      split_by_seconds, DEFAULT_CPS, CHUNK_MAX_SECONDS)
 import asr_check
 import cosy_client
 import vram
 import engine_select
 import pba
 import envshape
+import dyn
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("server")
@@ -184,6 +186,25 @@ ENV_TARGET = float(os.environ.get("TTS_ENV_TARGET", "0.15"))
 ENV_COMP = float(os.environ.get("TTS_ENV_COMP", "0.0"))
 ENV_MIN_CHARS = int(os.environ.get("TTS_ENV_MIN_CHARS", "120"))
 
+# ---- 能量动态扩展：补「轻重音」（韵律六维里的 C）--------------------------
+# 2026-10-05 案例库逐段实测（同文案、同口径）：
+#     案例男 seg0/seg1 C=14.09/14.77 dB   我们 chunk1/2 12.11/12.77   低 14~15%
+#     案例女 seg0/seg1 C=14.85/15.37      我们 chunk1/2 14.46/13.95   低 3~9%
+# C = RMS 包络 p10~p90 的宽度，听感上就是「有没有轻重音」。我们偏低意味着
+# 整段都差不多响 —— 这正是员工说的「像读课本 / 没感情」。
+# 男声尤其糟，而且它同时就是 A（句内音高动态）偏高的那一个：
+# 音高夸张 + 力度平 = 员工原话「男声前半段跟吵架似的」。
+#
+# 做法是给慢包络乘一条平滑增益曲线（中置的向上/向下扩展器），
+# 不动频谱、不动时长、不过声码器，所以没有音质风险；
+# 静音帧统一夹紧，句数 / 停顿熵不会被误伤（那是 PBA 管的）。
+# 详见 app/dyn.py 文件头。设 TTS_DYN=0 关闭。
+DYN_EXPAND = os.environ.get("TTS_DYN", "1") != "0"
+DYN_C_MALE = float(os.environ.get("TTS_DYN_C_MALE", "14.4"))
+DYN_C_FEMALE = float(os.environ.get("TTS_DYN_C_FEMALE", "15.1"))
+DYN_C_DEFAULT = float(os.environ.get("TTS_DYN_C", "14.7"))
+DYN_MIN_CHARS = int(os.environ.get("TTS_DYN_MIN_CHARS", "120"))
+
 # ---- 音色对齐：修「空旷感 / 薄 / 贴脸」--------------------------------
 # 2026-09-30 全篇实测，我们比案例原声（ElevenLabs 44.1kHz）薄且响：
 #     100~300Hz 占比   男 13.75% vs 25.44%（-46%）  女 9.61% vs 14.45%（-33%）
@@ -267,12 +288,54 @@ GAIN_MALE_DB = float(os.environ.get("TTS_GAIN_MALE_DB", "-1.7"))
 GAIN_FEMALE_DB = float(os.environ.get("TTS_GAIN_FEMALE_DB", "0.5"))
 F0_SPLIT_HZ = float(os.environ.get("TTS_F0_SPLIT_HZ", "220"))
 
-# ---- 块尾分段停顿 ----------------------------------------------------------
-# 案例（ElevenLabs）的段落之间是 0.45~0.66 s 的真换气；我们两块 mp3 拼起来
-# 中间只有编码残留的 0.1~0.2 s 数字零，员工听起来就是"没有分段"。
-# 给非最后一块补到 600 ms（与 pipeline.para_ms=620 同一量级），置 0 可关。
-CHUNK_TAIL_PAUSE_MS = float(os.environ.get("TTS_CHUNK_TAIL_PAUSE_MS", "600"))
-CHUNK_TAIL_SIL_DB = float(os.environ.get("TTS_CHUNK_TAIL_SIL_DB", "-45"))
+# ---- 块首尾静音：对齐案例的换气量 ----------------------------------------
+# ⚠️ 2026-10-05 用案例库重测，推翻了原先「案例段落间 0.45~0.66 s」的说法
+#    （那次是在别的素材上量的，且含底噪）。案例库两个样本逐段量首尾静音：
+#        案例男 seg0 尾 0.21 s + seg1 头 0.04 s = 段间 0.25 s
+#        案例女 seg0 尾 0.30 s + seg1 头 0.06 s = 段间 0.36 s
+#    而我们（补到 600 ms 那版）：chunk1 尾 0.48 + chunk2 头 0.20 = 0.68 s，
+#    是案例的两倍多 —— 拼接后听着「拖」。
+# 所以改成：首静音裁到 60 ms、尾静音统一补/裁到 220 ms，
+# 段间 = 0.22 + 0.06 = 0.28 s，正落进案例区间。
+# 两个都设 0 即关闭。
+EDGE_HEAD_S = float(os.environ.get("TTS_EDGE_HEAD_S", "0.06"))
+EDGE_TAIL_S = float(os.environ.get("TTS_EDGE_TAIL_S", "0.22"))
+EDGE_SIL_DB = float(os.environ.get("TTS_EDGE_SIL_DB", "-45"))
+
+
+def fit_edges(audio, sr, head_s=EDGE_HEAD_S, tail_s=EDGE_TAIL_S,
+              sil_db=EDGE_SIL_DB):
+    """把首尾静音修到指定秒数：长了裁掉，短了补上。
+
+    只碰静音（低于 sil_db 的部分），不动任何有声样本，无音质影响。
+    """
+    if (head_s <= 0 and tail_s <= 0) or len(audio) < sr * 0.2:
+        return audio
+    fr = max(int(sr * 0.02), 1)
+    n = len(audio) // fr
+    if n < 4:
+        return audio
+    e = np.sqrt((audio[:n * fr].reshape(n, fr) ** 2).mean(axis=1))
+    db = 20 * np.log10(e + 1e-9)
+    loud = np.where(db > sil_db)[0]
+    if loud.size == 0:
+        return audio
+    lead = int(loud[0]) * fr          # 首静音样本数
+    trail = (n - int(loud[-1]) - 1) * fr
+    if tail_s > 0:
+        need = int(round(tail_s * sr)) - trail
+        if need > 0:
+            audio = np.concatenate([audio,
+                                    np.zeros(need, dtype=audio.dtype)])
+        elif need < 0:
+            audio = audio[:len(audio) + need]   # need 为负，裁掉多余尾巴
+    if head_s > 0:
+        need = int(round(head_s * sr)) - lead
+        if need > 0:
+            audio = np.concatenate([np.zeros(need, dtype=audio.dtype), audio])
+        elif need < 0:
+            audio = audio[-need:]               # 裁掉多余头部静音
+    return audio
 
 
 def est_f0_hz(y, sr, sec=20.0, fmin=60.0, fmax=400.0):
@@ -632,8 +695,29 @@ async def run_job(job):
     # ---- 自动分块：整段文案按句子边界切成若干块，每块一个独立音频文件 ----
     # 员工不用手动分段（elevenlabs 时代是手动截成两半的），代码在这里代劳。
     # 块间不拼接，避免为了拼一个 769 秒的大文件白白多花时间。
-    chunks = split_chunks(job["text"], max_chars=CHUNK_MAX_CHARS)
+    #
+    # ⭐ 上限不再是固定字数，而是「预估音频时长」——2026-10-05 案例拆解结论：
+    #   ElevenLabs 按约 250 秒音频一块切（男声切在第 2157 字、女声第 1879 字，
+    #   字数差 15%，换算成时长却都是 251~258 秒）。
+    #   按字数切就会两性别切出完全不同的段长，我们第一块甚至到 352 秒，
+    #   比案例长 40%，而长上下文正是语气漂移的温床。
+    #   cps 用该音色的历史实测值（任务跑完自动写回 voices.json），无历史时用
+    #   DEFAULT_CPS 起步，跑过一单就收敛。
+    _vcps = float((voices.get(job["voice"]) or {}).get("cps") or 0) or DEFAULT_CPS
+    _spd = float(job.get("speed") or 1.0)
+    _limit = chunk_limit_chars(_vcps, _spd)
+    chunks = split_by_seconds(job["text"], cps=_vcps, speed=_spd)
+    # 退化路径：整篇没有句末标点时 split_by_seconds 会返回整块，
+    # 这时候才回退到字数贪心（它至少能在换行的地方断开）。
+    if len(chunks) <= 1 and len(job["text"] or "") > _limit:
+        chunks = split_chunks(job["text"], max_chars=_limit)
     n_chunk = max(len(chunks), 1)
+    job["chunk_limit"] = _limit
+    log.info("任务 %s 分块 %d 块（预估时长 %.0fs / 预算 %.0fs，音色 cps=%.2f "
+             "speed=%s，字数上限 %d）",
+             job["id"], n_chunk,
+             len(job["text"] or "") / max(_vcps * _spd, 0.1),
+             CHUNK_MAX_SECONDS, _vcps, _spd, _limit)
     jid = job["id"]
     base_name = _safe_name((job.get("title") or "").strip()
                            or (job["text"] or "").strip()[:6])
@@ -853,51 +937,11 @@ async def run_job(job):
                 log.warning("任务 %s 第 %d 块 包络整形失败（跳过）: %r",
                             jid, ci + 1, _e)
 
-        # CosyVoice3 已在模型内部按 speed 变速（梅尔谱插值 + 声码器重合成），
-        # 这里不能再叠一次 atempo，否则会变两次速。
-        _speed = 1.0 if job.get("_cosy_speed_applied") else float(
-            job.get("speed") or 1.0)
-        # PBA 削掉的静音时间靠这一档 atempo 补回来：最终时长 = 原时长 / speed，
-        # 与不开 PBA 时一致，员工侧的时长预估和统计都不受影响。
-        _atempo = _speed * _pba_ratio
-        # ---- 块尾分段停顿：修「听着没有分段」--------------------------------
-        # split_chunks 只在句末/段末断开，但两块是**两个独立 mp3**，拼起来时
-        # 接缝处只有 mp3 编码留下的约 0.1~0.2 s 数字零（实测块1 尾部从 -33dB
-        # 直接掉到 -165dB），远短于段落级停顿 → 听感上"两段粘成一条"。
-        # 这里给**非最后一块**补一段静音，补到 CHUNK_TAIL_PAUSE_MS 为止
-        # （先量已有尾部静音，不够才补），员工把几个 mp3 顺序拼起来就是
-        # 自然的换气/分段。
-        if CHUNK_TAIL_PAUSE_MS > 0 and ci < len(chunks) - 1:
-            try:
-                _fr = max(int(sr * 0.02), 1)
-                _n = len(audio) // _fr
-                if _n >= 4:
-                    _e = np.sqrt((audio[:_n * _fr].reshape(_n, _fr) ** 2)
-                                 .mean(axis=1))
-                    _db = 20 * np.log10(_e + 1e-9)
-                    _tail = 0
-                    for _v in _db[::-1]:
-                        if _v < CHUNK_TAIL_SIL_DB:
-                            _tail += 1
-                        else:
-                            break
-                    _have = _tail * _fr / float(sr) * 1000.0
-                    _need = CHUNK_TAIL_PAUSE_MS - _have
-                    if _need > 20:
-                        # atempo 会把这段一起拉长，先除回去
-                        _pad = np.zeros(int(sr * _need / 1000.0 / max(
-                            _atempo, 0.25)), dtype=audio.dtype)
-                        audio = np.concatenate([audio, _pad])
-                        log.info("任务 %s 第 %d 块 补分段停顿 %.0fms"
-                                 "（原有尾部静音 %.0fms）", jid, ci + 1,
-                                 _need, _have)
-            except Exception as _e:
-                log.warning("任务 %s 第 %d 块 补分段停顿失败（跳过）: %r",
-                            jid, ci + 1, _e)
-        # 分性别响度偏移：整段只判一次（同一个音色不会有男女混着的情况），
-        # 判不出来就退回 0 dB。
+        # ---- 性别判定：整段只判一次（同一个音色不会有男女混着的情况）------
+        # 提前到能量扩展之前：扩展的目标值是分性别的（案例男 14.4 / 女 15.1）。
         if "_gain_off" not in job:
             _off = 0.0
+            job["_is_male"] = None
             if GAIN_GENDER:
                 try:
                     _f0 = est_f0_hz(audio, sr)
@@ -908,10 +952,51 @@ async def run_job(job):
                              jid)
                 else:
                     _male = _f0 < F0_SPLIT_HZ
+                    job["_is_male"] = bool(_male)
                     _off = GAIN_MALE_DB if _male else GAIN_FEMALE_DB
                     log.info("任务 %s 性别判定 f0=%.0fHz -> %s，响度偏移 %+.1f dB",
                              jid, _f0, "男" if _male else "女", _off)
             job["_gain_off"] = _off
+
+        # ---- 能量动态扩展：补「轻重音」（韵律 C）----------------------------
+        # 放在包络整形之后：整形补的是音节内瞬态（8~16Hz），这里补的是
+        # 词/句级的轻重（慢包络），两者互不干扰，但先定"轻重"再定"咬字"
+        # 更接近真实的发声链。静音整体搬移，句数/停顿熵不受影响。
+        if DYN_EXPAND and len(chunk_text) >= DYN_MIN_CHARS:
+            _male = job.get("_is_male")
+            _tgt = (DYN_C_MALE if _male else
+                    DYN_C_FEMALE if _male is False else DYN_C_DEFAULT)
+            try:
+                audio, _k, _c0, _c1 = dyn.expand(audio, sr, target=_tgt)
+                if _k > 1.002:
+                    log.info("任务 %s 第 %d 块 能量动态 k=%.3f  C %.2f -> %s"
+                             "（目标 %.2f）", jid, ci + 1, _k, _c0,
+                             ("%.2f" % _c1) if _c1 else "-", _tgt)
+            except Exception as _e:
+                log.warning("任务 %s 第 %d 块 能量动态扩展失败（跳过）: %r",
+                            jid, ci + 1, _e)
+
+        # CosyVoice3 已在模型内部按 speed 变速（梅尔谱插值 + 声码器重合成），
+        # 这里不能再叠一次 atempo，否则会变两次速。
+        _speed = 1.0 if job.get("_cosy_speed_applied") else float(
+            job.get("speed") or 1.0)
+        # PBA 削掉的静音时间靠这一档 atempo 补回来：最终时长 = 原时长 / speed，
+        # 与不开 PBA 时一致，员工侧的时长预估和统计都不受影响。
+        _atempo = _speed * _pba_ratio
+        # ---- 首尾静音对齐案例的换气量 --------------------------------------
+        # 案例逐段量出来：头 0.04~0.08 s、尾 0.16~0.30 s，两块拼起来间隙
+        # 0.25~0.36 s。我们模型自带 0.16~0.20 s 头静音、最后一块几乎没有尾巴，
+        # 非最后一块又被补到 0.48 s —— 都比案例长一截。
+        # 这里统一裁/补到 60 ms 头 + 220 ms 尾，段间 0.28 s 落进案例区间。
+        # 补的量要先除掉 atempo（它会把静音一起拉长）。
+        if EDGE_HEAD_S > 0 or EDGE_TAIL_S > 0:
+            try:
+                audio = fit_edges(audio, sr,
+                                  EDGE_HEAD_S / max(_atempo, 0.25),
+                                  EDGE_TAIL_S / max(_atempo, 0.25))
+            except Exception as _e:
+                log.warning("任务 %s 第 %d 块 首尾静音对齐失败（跳过）: %r",
+                            jid, ci + 1, _e)
         _gain_db = OUT_GAIN_DB + float(job.get("_gain_off") or 0.0)
         mp3_name = f"{base_name}-{ci + 1}.mp3"
         mp3_abs = os.path.join(folder_path, mp3_name)
@@ -992,6 +1077,22 @@ async def run_job(job):
     agg["plan"] = last_plan
     agg["chunks"] = n_chunk
     stats = agg
+    # ---- 音色语速（cps）自校准 -------------------------------------------
+    # 分块上限现在是「时长驱动」的（对齐 ElevenLabs 约 250 秒一块），
+    # 字数→时长全靠 cps 换算。而 cps 每个音色都不一样（实测男 8.61 / 女 7.32，
+    # 差 18%），写死一个数必然有一个性别切歪。
+    # 所以每跑完一单就把实测值写回 voices.json（滑动平均，抗单篇波动）。
+    _vc = job.get("voice")
+    _new_cps = agg.get("cps") or 0.0
+    if _vc and 4.0 < _new_cps < 14.0 and (agg.get("audio_seconds") or 0) > 60:
+        _v = voices.get(_vc)
+        if _v is not None:
+            _old = float(_v.get("cps") or 0.0)
+            _v["cps"] = round(_new_cps if not _old
+                              else 0.6 * _old + 0.4 * _new_cps, 3)
+            save_voices(voices)
+            log.info("任务 %s 音色 %s 语速自校准 cps %.2f -> %.2f",
+                     jid, _vc, _old or _new_cps, _v["cps"])
     # 兼容老前端/统计：mp3 指向第一个文件
     job["mp3"] = files[0]["path"] if files else None
     job["stats"] = stats
@@ -2068,9 +2169,10 @@ async def upload_case(request: Request,
     # ---------- 第二遍：把文案对齐到各音频段 ----------
     aligned, align_method = _align_texts(texts,
                                          [a["dur"] for a in audio_meta])
-    # 只有「对齐彻底失败」才退化成整篇文案 + ASR，并如实记下来
-    full_text = texts[0] if (not aligned and len(texts) == 1
-                             and len(audio_meta) > 1) else ""
+    # 只要上传的是「一篇整文案 + N 段音频」，就把整篇原文存下来。
+    # 后续拆解要拿整篇去对段的字符区间；只留 seg 文本的话，对齐时被 strip 掉的
+    # 空白/换行就永久丢了，也没法校验「两段拼回来是否等于原文」。
+    full_text = texts[0].strip() if len(texts) == 1 else ""
     if full_text:
         with open(os.path.join(d, "full.txt"), "w", encoding="utf-8") as fh:
             fh.write(full_text)
@@ -2147,7 +2249,8 @@ async def upload_case(request: Request,
            "owner": u["username"], "created_at": time.time(),
            "segments": segs, "total_dur": total_dur, "total_chars": total_chars,
            "cps": round(total_chars / total_dur, 3) if total_dur else None,
-           "prosody": None, "prosody_done": False}
+           "prosody": None, "prosody_done": False,
+           "fb_count": 0, "fb_tags": {}, "fb_rating": None}
     cases[cid] = rec
     save_cases(cases)
     log.info("上传案例 %s(%s) name=%s 段数=%d 时长=%.1fs 字数=%d",
@@ -2168,7 +2271,12 @@ async def list_cases(request: Request, gender: str = "", source: str = ""):
         items = [c for c in items if c.get("source") == source.strip().lower()]
     items.sort(key=lambda c: c.get("created_at") or 0, reverse=True)
     # 段内文本可能很长，列表页只给统计值，详情再 GET /api/cases/{id}
-    return [{k: v for k, v in c.items() if k != "segments"} for c in items]
+    out = []
+    for c in items:
+        d = {k: v for k, v in c.items() if k != "segments"}
+        d["seg_count"] = len(c.get("segments") or [])
+        out.append(d)
+    return out
 
 
 @app.get("/api/cases/{cid}")
@@ -2220,6 +2328,131 @@ async def case_text(request: Request, cid: str):
                 parts.append(fh.read())
     return Response(content="\n\n".join(parts),
                     media_type="text/plain; charset=utf-8")
+
+
+# ======================== 案例反馈（员工试听后打分） ========================
+# 为什么要有它：指标（韵律六维、CER）只能证明"差多少"，证明不了"差在哪、
+# 值不值得修"。员工每天在听，他们一句话比我们跑十次实验准 ——
+# 但"好听"这种反馈没法直接进代码，所以把它拆成**可勾选的维度**，
+# 攒够之后按标签排序就知道该修哪一项。
+#
+# 存储：/mnt/tts/data/cases/{cid}/feedback.json（一条一条原始记录，不丢），
+#       汇总（人数 / 各标签票数 / 平均分）回写 cases.json，列表页直接显示。
+CASE_FEEDBACK_TAGS = (
+    "pace",        # 语速节奏
+    "intonation",  # 语调起伏
+    "emotion",     # 情绪感染力
+    "clarity",     # 咬字清晰度
+    "pausing",     # 停顿换气
+    "timbre",      # 音色质感
+    "natural",     # 整体自然度
+    "other",       # 其它（用备注说明）
+)
+
+
+def _fb_path(cid):
+    return os.path.join(_case_dir(cid), "feedback.json")
+
+
+def _load_fb(cid):
+    p = _fb_path(cid)
+    if os.path.isfile(p):
+        try:
+            with open(p, encoding="utf-8") as fh:
+                rows = json.load(fh)
+            if isinstance(rows, list):
+                return rows
+        except Exception as e:
+            log.warning("案例 %s 反馈读取失败: %s", cid, e)
+    return []
+
+
+def _save_fb(cid, rows):
+    d = _case_dir(cid)
+    os.makedirs(d, exist_ok=True)
+    tmp = os.path.join(d, "feedback.json.tmp")
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(rows, fh, ensure_ascii=False, indent=1)
+    os.replace(tmp, _fb_path(cid))     # 原子替换，避免并发写坏
+
+
+def _fb_summarize(cid):
+    """把原始反馈汇总回 cases.json（人数/票数/均分）。"""
+    rows = _load_fb(cid)
+    tags, rs = {}, []
+    for r in rows:
+        for t in (r.get("tags") or []):
+            tags[t] = tags.get(t, 0) + 1
+        if isinstance(r.get("rating"), (int, float)):
+            rs.append(float(r["rating"]))
+    c = cases[cid]
+    c["fb_count"] = len(rows)
+    c["fb_tags"] = tags
+    c["fb_rating"] = round(sum(rs) / len(rs), 2) if rs else None
+
+
+@app.post("/api/cases/{cid}/feedback")
+async def add_case_feedback(request: Request, cid: str):
+    """员工听完标杆案例后提交「喜欢哪些地方」。
+
+    同一人对同一案例只保留最新一条（改主意了能覆盖），
+    但**每条原始记录都留着**（未删），方便后面按人看变化。
+    """
+    u = require(request)
+    if cid not in cases:
+        raise HTTPException(404, "案例不存在")
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    tags = [t for t in (payload.get("tags") or []) if t in CASE_FEEDBACK_TAGS]
+    rating = payload.get("rating")
+    rating = int(rating) if isinstance(rating, (int, float)) and \
+        1 <= float(rating) <= 5 else None
+    note = (payload.get("note") or "").strip()[:500]
+    seg = payload.get("seg")
+    seg = int(seg) if isinstance(seg, (int, float)) else None
+    if not tags and rating is None and not note:
+        raise HTTPException(400, "至少选一个标签、打个分或写点备注")
+
+    rows = _load_fb(cid)
+    row = {"user": u["username"], "role": u.get("role"),
+           "tags": tags, "rating": rating, "note": note, "seg": seg,
+           "at": time.time()}
+    rows.append(row)
+    _save_fb(cid, rows)
+    _fb_summarize(cid)
+    save_cases(cases)
+    log.info("案例 %s 收到 %s 的反馈 tags=%s rating=%s", cid,
+             u["username"], tags, rating)
+    return {"ok": True, "mine": row, "fb_count": cases[cid]["fb_count"],
+            "fb_tags": cases[cid]["fb_tags"],
+            "fb_rating": cases[cid]["fb_rating"]}
+
+
+@app.get("/api/cases/{cid}/feedback")
+async def get_case_feedback(request: Request, cid: str):
+    """取反馈。员工只看得到自己的 + 汇总；管理员能看到每个人的备注。"""
+    u = require(request)
+    if cid not in cases:
+        raise HTTPException(404, "案例不存在")
+    rows = _load_fb(cid)
+    mine = [r for r in rows if r.get("user") == u["username"]][-1:]
+    c = cases[cid]
+    out = {"mine": mine[0] if mine else None,
+           "fb_count": c.get("fb_count") or 0,
+           "fb_tags": c.get("fb_tags") or {},
+           "fb_rating": c.get("fb_rating")}
+    if u.get("role") == "admin":
+        out["all"] = rows
+    else:
+        # 不暴露同事写的备注，只给"几个人投了什么"的统计
+        out["all"] = [{"user": r.get("user"), "tags": r.get("tags"),
+                       "rating": r.get("rating"), "seg": r.get("seg")}
+                      for r in rows]
+    return out
 
 
 @app.post("/api/cases/{cid}/analyze")

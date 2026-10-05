@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全量文案盲听验收 · 2026-09-30</title>
+<style>
+:root{--bg:#0f1115;--panel:#171a21;--panel2:#1e222b;--line:#2a2f3a;
+--txt:#e6e9ef;--dim:#9aa3b2;--accent:#5b9cff;--ok:#4ec9a0;--warn:#e8b04b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);
+font:15px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+.wrap{max-width:920px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:22px;margin:0 0 6px}
+h2{font-size:17px;margin:30px 0 12px;padding-left:10px;border-left:3px solid var(--accent)}
+.sub{color:var(--dim);font-size:13px;margin-bottom:20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:14px}
+.code{font-size:24px;font-weight:700;width:40px;height:40px;flex:0 0 40px;display:flex;
+align-items:center;justify-content:center;background:var(--panel2);border:1px solid var(--line);
+border-radius:8px;color:var(--accent)}
+.row{display:flex;align-items:center;gap:14px}
+.name b{font-size:15px}.name small{display:block;color:var(--dim);font-size:12px;margin-top:2px}
+audio{width:100%;margin:10px 0 0;height:36px}
+.reveal{margin-top:8px;font-size:12px;color:var(--warn);display:none}
+.reveal.show{display:block}
+button.act{background:var(--accent);color:#fff;border:0;border-radius:7px;padding:9px 16px;
+cursor:pointer;font-size:14px;margin-right:8px}
+button.act.ghost{background:transparent;border:1px solid var(--line);color:var(--dim)}
+.field{margin-top:10px;font-size:13px;color:var(--dim)}
+.stars{display:inline-flex;gap:3px;margin-left:6px}
+.stars button{background:var(--panel2);border:1px solid var(--line);color:var(--dim);
+border-radius:5px;padding:2px 7px;cursor:pointer;font-size:12px}
+.stars button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left}
+th{background:var(--panel2);color:var(--dim)}
+pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px;
+overflow:auto;font-size:12px;color:var(--dim);display:none}
+pre.show{display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>全量文案盲听验收</h1>
+<div class="sub">
+每段 2 个样本随机编号：<b>A/B 里有一个是案例原声（目标），一个是当前代码生成的</b>。<br>
+男声 = 文案前 1999 字（案例原声 261 秒）；女声 = 前 1773 字（案例原声 251 秒）。<br>
+重点听：<b>语速是不是一样快</b>、<b>断句是不是一样从容</b>、<b>起句有没有力气</b>。
+</div>
+
+<div class="card">
+<button class="act" onclick="toggle()">显示 / 隐藏真实身份</button>
+<button class="act ghost" onclick="exp()">导出打分</button>
+</div>
+
+<div id="box"></div>
+<pre id="out"></pre>
+</div>
+
+<script>
+const G=[
+ {t:'男声 · 1999 字', items:[
+   {f:'gt_male.mp3', l:'案例原声（目标）'},
+   {f:'male_r3.mp3', l:'当前代码 + speed 0.9'}]},
+ {t:'女声 · 1773 字', items:[
+   {f:'gt_female.mp3', l:'案例原声（目标）'},
+   {f:'female_r3.mp3', l:'当前代码 + speed 0.9'}]}
+];
+const C=['A','B'];
+const st={};
+function sh(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+(function(){
+ let h='';
+ G.forEach((g,gi)=>{
+  const o=sh(g.items.map((_,i)=>i));
+  st[gi]={o,rate:{}};
+  h+='<h2>'+g.t+'</h2>';
+  o.forEach((idx,p)=>{
+   const it=g.items[idx], c=C[p];
+   st[gi].rate[c]={nat:0,sim:0};
+   h+='<div class="card"><div class="row"><div class="code">'+c+'</div><div class="name"><b>样本 '+c+'</b>'
+     +'<small class="reveal">'+it.l+'</small></div></div>'
+     +'<audio controls preload="none" src="'+it.f+'"></audio>'
+     +'<div class="field">自然度<span class="stars" data-g="'+gi+'" data-c="'+c+'" data-k="nat">'
+     +[1,2,3,4,5].map(v=>'<button onclick="r('+gi+',\''+c+'\',\'nat\','+v+')">'+v+'</button>').join('')
+     +'</span></div>'
+     +'<div class="field">像目标<span class="stars" data-g="'+gi+'" data-c="'+c+'" data-k="sim">'
+     +[1,2,3,4,5].map(v=>'<button onclick="r('+gi+',\''+c+'\',\'sim\','+v+')">'+v+'</button>').join('')
+     +'</span></div></div>';
+  });
+ });
+ document.getElementById('box').innerHTML=h;
+})();
+function r(g,c,k,v){
+ st[g].rate[c][k]=v;
+ document.querySelectorAll('.stars[data-g="'+g+'"][data-c="'+c+'"][data-k="'+k+'"] button')
+  .forEach((b,i)=>b.classList.toggle('on',i<v));
+}
+let on=false;
+function toggle(){on=!on;document.querySelectorAll('.reveal').forEach(e=>e.classList.toggle('show',on))}
+function lab(g,c){return g.items[st[G.indexOf(g)].o[C.indexOf(c)]].l}
+function exp(){
+ let m='# 全量盲听打分 '+new Date().toLocaleString('zh-CN')+'\n\n';
+ G.forEach((g,gi)=>{
+  m+='## '+g.t+'\n\n| 编号 | 真实身份 | 自然度 | 像目标 |\n|---|---|---|---|\n';
+  C.forEach(c=>{const r=st[gi].rate[c];m+='| '+c+' | '+lab(g,c)+' | '+(r.nat||'-')+' | '+(r.sim||'-')+' |\n'});
+  m+='\n';
+ });
+ const p=document.getElementById('out');p.textContent=m;p.classList.add('show');
+ navigator.clipboard&&navigator.clipboard.writeText(m);
+}
+</script>
+</body>
+</html>

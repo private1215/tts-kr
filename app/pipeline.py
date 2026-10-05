@@ -6,6 +6,7 @@
 """
 import os
 import re
+import math
 import random
 import numpy as np
 from scipy.signal import resample_poly
@@ -150,8 +151,179 @@ def split_for_retry(text: str, min_chars: int = 6) -> list:
 
 # ============================ 长文案自动分块 ============================
 
-CHUNK_MAX_CHARS = 2600      # 单块字数上限（对齐 elevenlabs 习惯）
+CHUNK_MAX_CHARS = 2600      # 单块字数上限（兜底值，见下面 chunk_limit_chars）
 CHUNK_MIN_TAIL_RATIO = 0.30  # 尾块短于上限的这个比例时，改为均匀分块
+
+# ⭐ 2026-10-05 案例拆解结论：ElevenLabs 是按「音频时长」分块，不是按字数。
+#    实测两个案例（案例库 /api/cases）：
+#      男声 4091 字 483.8s，切在第 2157 字 = 8.36 字/秒 → 258 秒
+#      女声 3429 字 459.1s，切在第 1879 字 = 7.51 字/秒 → 250 秒
+#    字数差 15%，换算成时长却都落在 250~258 秒 —— 只有「按时长切」才解释得了。
+#    而我们按 2600 字切，两性别切出完全不同的段长：
+#      男 2573/1472（第一段 298s，比案例长 20%）
+#      女 2580/836 （第一段 352s，比案例长 40%）
+#    段太长正是「前半段跟吵架似的」的嫌疑之一：长上下文里语气更容易漂。
+CHUNK_MAX_SECONDS = float(os.environ.get("TTS_CHUNK_MAX_SECONDS", "250"))
+# 韩语实测 7.3~8.7 字/秒（男快女慢）。没历史数据时用这个起步，跑过几单后
+# 由 server.py 按该音色的实测值自校准（写回 voices.json 的 cps 字段）。
+DEFAULT_CPS = float(os.environ.get("TTS_DEFAULT_CPS", "8.0"))
+# 尾块保护：尾块预估时长短于预算的这个比例时，改为**等分**。
+# 为什么不一路贪心到底：贪心到最后剩多少就是多少，5000 字男声会切出
+# 250+250+92 秒，最后一块只有 92 秒（不到预算的四成），
+# 一方面员工拿到一个"半截"文件，另一方面短尾块的上下文太少、韵律更容易跑偏。
+# 案例只有 2 段的样本（男 262+222 / 女 251+208），没有 3 段样本可以证明
+# 平台会保留这种短尾块，所以宁可等分。
+CHUNK_MIN_TAIL_SEC_RATIO = float(
+    os.environ.get("TTS_CHUNK_MIN_TAIL_SEC_RATIO", "0.4"))
+
+
+def chunk_limit_chars(cps: float = DEFAULT_CPS, speed: float = 1.0) -> int:
+    """时长驱动的块字数上限 = 时长上限(秒) × 语速(字/秒) × speed。
+
+    speed 是员工选的语速：1.2 倍速每秒念的字更多，同样 250 秒能装更多字。
+    下限 600 字是防止 cps 被写坏时把文本切成一地碎块。
+    """
+    return max(int(CHUNK_MAX_SECONDS * max(cps, 1.0) * max(speed, 0.25)), 600)
+
+
+def units_of(t: str) -> list:
+    """把文本拆成 [(句子, 所属段落序号)]。这里是唯一的句/段判定口径。"""
+    units = []
+    for pi, para in enumerate(re.split(r'\n\s*\n', t)):
+        for s in split_sentences(para):
+            units.append((s, pi))
+    return units
+
+
+def render_units(group: list) -> str:
+    """把一组 (句, 段号) 还原成文本：段内空格连，段间空行分隔。"""
+    out, prev_pi = [], None
+    for s, pi in group:
+        if prev_pi is None:
+            out.append(s)
+        elif pi == prev_pi:
+            out.append(" " + s)
+        else:
+            out.append("\n\n" + s)
+        prev_pi = pi
+    return "".join(out)
+
+
+def _unit_ends(units: list) -> list:
+    """每个句子在**还原文本**中的结束位置（把 ' ' / '\\n\\n' 的拼接开销算进去）。
+
+    ⚠️ 必须按 render_units 的口径算：直接累加 len(s) 会少算拼接字符，
+    于是位置对不上、切出来的块长度和预期差几十字。
+    """
+    ends, pos, prev_pi = [], 0, None
+    for s, pi in units:
+        if prev_pi is not None:
+            pos += 1 if pi == prev_pi else 2
+        pos += len(s)
+        ends.append(pos)
+        prev_pi = pi
+    return ends
+
+
+def greedy_split(units: list, limit: int) -> list:
+    """贪心：每块尽量填满 limit，断点必然落在句末/段末。
+
+    ⚠️ 长度必须按 render_units 的口径算（句间 ' '、段间 '\\n\\n'），
+    否则会残留几十字的孤儿尾块 —— 踩过一次（4091 字切出 1354/1333/1332/24）。
+    """
+    chunks, buf, buf_len = [], [], 0
+    for u in units:
+        s, pi = u
+        add = len(s) if not buf else (
+            len(s) + 1 if pi == buf[-1][1] else len(s) + 2)
+        if buf and buf_len + add > limit:
+            chunks.append(render_units(buf))
+            buf, buf_len = [u], len(s)
+        else:
+            buf.append(u)
+            buf_len += add
+    if buf:
+        chunks.append(render_units(buf))
+    return [c for c in chunks if c.strip()]
+
+
+def even_split(units: list, n: int) -> list:
+    """把 units 等分成 n 块：n-1 个断点各自吸附到最近的句末。
+
+    块数由调用方保证（= ceil(预估时长 / 预算)），所以不会多切、也不会留孤儿。
+    """
+    if n <= 1 or len(units) <= 1:
+        return [render_units(units)]
+    ends = _unit_ends(units)
+    total = ends[-1]
+    cuts, used = set(), set()
+    for k in range(1, n):
+        target = total * k / float(n)
+        best, bd = None, None
+        for i, e in enumerate(ends[:-1]):
+            if i in used:
+                continue
+            d = abs(e - target)
+            if bd is None or d < bd:
+                best, bd = i, d
+        if best is None:
+            break
+        used.add(best)
+        cuts.add(best + 1)
+    out, prev = [], 0
+    for c in sorted(cuts) + [len(units)]:
+        grp = units[prev:c]
+        if grp and render_units(grp).strip():
+            out.append(render_units(grp))
+        prev = c
+    return out or [render_units(units)]
+
+
+def split_by_seconds(text: str, cps: float = DEFAULT_CPS,
+                     max_seconds: float = CHUNK_MAX_SECONDS,
+                     speed: float = 1.0) -> list:
+    """按**音频时长预算**分块：贪心填满预算，尾块太短才回退等分。
+
+    为什么是这个形状（2026-10-05 案例拆解，两个 ElevenLabs 样本）：
+
+        案例男 483.8s -> 262s + 222s（53% / 47%）
+        案例女 459.1s -> 251s + 208s（55% / 45%）
+
+    两个样本都是**前重后轻**，而且第一块都刚好 ~250 秒 ——
+    这是「攒到预算就在下一个句末断开」的形状，**不是等分**。
+    2 块时等分（50/50）跟它只差 3~5 个百分点，看不出来；
+    但块数一多两者就分道扬镳（5000 字男声：等分 197×3，贪心 250+250+92）。
+
+    所以：
+      1. 先算块数 N = ceil(预估总秒数 / 预算)，保证每块**平均**不超预算；
+      2. 用**贪心**切（复刻案例的前重后轻形状）；
+      3. 若尾块短于预算的 40%（CHUNK_MIN_TAIL_SEC_RATIO），回退成**等分 N 块**，
+         避免产出 92 秒这种半截文件 —— 案例没有 3 段以上样本，
+         不能证明平台会保留短尾块，宁可等分。
+
+    实测（cps 已校准：男 8.45 / 女 7.25，预算 250s）：
+      男 4045 字 -> 479s -> N=2 -> **2112 + 1933**（250s + 229s） 案例 2157 + 1888
+      女 3416 字 -> 471s -> N=2 -> **1813 + 1603**（250s + 221s） 案例 1879 + 1541
+      男 5000 字 -> 592s -> N=3 -> 2112+2112+776，尾块 92s < 100s -> 等分 1667 × 3
+    """
+    t = (text or "").strip()
+    if not t:
+        return []
+    rate = max(cps * max(speed, 0.25), 0.1)      # 字/秒
+    est_sec = len(t) / rate
+    n = max(int(math.ceil(est_sec / max(max_seconds, 30.0))), 1)
+    if n <= 1:
+        return [t]
+    units = units_of(t)
+    if len(units) <= 1:
+        return [t]
+    limit = max(int(max_seconds * rate), 600)
+    chunks = greedy_split(units, limit)
+    if len(chunks) >= 2:
+        tail_sec = len(chunks[-1]) / rate
+        if tail_sec < max_seconds * CHUNK_MIN_TAIL_SEC_RATIO:
+            chunks = even_split(units, n)
+    return chunks
 
 
 def split_chunks(text: str, max_chars: int = CHUNK_MAX_CHARS,
@@ -181,11 +353,7 @@ def split_chunks(text: str, max_chars: int = CHUNK_MAX_CHARS,
     if len(t) <= max_chars:
         return [t]
 
-    # 单元列表：每项是 (句子文本, 所属段落序号)
-    units = []
-    for pi, para in enumerate(re.split(r'\n\s*\n', t)):
-        for s in split_sentences(para):
-            units.append((s, pi))
+    units = units_of(t)
     if len(units) <= 1:
         # 全文没有句末标点（无换行无句号的粘贴文本），只能整块交给段级切分
         return [t]
