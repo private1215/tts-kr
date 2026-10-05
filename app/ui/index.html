@@ -92,6 +92,14 @@ button.danger{color:var(--err)}
 .chip:hover{border-color:var(--accent);color:var(--txt);background:rgba(91,159,255,.10)}
 .hint{font-size:12px;color:var(--dim);margin-top:7px;line-height:1.55}
 
+/* ---- 2026-09-30 易用性微调：只加样式，不动结构 ---- */
+#text{min-height:190px;font-size:14.5px;line-height:1.75}   /* 员工主输入区，字大一点好校对 */
+#submit{padding:11px 22px;font-size:14.5px;font-weight:600;letter-spacing:.3px}
+#count{font-size:12.5px;color:var(--txt2);margin-top:9px}
+button.primary:disabled{opacity:.55;cursor:not-allowed}
+.card h2{letter-spacing:1.2px}
+label{font-size:12.5px}
+
 .job{border:1px solid var(--line);border-radius:12px;padding:13px 15px;margin-bottom:10px;
   background:linear-gradient(180deg,var(--panel2) 0%,#171C25 100%);
   transition:border-color .16s var(--ease), transform .16s var(--ease)}
@@ -876,6 +884,7 @@ let page = 1, pageSize = +(localStorage.getItem('tts_page_size') || 10), pages =
 let USERS = [];
 const jobNodes = new Map();
 const DRAFT = 'tts_draft';
+const PREF  = 'tts_pref';   /* 生成参数记忆：模式/音色/语言/情感/语速，避免每天重复选 */
 
 const t = k => (I18N[UI][k] !== undefined ? I18N[UI][k] : k);
 const outLang = () => $('#language').value || UI2OUT[UI] || 'korean';
@@ -1014,7 +1023,15 @@ function renderOwners(){
 function renderCount(){
   const n = $('#text').value.length;
   const seg = Math.max(1, Math.ceil(n / (+$('#maxChars').value || 110)));
-  $('#count').textContent = t('countFmt')(n, seg);
+  /* 韩语实测模型：audio_seconds = 字数/6.15，gen_seconds = 8.40 + 0.07374×字数
+     让员工提交前就知道要等多久、成品多长，不用干等 */
+  let extra = '';
+  if(n > 0){
+    const spd = +($('#speed') && $('#speed').value) || 1.0;
+    extra = ' · 约 ' + fmtDur(n / 6.15 / spd) + ' 音频 · 约 '
+          + fmtDur(8.40 + 0.07374 * n) + ' 生成';
+  }
+  $('#count').textContent = t('countFmt')(n, seg) + extra;
 }
 async function loadMeta(){
   try{ META = await (await api('/api/meta')).json(); }catch(e){ return; }
@@ -1178,8 +1195,9 @@ async function login(){
     $('#advBox').classList.toggle('hide', ME.role !== 'admin');
     scope = ME.role === 'admin' ? 'all' : 'mine';
     $$('#scopeBox .tab').forEach(x=>x.classList.toggle('on', x.dataset.scope === scope));
-    applyStatic(); loadMeta(); resetJobs(); poll(); loadStats(); loadUsersSilent();
-    restoreDraft();
+    /* loadMeta 是异步的：不 await 的话选项还没填好，参数记忆恢复不上 */
+    applyStatic(); await loadMeta(); resetJobs(); poll(); loadStats(); loadUsersSilent();
+    restoreDraft(); restorePref();
     if(ME.must_change) setTimeout(()=>openPw(true), 300);
   }catch(e){ $('#lerr').textContent = t('netErr'); }
 }
@@ -1344,6 +1362,36 @@ function restoreDraft(){
   }catch(e){}
 }
 
+/* ---------- 生成参数记忆 ----------
+   员工每天都用同一套设置（同一音色、韩语、同一情感语速），
+   没有记忆的话每天要点 5 次下拉。提交时记一次，下次自动恢复。 */
+function savePref(){
+  try{
+    const g = id => { const e = $(id); return e ? e.value : ''; };
+    localStorage.setItem(PREF, JSON.stringify({
+      mode: (typeof mode !== 'undefined' ? mode : 'custom'),
+      speaker: g('#speaker'), voice: g('#voice'), language: g('#language'),
+      emotion: g('#emotion'), speed: g('#speed')
+    }));
+  }catch(e){}
+}
+function restorePref(){
+  try{
+    const p = JSON.parse(localStorage.getItem(PREF) || 'null');
+    if(!p) return;
+    if(p.mode && p.mode !== (typeof mode !== 'undefined' ? mode : 'custom')){
+      const tab = document.querySelector('.tab[data-mode="'+p.mode+'"]');
+      if(tab) tab.click();          /* 切 tab 会同步显示对应面板 */
+    }
+    const set = (id, v) => { const e = $(id); if(e && v && [...e.options].some(o=>o.value===v)) e.value = v; };
+    set('#language', p.language);
+    set('#speaker',  p.speaker);  if(p.speaker && typeof spkTouched !== 'undefined') spkTouched = true;
+    set('#voice',    p.voice);
+    set('#emotion',  p.emotion);
+    set('#speed',    p.speed);
+  }catch(e){}
+}
+
 /* ---------- 提交 ---------- */
 $$('.tab[data-mode]').forEach(tab=>{
   tab.onclick = () => {
@@ -1363,6 +1411,12 @@ $$('#scopeBox .tab').forEach(tab=>{
 });
 $('#title').oninput = saveDraft;
 $('#text').oninput = () => { renderCount(); saveDraft(); };
+/* Ctrl/Cmd + Enter 直接提交：员工粘完文案不用再去摸鼠标 */
+$('#text').addEventListener('keydown', e => {
+  if((e.ctrlKey || e.metaKey) && e.key === 'Enter'){ e.preventDefault(); $('#submit').click(); }
+});
+/* 语速变了，预估时长要跟着变 */
+$('#speed').addEventListener('change', renderCount);
 $('#maxChars').oninput = renderCount;
 $('#language').onchange = () => { outLangTouched = true; renderChips(); syncSpeakerToLang(); };
 $('#speaker').onchange = () => { spkTouched = true; };   /* 手动挑过就不再被语言切换覆盖 */
@@ -1393,6 +1447,7 @@ $('#submit').onclick = async () => {
   $('#submit').disabled = true;
   try{
     await api('/api/jobs', {method:'POST', body:fd});
+    savePref();                       /* 记住这次的设置，下次打开自动恢复 */
     $('#title').value = ''; $('#text').value = '';
     localStorage.removeItem(DRAFT);
     renderCount(); page = 1; resetJobs(); poll(); loadStats();
@@ -1716,8 +1771,9 @@ renderCount();
     $('#advBox').classList.toggle('hide', ME.role !== 'admin');
     scope = ME.role === 'admin' ? 'all' : 'mine';
     $$('#scopeBox .tab').forEach(x=>x.classList.toggle('on', x.dataset.scope===scope));
-    applyStatic(); loadMeta(); resetJobs(); poll(); loadStats(); loadUsersSilent();
-    restoreDraft();
+    /* loadMeta 是异步的：不 await 的话选项还没填好，参数记忆恢复不上 */
+    applyStatic(); await loadMeta(); resetJobs(); poll(); loadStats(); loadUsersSilent();
+    restoreDraft(); restorePref();
     if(ME.must_change) setTimeout(()=>openPw(true), 300);
   }).catch(()=>showLogin(t('netErr')));
 })();
