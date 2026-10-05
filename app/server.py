@@ -17,8 +17,10 @@ import hashlib
 import secrets
 import asyncio
 import logging
+import shutil
 import subprocess
-from typing import Optional
+import threading
+from typing import Optional, List
 
 import numpy as np
 import soundfile as sf
@@ -46,13 +48,20 @@ BASE = os.environ.get("TTS_BASE", "").strip() or "/mnt/tts"
 OUTPUT_DIR = os.path.join(BASE, "output")
 DATA_DIR = os.path.join(BASE, "data")
 VOICE_DIR = os.path.join(DATA_DIR, "voices")
+# 案例素材库：与 voices 严格分开。
+#   voices = 克隆源（~15s 短片段，喂给模型当 prompt，是「输入」）
+#   cases  = 对标目标（几分钟整段成品 + 原文，是「标准答案」）
+# 混在一起会让人分不清哪个是输入、哪个是判卷标准，所以独立成库。
+CASE_DIR = os.path.join(DATA_DIR, "cases")
 MODEL_DIR = os.path.join(BASE, "models")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(VOICE_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(CASE_DIR, exist_ok=True)
 
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
 JOBS_FILE = os.path.join(DATA_DIR, "jobs.json")
+CASES_FILE = os.path.join(DATA_DIR, "cases.json")
 DEFAULT_ADMIN = "admin"
 # 出厂口令**不再硬编码**：所有部署共用同一个默认口令是致命问题（尤其仓库含源码）。
 # 新环境初始化时：
@@ -534,6 +543,17 @@ def save_voices(v):
 
 
 voices = load_voices()
+
+
+def load_cases():
+    return load_json(CASES_FILE, {})
+
+
+def save_cases(c):
+    save_json(CASES_FILE, c)
+
+
+cases = load_cases()
 
 
 def read_audio(path):
@@ -1859,6 +1879,409 @@ async def delete_voice(request: Request, name: str):
     save_voices(voices)
     log.info("删除音色 %s，清理文件: %s", name, removed or "无")
     return {"ok": True, "removed": removed}
+
+
+# ============================ 案例素材库 ============================
+#
+# 存在的目的：把「对标 ElevenLabs 的 1:1 案例」沉淀成可复用的数据集，
+# 而不是每次靠一两条音频拍脑袋。每份案例 = 原文 + 原声 + 自动算出的客观指标
+# （时长 / 字数 / 语速 / CER / 韵律六维），攒够样本后才能横向找规律。
+#
+# 存储：/mnt/tts/data/cases/{cid}/
+#   meta 见 cases.json      seg{N}.wav  24k 单声道归一化音频
+#   seg{N}.txt  该段文本     source{N}{ext}  原始上传留档（重分析不用再传）
+#   merged.wav  拼接整段（韵律分析按整段算，多段案例本来就是连着播的）
+
+CASE_GENDERS = ("male", "female", "unknown")
+# 来源平台：案例是「标准答案」，必须能追溯它是谁生成的，
+# 否则后面做横向规律分析时，不同平台的样本会混在一起互相污染结论。
+CASE_SOURCES = ("elevenlabs", "qwen", "cosyvoice3", "other", "unknown")
+# 韵律六维（pyin）很慢，几分钟音频要 1~2 分钟，默认后台跑，不卡上传请求。
+# 设 TTS_CASE_PROSODY=0 可整体关掉。
+CASE_PROSODY = os.environ.get("TTS_CASE_PROSODY", "1").strip().lower() not in (
+    "0", "false", "no")
+
+
+def _snap_sentence_end(t, pos, window=400):
+    """把切点吸附到附近最近的句末标点之后，避免切在句子中间。"""
+    lo, hi = max(0, pos - window), min(len(t), pos + window)
+    best, bestd = pos, None
+    for m in re.finditer(r"[.!?。！？…]", t):
+        p = m.end()
+        if lo <= p <= hi:
+            d = abs(p - pos)
+            if bestd is None or d < bestd:
+                best, bestd = p, d
+    return best
+
+
+def _align_texts(texts, durs):
+    """把文案对齐到各音频段。返回 ([(文本, (char_start, char_end))...], 方式)。
+
+    为什么必须对齐，而不是「存整篇文案 + 每段用 ASR 补全」：
+    ElevenLabs 的玩法是整篇文案丢进去，平台按 ~2600 字上限自动拆块、
+    逐块生成。所以「1 篇文案 + N 段音频」是**平台分块后的产物**，
+    不是素材没配对。文案哪一段对应哪段音频必须对齐出来，否则
+      ① 拿不到准确文本（ASR 噪声 ~22%）
+      ② 没法逆向研究平台的拆分边界策略——而这正是要拆解的东西
+    对齐后每段都记 char_start/char_end，能回溯到整篇文案的位置。
+
+    三种方式，按可靠性排序：
+      per_file        上传时就按段给好了文本，直接用
+      split_chunks    用与生成端同一口径的分块器（2600 上限、句末断开）拆，块数对得上
+      duration_ratio  块数对不上，按音频时长占比切到最近句末
+    """
+    if not texts or not durs:
+        return [], "none"
+    # ① 逐段一一对应
+    if len(texts) == len(durs):
+        return [(t, None) for t in texts], "per_file"
+    if len(texts) != 1:
+        return [], "none"
+    t = (texts[0] or "").strip()
+    if not t:
+        return [], "none"
+
+    # ② 按时长占比切到最近句末。
+    #    ⚠️ 不要拿 split_chunks（2600 字上限贪心）的结果当对齐依据：
+    #    它的块长比与音频时长比常常对不上——实测 4045 字案例，
+    #    split_chunks 切成约 64%/36%，而两段音频是 54%/46%。
+    #    硬用字数块去套音频，文本范围根本不是音频念的那段，CER 会爆掉，
+    #    还会误判成「文本与音频对不上」。
+    #    时长占比才直接反映「这段音频念了多少字」。
+    #    split_chunks 的预测边界另存进 chunk_pred，用来研究平台到底怎么切。
+    total = float(sum(durs)) or 1.0
+    t_len = len(t)
+    ends, acc = [], 0
+    for x in durs[:-1]:
+        acc += x
+        ends.append(_snap_sentence_end(t, int(round(t_len * acc / total))))
+    out, prev = [], 0
+    for e in ends + [t_len]:
+        e = max(e, prev)
+        out.append((t[prev:e].strip(), (prev, e)))
+        prev = e
+    return out, "duration_ratio"
+
+
+def _case_dir(cid):
+    return os.path.join(CASE_DIR, cid)
+
+
+def _analyze_case(cid):
+    """后台算韵律六维并回写 cases.json。失败只记日志，不影响案例本身。"""
+    try:
+        import prosody_report
+        c = cases.get(cid)
+        if not c:
+            return
+        merged = os.path.join(_case_dir(cid), "merged.wav")
+        if not os.path.isfile(merged):
+            return
+        m = prosody_report.measure(merged, name=cid)
+        c["prosody"] = {k: m.get(k) for k in
+                        ("A", "B", "C", "D", "E", "F", "segs", "pauses")}
+        c["prosody_done"] = True
+        save_cases(cases)
+        log.info("案例 %s 韵律分析完成: %s", cid, c["prosody"])
+    except Exception as e:
+        log.warning("案例 %s 韵律分析失败: %s", cid, e)
+
+
+@app.post("/api/cases")
+async def upload_case(request: Request,
+                      name: str = Form(...),
+                      gender: str = Form("unknown"),
+                      source: str = Form("unknown"),
+                      tags: str = Form(""),
+                      note: str = Form(""),
+                      files: List[UploadFile] = File(...),
+                      text_files: Optional[List[UploadFile]] = File(None)):
+    """上传一份案例（可多段音频 + 对应文本）。
+
+    约定：音频与文本都按文件名排序后一一对应（案例常是 1.mp3 / 2.mp3 + 1.txt / 2.txt）。
+    没给文本的段会自动用 ASR 转写补上并标注 text_src=asr，方便人工校对。
+
+    source / tags 是给后续「拆解它是怎么生成的」用的：
+    案例多来自 ElevenLabs，能标出 voice / model / speed 这类生成参数，
+    后面按参数分组找规律才有依据（否则只能笼统说「案例比较好」）。
+    """
+    u = require(request)
+    gender = (gender or "unknown").strip().lower()
+    if gender not in CASE_GENDERS:
+        raise HTTPException(400, f"gender 需在 {list(CASE_GENDERS)} 之内")
+    source = (source or "unknown").strip().lower()
+    if source not in CASE_SOURCES:
+        raise HTTPException(400, f"source 需在 {list(CASE_SOURCES)} 之内")
+    safe = "".join(ch for ch in (name or "") if ch not in '/\\:*?"<>|').strip()
+    if not safe:
+        raise HTTPException(400, "案例名无效")
+    if not files:
+        raise HTTPException(400, "至少上传一个音频文件")
+
+    texts = []
+    if text_files:
+        for tf in sorted([f for f in text_files if f.filename],
+                         key=lambda f: f.filename):
+            raw = await tf.read()
+            texts.append(raw.decode("utf-8", errors="ignore").strip())
+
+    cid = uuid.uuid4().hex[:12]
+    d = _case_dir(cid)
+    os.makedirs(d, exist_ok=True)
+
+    order = sorted([f for f in files if f.filename], key=lambda f: f.filename)
+
+    # ---------- 第一遍：先处理音频，拿到每段时长 ----------
+    # 必须先拿时长：文本对齐要按时长比例分配，而时长只有解码后才知道。
+    audio_meta = []
+    for i, up in enumerate(order):
+        raw = await up.read()
+        ext = os.path.splitext(up.filename or "")[1].lower() or ".mp3"
+        src = os.path.join(d, f"source{i}{ext}")
+        with open(src, "wb") as fh:
+            fh.write(raw)
+        try:
+            data, sr = sf.read(src, dtype="float32")
+        except Exception as e:
+            # 单个文件坏了不该让整单失败：留档后跳过，其它段照常入库
+            log.warning("案例 %s 第 %d 个音频无法读取 %s: %s", cid, i, up.filename, e)
+            continue
+        if getattr(data, "ndim", 1) > 1:
+            data = data.mean(axis=1)
+        # 统一 24k 单声道：与内部处理口径一致，后续分析不用再猜采样率
+        if int(sr) != 24000:
+            import librosa
+            data = librosa.resample(data.astype(np.float64), orig_sr=sr,
+                                    target_sr=24000).astype(np.float32)
+            sr = 24000
+        wav = os.path.join(d, f"seg{i}.wav")
+        sf.write(wav, data, sr)
+        audio_meta.append({"idx": i, "src": up.filename,
+                           "audio": f"seg{i}.wav",
+                           "dur": round(len(data) / float(sr), 3)})
+
+    if not audio_meta:
+        shutil.rmtree(d, ignore_errors=True)
+        raise HTTPException(400, "没有任何可用的音频文件")
+
+    # ---------- 第二遍：把文案对齐到各音频段 ----------
+    aligned, align_method = _align_texts(texts,
+                                         [a["dur"] for a in audio_meta])
+    # 只有「对齐彻底失败」才退化成整篇文案 + ASR，并如实记下来
+    full_text = texts[0] if (not aligned and len(texts) == 1
+                             and len(audio_meta) > 1) else ""
+    if full_text:
+        with open(os.path.join(d, "full.txt"), "w", encoding="utf-8") as fh:
+            fh.write(full_text)
+
+    segs = []
+    for i, am in enumerate(audio_meta):
+        wav = os.path.join(d, am["audio"])
+        dur = am["dur"]
+        txt = aligned[i][0] if i < len(aligned) else ""
+        rng = aligned[i][1] if i < len(aligned) else None
+        text_src = "user" if txt else ""
+        if not txt:
+            try:
+                txt = asr_check.transcribe(wav, language="Korean")
+                text_src = "asr"
+            except Exception as e:
+                log.warning("案例 %s 第 %d 段 ASR 转写失败: %s", cid, i, e)
+        if txt:
+            with open(os.path.join(d, f"seg{i}.txt"), "w", encoding="utf-8") as fh:
+                fh.write(txt)
+
+        # CER 在这里的含义是「文本与音频对不对得上」，不是发音好坏：
+        # 案例原声自己就有 ~0.2227 的噪声底，明显高于它才说明文本对不上。
+        # ⚠️ 只对 text_src=user 的段算：文本若来自 ASR，等于拿转写比转写，
+        #    结果必然是 0，反而会伪装成「文本完美匹配」误导后续分析
+        #    （与「CER 恰好为 0 = 回检坏了」是同一个陷阱）。
+        cer = None
+        if txt and text_src == "user":
+            try:
+                cer = asr_check.check_chunk(wav, txt, "Korean").get("cer")
+            except Exception:
+                cer = None
+
+        segs.append({"idx": i, "src": am["src"], "audio": am["audio"],
+                     "text": f"seg{i}.txt" if txt else "",
+                     "dur": dur, "chars": len(txt), "text_src": text_src,
+                     "char_start": (rng or (None, None))[0],
+                     "char_end": (rng or (None, None))[1],
+                     "cps": round(len(txt) / dur, 3) if dur and txt else None,
+                     "cer": cer})
+
+    if not segs:
+        shutil.rmtree(d, ignore_errors=True)
+        raise HTTPException(400, "没有任何可用的音频文件")
+
+    try:
+        parts = [sf.read(os.path.join(d, s["audio"]), dtype="float32")[0]
+                 for s in segs]
+        allx = np.concatenate(parts) if len(parts) > 1 else parts[0]
+        sf.write(os.path.join(d, "merged.wav"), allx, 24000)
+    except Exception as e:
+        log.warning("案例 %s 拼接 merged 失败: %s", cid, e)
+
+    # 顺带记下「按我们自己的口径会怎么切」，供后续对比平台的实际切法。
+    # 这两者的差异本身就是「平台分块策略」的直接证据。
+    chunk_pred = []
+    _t = (texts[0] if len(texts) == 1 else "").strip()
+    if _t and len(audio_meta) > 1:
+        import pipeline
+        pos = 0
+        for c in pipeline.split_chunks(_t):
+            s = _t.find(c[:60], pos)
+            if s < 0:
+                s = pos
+            chunk_pred.append([s, s + len(c)])
+            pos = s + len(c)
+
+    total_dur = round(sum(s["dur"] for s in segs), 3)
+    total_chars = sum(s["chars"] for s in segs)
+    rec = {"id": cid, "name": safe, "gender": gender, "source": source,
+           "tags": (tags or "").strip(), "note": (note or "").strip(),
+           "has_full_text": bool(full_text), "align_method": align_method,
+           "chunk_pred": chunk_pred,
+           "owner": u["username"], "created_at": time.time(),
+           "segments": segs, "total_dur": total_dur, "total_chars": total_chars,
+           "cps": round(total_chars / total_dur, 3) if total_dur else None,
+           "prosody": None, "prosody_done": False}
+    cases[cid] = rec
+    save_cases(cases)
+    log.info("上传案例 %s(%s) name=%s 段数=%d 时长=%.1fs 字数=%d",
+             cid, gender, safe, len(segs), total_dur, total_chars)
+
+    if CASE_PROSODY:
+        threading.Thread(target=_analyze_case, args=(cid,), daemon=True).start()
+    return rec
+
+
+@app.get("/api/cases")
+async def list_cases(request: Request, gender: str = "", source: str = ""):
+    require(request)
+    items = list(cases.values())
+    if gender.strip():
+        items = [c for c in items if c.get("gender") == gender.strip().lower()]
+    if source.strip():
+        items = [c for c in items if c.get("source") == source.strip().lower()]
+    items.sort(key=lambda c: c.get("created_at") or 0, reverse=True)
+    # 段内文本可能很长，列表页只给统计值，详情再 GET /api/cases/{id}
+    return [{k: v for k, v in c.items() if k != "segments"} for c in items]
+
+
+@app.get("/api/cases/{cid}")
+async def get_case(request: Request, cid: str):
+    require(request)
+    c = cases.get(cid)
+    if not c:
+        raise HTTPException(404, "案例不存在")
+    return c
+
+
+@app.get("/api/cases/{cid}/audio")
+async def case_audio(request: Request, cid: str, seg: Optional[int] = None):
+    """下载案例音频。不带 seg = 拼接整段；带 seg = 指定片段。"""
+    require(request)
+    c = cases.get(cid)
+    if not c:
+        raise HTTPException(404, "案例不存在")
+    if seg is None:
+        p = os.path.join(_case_dir(cid), "merged.wav")
+    else:
+        s = next((x for x in c.get("segments", []) if x.get("idx") == seg), None)
+        if not s:
+            raise HTTPException(404, "片段不存在")
+        p = os.path.join(_case_dir(cid), s.get("audio", ""))
+    if not os.path.isfile(p):
+        raise HTTPException(404, "音频文件不存在")
+    return FileResponse(p, media_type="audio/wav",
+                        filename=f"{c.get('name', cid)}-{cid}.wav")
+
+
+@app.get("/api/cases/{cid}/text")
+async def case_text(request: Request, cid: str):
+    """取案例文本。有整篇文案（full.txt）就优先给整篇，否则拼各段。"""
+    require(request)
+    c = cases.get(cid)
+    if not c:
+        raise HTTPException(404, "案例不存在")
+    fp = os.path.join(_case_dir(cid), "full.txt")
+    if os.path.isfile(fp):
+        with open(fp, encoding="utf-8") as fh:
+            return Response(content=fh.read(),
+                            media_type="text/plain; charset=utf-8")
+    parts = []
+    for s in c.get("segments", []):
+        p = os.path.join(_case_dir(cid), s.get("text", ""))
+        if s.get("text") and os.path.isfile(p):
+            with open(p, encoding="utf-8") as fh:
+                parts.append(fh.read())
+    return Response(content="\n\n".join(parts),
+                    media_type="text/plain; charset=utf-8")
+
+
+@app.post("/api/cases/{cid}/analyze")
+async def reanalyze_case(request: Request, cid: str):
+    """重算韵律六维（换了分析口径、或上次跑失败时用）。"""
+    require(request)
+    if cid not in cases:
+        raise HTTPException(404, "案例不存在")
+    threading.Thread(target=_analyze_case, args=(cid,), daemon=True).start()
+    return {"ok": True, "msg": "已在后台重算，稍后刷新查看 prosody 字段"}
+
+
+@app.post("/api/cases/{cid}/meta")
+async def update_case_meta(request: Request, cid: str,
+                           name: str = Form(""),
+                           gender: str = Form(""),
+                           source: str = Form(""),
+                           tags: str = Form(""),
+                           note: str = Form("")):
+    """补改标注。
+
+    单独开这个接口是因为：标注（尤其 ElevenLabs 的 voice/model/speed）
+    往往是事后才打听到的，为改几个字重传几百 MB 音频不划算。
+    只传要改的字段，留空表示不改。
+    """
+    u = require(request)
+    c = cases.get(cid)
+    if not c:
+        raise HTTPException(404, "案例不存在")
+    if u.get("role") != "admin" and c.get("owner") != u.get("username"):
+        raise HTTPException(403, "无权修改他人上传的案例")
+    if gender.strip():
+        g = gender.strip().lower()
+        if g not in CASE_GENDERS:
+            raise HTTPException(400, f"gender 需在 {list(CASE_GENDERS)} 之内")
+        c["gender"] = g
+    if source.strip():
+        s = source.strip().lower()
+        if s not in CASE_SOURCES:
+            raise HTTPException(400, f"source 需在 {list(CASE_SOURCES)} 之内")
+        c["source"] = s
+    for key, val in (("name", name), ("tags", tags), ("note", note)):
+        if val.strip():
+            c[key] = "".join(ch for ch in val.strip()
+                             if ch not in '/\\:*?"<>|') if key == "name" else val.strip()
+    save_cases(cases)
+    return c
+
+
+@app.delete("/api/cases/{cid}")
+async def delete_case(request: Request, cid: str):
+    u = require(request)
+    c = cases.get(cid)
+    if not c:
+        raise HTTPException(404, "案例不存在")
+    if u.get("role") != "admin" and c.get("owner") != u.get("username"):
+        raise HTTPException(403, "无权删除他人上传的案例")
+    shutil.rmtree(_case_dir(cid), ignore_errors=True)
+    del cases[cid]
+    save_cases(cases)
+    log.info("删除案例 %s (%s)", cid, c.get("name"))
+    return {"ok": True}
 
 
 @app.get("/api/download/{fn:path}")
