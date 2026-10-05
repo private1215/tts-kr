@@ -19,6 +19,11 @@
 | `docs/语感优化分析-2026-09-29.md` | 韵律六维体检与对齐 ElevenLabs 的实测结论 |
 | `docs/内置音色与自动分块方案.md` | 内置克隆音色、自动分块独立输出 |
 | **`docs/从零部署与迁移.md`** | **换新服务器时照这个走**（含 torch CPU 版陷阱、模型下载、数据迁移、验收清单） |
+| **`docs/r13-韵律移植上线-2026-10-06.md`** | **r13 韵律移植（PROSO）：验收数据、原理、已知偏差、EQ 反向问题、下一步** |
+| `docs/案例拆解-2026-10-05.md` | 标杆案例（ElevenLabs）拆解：六维基线、分块策略、排障全过程 |
+| `docs/案例素材库接口.md` | 案例素材库 API 与「试听后打分」的员工反馈接口 |
+| `docs/回归验证流程.md` | 改完怎么验（含「先确认代码到底生效了没有」，避免白跑） |
+| `docs/部署验收对比-2026-10-05.md` | 新机部署验收（本机基线，⚠️ 不可与 r11 及更早逐项对比） |
 | `docs/bench_result.json` | batch 选型 benchmark 原始数据 |
 
 ## 目录结构
@@ -211,6 +216,9 @@ Qwen3-TTS 克隆有个**官方已知的随机缺陷**（GitHub Issue #239 / #290
 | mp3 码率 | 160k（24kHz 采样率下 LAME 上限，请求 192k 会被钳） | `server.MP3_BITRATE` |
 | 韵律采样温度 | `subtalker_temperature` 已全链路透传，但**实测无效**，默认保持官方 0.9 | `tts_engine.GEN_SUBTALKER_TEMPERATURE` |
 | 克隆 + 语气指令 | **官方不支持**：CustomVoice 禁止跑 `generate_voice_clone`，Base 的克隆接口又没有 `instruct` | — |
+| **韵律移植（r13 起默认开）** | F0 重映射：A 句内动态 / E 句尾多样性直接用 **Praat PSOLA** 改 F0，`k = target/cur` **一步到位**（单调缩放下宽度/斜率精确乘 k，不要迭代）。⚠️ 目标值是 **Praat 口径**、验收是 **pyin 口径**，两口径比值在重合成后失效（男声 A/E 因此未达标） | `app/proso.py` |
+| 首尾静音阈值 | `-45 dB` 判据**必须做电平补偿**（`sil_db = EDGE_SIL_DB − gain_db`），否则 `OUT_GAIN_DB` 或性别偏移一变就静默失效，日志还会显示"已修好" | `server.fit_edges` |
+| 音色 EQ 现状 | ⚠️ `TTS_TONE_EQ_FILTER` 低频段是 **2026-09-30 口径下 fitted 的，现已过头**（成品低频比案例多 4 dB 还在加 5 dB），修正值已算好待上线 | `server.TONE_EQ_FILTER` |
 
 ⚠️ **ASR 内容回检依赖两点，缺一个就静默失效**：
 ① faster-whisper 权重必须在**服务运行用户的 HOME** 下（服务跑 root，
