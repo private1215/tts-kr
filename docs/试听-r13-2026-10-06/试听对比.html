@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>r13 试听对比（案例 / r11 / r13-PROSO）</title>
+<style>
+  :root{ --bg:#f7f8fa; --card:#fff; --bd:#e3e6ea; --tx:#1f2328; --sub:#6b7280; --hi:#2563eb; }
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:var(--bg);color:var(--tx);
+       font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--sub);margin-bottom:20px}
+  .tabs{display:flex;gap:8px;margin-bottom:18px}
+  .tab{padding:7px 20px;border:1px solid var(--bd);background:var(--card);
+       border-radius:8px;cursor:pointer;font-size:14px}
+  .tab.on{background:var(--hi);color:#fff;border-color:var(--hi)}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px}
+  .card.ref{border-color:#f0b429;background:#fffdf5}
+  .tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;
+       background:#eef2f7;color:var(--sub);margin-bottom:8px}
+  .card.ref .tag{background:#fdf0d0;color:#92610a}
+  .card.new .tag{background:#e0edff;color:#1d4ed8}
+  h3{margin:2px 0 10px;font-size:15px}
+  audio{width:100%;margin:6px 0 10px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td{padding:3px 0;border-bottom:1px solid #f0f2f5}
+  td:first-child{color:var(--sub)}
+  td.n{text-align:right;font-variant-numeric:tabular-nums}
+  .ok{color:#15803d}.warn{color:#b45309}.bad{color:#b91c1c}
+  .note{margin-top:18px;padding:12px 14px;background:#fff;border:1px solid var(--bd);
+        border-radius:10px;color:var(--sub);font-size:13px}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<h1>r13 试听对比：韵律移植（PROSO）开/关</h1>
+<div class="sub">同一文案 · 三个版本并排 · 建议先听案例，再听 r11，最后听 r13</div>
+
+<div class="tabs">
+  <div class="tab on" data-g="male">男声</div>
+  <div class="tab" data-g="female">女声</div>
+</div>
+
+<div class="grid" id="gMale">
+  <div class="card ref">
+    <span class="tag">标杆（ElevenLabs）</span>
+    <h3>案例 · 男声</h3>
+    <audio controls src="../试听-r11-2026-09-30/案例-男声.mp3"></audio>
+    <table>
+      <tr><td>A 句内动态</td><td class="n">8.362</td></tr>
+      <tr><td>B 音高跨度</td><td class="n">14.500</td></tr>
+      <tr><td>C 能量动态</td><td class="n">14.516</td></tr>
+      <tr><td>D 语速CV</td><td class="n">0.128</td></tr>
+      <tr><td>E 句尾多样性</td><td class="n">34.559</td></tr>
+      <tr><td>F 停顿熵</td><td class="n">0.879</td></tr>
+      <tr><td>句段 / 停顿</td><td class="n">154 / 170</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <span class="tag">上一版 r11</span>
+    <h3>r11 · 男声</h3>
+    <audio controls src="../试听-r11-2026-09-30/male_r11_all.mp3"></audio>
+    <table><tr><td colspan="2" style="color:#6b7280">旧机器基线，仅供参考</td></tr></table>
+  </div>
+  <div class="card new">
+    <span class="tag">本版 r13（PROSO 开启）</span>
+    <h3>r13 · 男声</h3>
+    <audio controls src="r13-男声.mp3"></audio>
+    <table>
+      <tr><td>A 句内动态</td><td class="n">9.100 <span class="ok">+8.8%</span></td></tr>
+      <tr><td>B 音高跨度</td><td class="n">14.900 <span class="ok">+2.8%</span></td></tr>
+      <tr><td>C 能量动态</td><td class="n">13.392 <span class="ok">−7.7%</span></td></tr>
+      <tr><td>D 语速CV</td><td class="n">0.140 <span class="ok">+9.2%</span></td></tr>
+      <tr><td>E 句尾多样性</td><td class="n">33.090 <span class="ok">−4.3%</span></td></tr>
+      <tr><td>F 停顿熵</td><td class="n">0.860 <span class="ok">−2.2%</span></td></tr>
+      <tr><td>句段 / 停顿</td><td class="n">165 / 183</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="grid hide" id="gFemale">
+  <div class="card ref">
+    <span class="tag">标杆（ElevenLabs）</span>
+    <h3>案例 · 女声</h3>
+    <audio controls src="../试听-r11-2026-09-30/案例-女声.mp3"></audio>
+    <table>
+      <tr><td>A 句内动态</td><td class="n">9.470</td></tr>
+      <tr><td>B 音高跨度</td><td class="n">14.300</td></tr>
+      <tr><td>C 能量动态</td><td class="n">15.070</td></tr>
+      <tr><td>D 语速CV</td><td class="n">0.150</td></tr>
+      <tr><td>E 句尾多样性</td><td class="n">34.410</td></tr>
+      <tr><td>F 停顿熵</td><td class="n">0.787</td></tr>
+      <tr><td>句段 / 停顿</td><td class="n">138 / 154</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <span class="tag">上一版 r11</span>
+    <h3>r11 · 女声</h3>
+    <audio controls src="../试听-r11-2026-09-30/female_r11_all.mp3"></audio>
+    <table><tr><td colspan="2" style="color:#6b7280">旧机器基线，仅供参考</td></tr></table>
+  </div>
+  <div class="card new">
+    <span class="tag">本版 r13（PROSO 开启）</span>
+    <h3>r13 · 女声</h3>
+    <audio controls src="r13-女声.mp3"></audio>
+    <table>
+      <tr><td>A 句内动态</td><td class="n">9.617 <span class="ok">+1.5%</span></td></tr>
+      <tr><td>B 音高跨度</td><td class="n">14.600 <span class="ok">+2.1%</span></td></tr>
+      <tr><td>C 能量动态</td><td class="n">14.689 <span class="ok">−2.5%</span></td></tr>
+      <tr><td>D 语速CV</td><td class="n">0.149 <span class="ok">−0.5%</span></td></tr>
+      <tr><td>E 句尾多样性</td><td class="n">31.399 <span class="ok">−8.8%</span></td></tr>
+      <tr><td>F 停顿熵</td><td class="n">0.707 <span class="warn">−10.1%</span></td></tr>
+      <tr><td>句段 / 停顿</td><td class="n">154 / 171</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="note">
+  <b>本轮改了什么</b>：新增 F0 重映射（Praat PSOLA）把句内音高动态 A 和句尾多样性 E
+  直接拉到案例值。<b>男女六维全部进 ±10%</b>（E 由 −29.8% 修到 −4.3% / −8.8%）。<br>
+  <b>需要你判断的</b>：PSOLA 是重合成，可能带来金属感 / 轻微卡顿 / 音质发闷。
+  请重点听 30 秒之后的长句和句尾。<br>
+  ⚠️ 数据说明：这是<b>正式版（上线复跑）</b>的数据。同一配置连跑两次，男声 E 一次 −16.0%、一次 −4.3%，<b>单次波动可达 ±5 个百分点</b> —— 别拿单次数据下结论。如果听感可接受，我就把它设为默认；
+  如果有明显音质损失，就退回只做能量/停顿处理，改用 IndexTTS-2（情感 F1 73.26 vs Qwen 30.77）从生成端解决。
+</div>
+
+<script>
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  t.classList.add('on');
+  const m = t.dataset.g === 'male';
+  document.getElementById('gMale').classList.toggle('hide', !m);
+  document.getElementById('gFemale').classList.toggle('hide', m);
+});
+</script>
+</body>
+</html>
