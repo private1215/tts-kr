@@ -19,6 +19,23 @@ Environment=PYTHONUNBUFFERED=1
 # 改完记得同步改上面 PATH / WorkingDirectory / ExecStart / 日志路径，以及 RequiresMountsFor。
 # 删除此行则回落到代码默认值 /mnt/tts。
 Environment=TTS_BASE=/mnt/tts
+# ⚠️ 双显卡时锁死具体哪张卡，必须写 UUID，不要写序号。
+# 本机 nvidia-smi 与 torch 的编号是反的：
+#   nvidia-smi  index 0 = RTX 3060 (12G, PCI 03:00.0)
+#                index 1 = RTX 3090 (24G, PCI 04:00.0)
+#   torch.device  0 = RTX 3090（CUDA 默认 FASTEST_FIRST，按算力强弱排）
+#               1 = RTX 3060
+# 写序号会踩错卡。换机换卡时用 nvidia-smi --query-gpu=index,name,uuid --format=csv 重取。
+# 当前策略：先用 12G 的 3060，与旧机显存条件一致，便于复现历史性能基线。
+# ⚠️ ASR 回检（faster-whisper）的 HF 缓存位置必须显式钉死。
+# 服务以 root 运行，而模型当初是 zheng 用户下的 → root 的 HOME=/root 找不到缓存，
+# local_files_only=True 直接抛错 → 转写返回空串 → CER 恒为 0 且标记 skipped，
+# 「内容跑飞」一条都抓不到（表现为仿真度回检全程静默失效）。
+# 放到 /mnt/tts 下还有个好处：与项目「所有数据都在 /mnt/tts」一致，
+# 不再受运行用户 HOME 变化影响。缓存结构必须是 HF_HOME/hub/models--*。
+Environment=HF_HOME=/mnt/tts/models/asr
+Environment=HF_HUB_OFFLINE=1
+Environment=CUDA_VISIBLE_DEVICES=GPU-94853612-464c-9177-c374-a9a82e321229
 # PyTorch 缓存分配器调优：服务长期不重启时 reserved 会碎片化累积，
 # 实测 service.log 里出现过 "2.15 GiB reserved but unallocated" 导致的假性 OOM。
 # expandable_segments：创建可动态扩展的内存段，从根源减少碎片（PyTorch 官方首推）

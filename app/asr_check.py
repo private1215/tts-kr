@@ -19,6 +19,12 @@
    （模型权重 464M 已缓存在 ~/.cache/huggingface）。这是踩过的坑，别改。
 2. CPU + int8 推理，不占显存，与 GPU 生成互不干扰。
 3. 任何异常都**降级为跳过**，绝不能因为回检失败而让整单失败。
+4. ⚠️ 2026-10-05 修（换新机重装时暴露）：**不能把文件路径交给 transcribe**。
+   faster-whisper ≥1.2 内部调 `av.container.open(..., metadata_errors=...)`，
+   而 av ≥19 已移除该参数 → TypeError → 被下面的 except 吞掉 → 返回空串 →
+   CER 直接标记 skipped 且 ok=True。**表现为「回检全程静默失效」：
+   所有任务 CER 都是 0，跑飞一条也发现不了。**
+   对策：自己用 soundfile 读成 ndarray 再传，绕开 av 解码（见 `_read_16k`）。
 """
 import os
 import re
@@ -84,13 +90,38 @@ def _load():
     return _model
 
 
+def _read_16k(wav_path: str):
+    """读音频为 16 kHz 单声道 float32 ndarray。
+
+    两件事都必须在这里做掉，缺一个就会静默出错：
+    1. 不能用文件路径调 transcribe（原因见文件头第 4 点，av ≥19 参数不兼容）；
+    2. 传 ndarray 时 faster-whisper **假定采样率就是 16000**，不会重采样。
+       我们的成品是 24 kHz，直接丢进去等于把音频当 16 kHz 处理 →
+       音高语速全错、转写崩坏，而它不会报错。
+    """
+    import numpy as np
+    import soundfile as sf
+    from math import gcd
+    from scipy.signal import resample_poly
+
+    data, sr = sf.read(wav_path, dtype="float32", always_2d=False)
+    if getattr(data, "ndim", 1) > 1:
+        data = data.mean(axis=1)
+    data = np.asarray(data, dtype=np.float32)
+    if int(sr) != 16000:
+        g = gcd(int(sr), 16000)
+        data = resample_poly(data, 16000 // g, int(sr) // g).astype(np.float32)
+    return data
+
+
 def transcribe(wav_path: str, language: str = "ko") -> str:
     """转写音频文件，返回文本。失败返回空串。"""
     m = _load()
     if m is None:
         return ""
     try:
-        segs, _info = m.transcribe(wav_path, language=lang_code(language),
+        segs, _info = m.transcribe(_read_16k(wav_path),
+                                   language=lang_code(language),
                                    vad_filter=True, beam_size=1)
         return " ".join(s.text for s in segs).strip()
     except Exception as e:
