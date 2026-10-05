@@ -39,6 +39,12 @@ import engine_select
 import pba
 import envshape
 import dyn
+import prosody_report
+try:
+    import proso          # 韵律 A/E 的 F0 重映射（依赖 parselmouth/Praat）
+except Exception as _e:   # 没装就优雅降级，不影响主链路
+    proso = None
+    log.warning("proso 未启用（parselmouth 不可用）: %r", _e)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("server")
@@ -298,9 +304,45 @@ F0_SPLIT_HZ = float(os.environ.get("TTS_F0_SPLIT_HZ", "220"))
 # 所以改成：首静音裁到 60 ms、尾静音统一补/裁到 220 ms，
 # 段间 = 0.22 + 0.06 = 0.28 s，正落进案例区间。
 # 两个都设 0 即关闭。
+# ---- 韵律 A / E 的 F0 重映射（app/proso.py，Praat PSOLA）-------------------
+# 目标值是「案例音频用同一套 Praat F0 公式量出来的」，与 prosody_report 的
+# librosa.pyin 口径数值不同（男 E 45.5 vs 34.6），但同源自洽，k=target/cur 成立。
+# ⚠️ 默认关闭：PSOLA 是重合成，有音质代价（可能引入金属感/卡顿），
+#    必须先跑一轮开着的全篇让耳朵验收，再决定要不要默认开。
+PROSO = os.environ.get("TTS_PROSO", "0") != "0"
+PROSO_MIN_CHARS = int(os.environ.get("TTS_PROSO_MIN_CHARS", "120"))
+PROSO_A_MALE = float(os.environ.get("TTS_PROSO_A_MALE", "9.495"))
+PROSO_E_MALE = float(os.environ.get("TTS_PROSO_E_MALE", "45.493"))
+PROSO_A_FEMALE = float(os.environ.get("TTS_PROSO_A_FEMALE", "9.498"))
+PROSO_E_FEMALE = float(os.environ.get("TTS_PROSO_E_FEMALE", "33.511"))
+PROSO_A_DEFAULT = float(os.environ.get("TTS_PROSO_A_DEFAULT", "9.50"))
+PROSO_E_DEFAULT = float(os.environ.get("TTS_PROSO_E_DEFAULT", "39.50"))
+
 EDGE_HEAD_S = float(os.environ.get("TTS_EDGE_HEAD_S", "0.06"))
 EDGE_TAIL_S = float(os.environ.get("TTS_EDGE_TAIL_S", "0.22"))
 EDGE_SIL_DB = float(os.environ.get("TTS_EDGE_SIL_DB", "-45"))
+
+
+def sil_edges(audio, sr, sil_db=EDGE_SIL_DB):
+    """量首尾静音秒数（只用于诊断日志 / fit_edges 内部）。
+
+    与 fit_edges 同一口径：20 ms 帧 RMS，低于 sil_db 算静音。
+    第三个返回值是整段最响帧的 dB —— 用来判断「是不是整段都太安静，
+    导致一个响帧都挑不出来」（那样 fit_edges 会直接放弃、静默不生效）。
+    """
+    a = np.asarray(audio, dtype=np.float64)
+    fr = max(int(sr * 0.02), 1)
+    n = len(a) // fr
+    if n < 4:
+        return None, None, None
+    e = np.sqrt((a[:n * fr].reshape(n, fr) ** 2).mean(axis=1))
+    db = 20 * np.log10(e + 1e-9)
+    loud = np.where(db > sil_db)[0]
+    dmax = float(db.max())
+    if loud.size == 0:
+        return None, None, dmax
+    return (int(loud[0]) * fr / float(sr),
+            (n - int(loud[-1]) - 1) * fr / float(sr), dmax)
 
 
 def fit_edges(audio, sr, head_s=EDGE_HEAD_S, tail_s=EDGE_TAIL_S,
@@ -989,15 +1031,59 @@ async def run_job(job):
         # 非最后一块又被补到 0.48 s —— 都比案例长一截。
         # 这里统一裁/补到 60 ms 头 + 220 ms 尾，段间 0.28 s 落进案例区间。
         # 补的量要先除掉 atempo（它会把静音一起拉长）。
+        # ---- 韵律 A / E 的 F0 重映射（Praat PSOLA）--------------------------
+        # 放在能量扩展之后、首尾静音之前：PSOLA 只动浊音段，不动静音，
+        # 所以不会破坏下面的首尾判定；反过来放则会被重合成轻微扰动首尾。
+        if PROSO and proso is not None and len(chunk_text) >= PROSO_MIN_CHARS:
+            _male = job.get("_is_male")
+            _ta = PROSO_A_MALE if _male else PROSO_A_FEMALE if _male is False \
+                else PROSO_A_DEFAULT
+            _te = PROSO_E_MALE if _male else PROSO_E_FEMALE if _male is False \
+                else PROSO_E_DEFAULT
+            try:
+                _segs, _cuts, _hop = prosody_report.sent_windows(audio, sr)
+                _ca, _ce = proso.ae_of(audio, sr, is_male=_male, segs=_segs)
+                audio, _ka, _kt = proso.fit(
+                    audio, sr, target_a=_ta, cur_a=_ca,
+                    target_e=_te, cur_e=_ce, is_male=_male, segs=_segs)
+                if _ka > 1.002 or _ka < 0.998 or _kt > 1.002 or _kt < 0.998:
+                    log.info("任务 %s 第 %d 块 韵律移植 A %.2f->目标 %.2f "
+                             "(k=%.3f)  E %.2f->目标 %.2f (k_tail=%.3f)",
+                             jid, ci + 1, _ca or -1, _ta, _ka,
+                             _ce or -1, _te, _kt)
+            except Exception as _e:
+                log.warning("任务 %s 第 %d 块 韵律移植失败（跳过）: %r",
+                            jid, ci + 1, _e)
+
+        # ⚠️ 阈值必须按「成品电平」补偿：下面 ffmpeg 还会施加 _gain_db
+        # （OUT_GAIN_DB + 性别偏移，男声合计约 -6.2 dB）。不补偿的话，
+        # pre-encode 判为「响」的极弱起振段（-40 dB 量级）在成品里会掉到
+        # -45 dB 以下，于是成品量出来的头静音还是 0.22 s —— 表现就是
+        # 「日志说修好了、实测没变」。2026-10-05 排查就是这个坑。
+        _gain_db = OUT_GAIN_DB + float(job.get("_gain_off") or 0.0)
         if EDGE_HEAD_S > 0 or EDGE_TAIL_S > 0:
             try:
+                _h0, _t0, _d0 = sil_edges(audio, sr)
                 audio = fit_edges(audio, sr,
                                   EDGE_HEAD_S / max(_atempo, 0.25),
-                                  EDGE_TAIL_S / max(_atempo, 0.25))
+                                  EDGE_TAIL_S / max(_atempo, 0.25),
+                                  sil_db=EDGE_SIL_DB - _gain_db)
+                _h1, _t1, _d1 = sil_edges(audio, sr)
+                log.info("任务 %s 第 %d 块 首尾静音 head %.3f->%.3f "
+                         "tail %.3f->%.3f（目标 %.3f/%.3f, atempo=%.3f）"
+                         " | 峰值帧 %.1f->%.1f dB, sr=%d, n=%d",
+                         jid, ci + 1, _h0 if _h0 is not None else -1,
+                         _h1 if _h1 is not None else -1,
+                         _t0 if _t0 is not None else -1,
+                         _t1 if _t1 is not None else -1,
+                         EDGE_HEAD_S / max(_atempo, 0.25),
+                         EDGE_TAIL_S / max(_atempo, 0.25), _atempo,
+                         _d0 if _d0 is not None else -999,
+                         _d1 if _d1 is not None else -999,
+                         int(sr), len(audio))
             except Exception as _e:
                 log.warning("任务 %s 第 %d 块 首尾静音对齐失败（跳过）: %r",
                             jid, ci + 1, _e)
-        _gain_db = OUT_GAIN_DB + float(job.get("_gain_off") or 0.0)
         mp3_name = f"{base_name}-{ci + 1}.mp3"
         mp3_abs = os.path.join(folder_path, mp3_name)
         job["stage"] = "encoding"

@@ -42,6 +42,20 @@ Environment=CUDA_VISIBLE_DEVICES=GPU-94853612-464c-9177-c374-a9a82e321229
 # garbage_collection_threshold=0.8：占用率达 80% 时主动回收空闲块
 # 注意：不要与 max_split_size_mb 同时设置，两者在官方文档中被标记为互斥。
 Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,garbage_collection_threshold:0.8
+# ---- 韵律移植（PROSO）：F0 重映射，把 A 句内动态 / E 句尾多样性拉到案例值 ----
+# r13（2026-10-06）上线。实现见 app/proso.py（Praat PSOLA，经 parselmouth 调用）。
+# 验收（vs ElevenLabs 标杆，整篇同文案）：
+#   女声 六维全部进 ±10%，E 由 -29.8% 修到 -3.9%（最难的一项）
+#   男声 A +12.3% / E -16.0% —— 未达标，见下方「已知偏差」
+# ⚠️ 只在整段字数 >= TTS_PROSO_MIN_CHARS（默认 120）时触发，短句不受影响也不耗时。
+# ⚠️ 代价：PSOLA 是重合成。女声 RTF 由 0.576 升到 0.727（+26%），男声 0.531→0.534 基本不变。
+#    按日产 80 条算，女声任务排队时间会变长，产能评估要把这个算进去。
+# ⚠️ 已知偏差（下一轮修）：Praat 口径算 k、pyin 口径验收，两者换算系数在重合成后失效
+#    （案例两口径比值 1.136，我们处理后只有 1.011），导致男声 A/E 没到位。
+#    修法是按实测反推校准目标值，不要改成迭代求解。
+# 回滚（A/B 用，重启后恢复本文件的 1）：
+#    systemctl set-environment TTS_PROSO=0 && systemctl restart qwen-tts
+Environment=TTS_PROSO=1
 ExecStart=/mnt/tts/projects/qwen3-tts/venv/bin/python -u server.py
 Restart=always
 RestartSec=10
