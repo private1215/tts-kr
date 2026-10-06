@@ -478,6 +478,7 @@ details.adv summary:hover{color:var(--txt2)}
 
         <label data-i18n="emotion">情感</label>
         <select id="emotion"></select>
+        <div class="hint" id="emotionTip" style="display:none;margin-top:4px;color:#b45309"></div>
         <div class="hint" data-i18n="emotionHint">选一种语气即可，引擎和参数由系统自动匹配。「平稳」准确度最高；需要情绪起伏时选其它项。</div>
 
         <label data-i18n="speed">语速</label>
@@ -646,6 +647,7 @@ const I18N = {
     statsFmt:(td,n,h)=>`今日 ${td} 条 · 累计 ${n} 条 · 累计音频 ${h} 小时`,
     by:(o)=>`由 ${o} 生成`, untitled:'未命名', loading:'加载中...',
     delJob:'删除', retry:'重试', confirmDelJob:(t)=>`删除「${t}」？音频文件会一起删掉`, noRetry:'原文案已丢失，无法重试',
+    altVer:'换个版本', altVerTip:'同一文案换一个随机种子重出，效果会不一样（模型有随机性）', altVerDone:'已提交，换个版本生成中',
     draftSaved:'草稿已恢复', draftCleared:'草稿已清空',
     emptyOpt:'（尚未录入）', noInstructPreset:'该语言暂无预设，可直接手动输入',
     l10n:{auto:'自动检测',chinese:'中文',english:'英语',french:'法语',german:'德语',italian:'意大利语',
@@ -761,6 +763,7 @@ const I18N = {
     statsFmt:(td,n,h)=>`Today ${td} · total ${n} · ${h}h audio`,
     by:(o)=>`by ${o}`, untitled:'Untitled', loading:'Loading...',
     delJob:'Delete', retry:'Retry', confirmDelJob:(t)=>`Delete "${t}"? Audio files go too`, noRetry:'Original script lost, cannot retry',
+    altVer:'New take', altVerTip:'Re-generate with a different random seed — output varies between seeds', altVerDone:'Queued a new take',
     draftSaved:'Draft restored', draftCleared:'Draft cleared',
     emptyOpt:'(none enrolled)', noInstructPreset:'No presets for this language — type one manually',
     l10n:{auto:'Auto detect',chinese:'Chinese',english:'English',french:'French',german:'German',italian:'Italian',
@@ -876,6 +879,7 @@ const I18N = {
     statsFmt:(td,n,h)=>`오늘 ${td}건 · 누적 ${n}건 · 누적 오디오 ${h}시간`,
     by:(o)=>`${o} 생성`, untitled:'제목 없음', loading:'불러오는 중...',
     delJob:'삭제', retry:'재시도', confirmDelJob:(t)=>`"${t}"을(를) 삭제할까요? 음성 파일도 함께 삭제됩니다`, noRetry:'원고가 없어 재시도할 수 없습니다',
+    altVer:'다른 버전', altVerTip:'새 시드로 다시 생성합니다(모델 특성상 결과가 달라집니다)', altVerDone:'새 버전 생성을 요청했습니다',
     draftSaved:'임시 저장된 원고를 불러왔습니다', draftCleared:'임시 저장이 비워졌습니다',
     emptyOpt:'(등록된 음성 없음)', noInstructPreset:'이 언어의 프리셋이 없습니다. 직접 입력하세요',
     l10n:{auto:'자동 감지',chinese:'중국어',english:'영어',french:'프랑스어',german:'독일어',italian:'이탈리아어',
@@ -991,6 +995,7 @@ const I18N = {
     statsFmt:(td,n,h)=>`本日 ${td}件 · 累計 ${n}件 · 音声 ${h}時間`,
     by:(o)=>`${o} が生成`, untitled:'無題', loading:'読み込み中...',
     delJob:'削除', retry:'再試行', confirmDelJob:(t)=>`「${t}」を削除しますか？音声ファイルも削除されます`, noRetry:'原稿が残っていないため再試行できません',
+    altVer:'別テイク', altVerTip:'別のシードで再生成します（結果は変わります）', altVerDone:'別テイクを投入しました',
     draftSaved:'下書きを復元しました', draftCleared:'下書きをクリアしました',
     emptyOpt:'（未登録）', noInstructPreset:'この言語のプリセットはありません。手入力してください',
     l10n:{auto:'自動判定',chinese:'中国語',english:'英語',french:'フランス語',german:'ドイツ語',italian:'イタリア語',
@@ -1274,13 +1279,32 @@ function renderEmotions(){
   };
   const L = (window.UI && UI.lang) || 'zh';
   const prev = em.value;
+  // ⚠️ engine 不可用（当前只有 qwen 在线，CosyVoice3 未部署）时必须置灰：
+  //    否则员工选了「激昂」，后端会尝试切引擎失败后**静默回退 Qwen**，
+  //    任务照样成功、不报错，但成品和「平稳」逐字节一样 —— 白等一轮排队。
+  const OFF = {zh:'（暂未开放）',en:' (soon)',ko:' (준비 중)',ja:'（準備中）'};
   em.innerHTML = list.map(o=>{
     const n = (NAMES[o.key] && NAMES[o.key][L]) || NAMES[o.key].en;
-    return `<option value="${o.key}">${n}</option>`;
+    const okk = o.available !== false;
+    return `<option value="${o.key}"${okk ? '' : ' disabled'}>${n}${okk ? '' : (OFF[L]||OFF.en)}</option>`;
   }).join('');
+  const usable = list.filter(o=>o.available !== false).map(o=>String(o.key));
   const keys = list.map(o=>String(o.key));
   const def  = String(META.emotion_default || 'standard');
-  em.value = (prev && keys.includes(prev)) ? prev : (keys.includes(def) ? def : keys[0]);
+  em.value = (prev && usable.includes(prev)) ? prev
+           : (usable.includes(def) ? def : (usable[0] || keys[0]));
+  // 下拉下方再补一句原因，避免员工以为是音色坏了
+  const tip = $('#emotionTip');
+  if(tip){
+    const offN = list.length - usable.length;
+    tip.textContent = offN > 0 ? ({
+      zh:`有 ${offN} 项暂不可用：对应引擎（CosyVoice3）尚未上线，选了也只是出和「平稳」一样的成品，已置灰。`,
+      en:`${offN} disabled: their engine (CosyVoice3) is offline — picking them would silently fall back to Standard.`,
+      ko:`${offN}개 항목 사용 불가: 해당 엔진(CosyVoice3)이 미배포 상태이며 선택해도 「차분」과 동일한 결과가 나옵니다.`,
+      ja:`${offN}件は未対応：エンジン(CosyVoice3)が未導入のため、選んでも「標準」と同じ結果になります。`
+    }[L] || '') : '';
+    tip.style.display = offN > 0 ? '' : 'none';
+  }
 }
 
 /* 语速档位由后端 /api/meta 下发（模型本身没有 speed 接口，靠 atempo 后处理） */
@@ -2026,7 +2050,14 @@ function updateJob(el, j){
         ${j.wav?`<a href="/api/download/${j.wav}" download><button>${t('dlWav')}</button></a>`:''}
         ${(j.mp3 && !files.length)?`<a href="/api/download/${j.mp3}" download><button>${t('dlMp3')}</button></a>`:''}
         <button class="mini danger" data-deljob="${j.id}">${t('delJob')}</button>
-        ${j.status==='error'?`<button class="mini" data-retry="${j.id}">${t('retry')}</button>`:''}
+        ${j.status==='error'
+          ?`<button class="mini" data-retry="${j.id}">${t('retry')}</button>`
+          :(j.status==='done'
+            /* 「换个版本」= 换新种子重出。模型有随机性，同一段文案不同种子
+               效果不一样；原来只有「重试」且它连种子一起复制，出的是逐字节
+               相同的音频，等于没有。这是员工遇到「某段别扭」时唯一的自救手段。 */
+            ?`<button class="mini" data-retry="${j.id}" title="${t('altVerTip')}">${t('altVer')}</button>`
+            :'')}
       </div>`;
     const db = m.querySelector('[data-deljob]');
     db.onclick = async ()=>{
@@ -2041,8 +2072,13 @@ function updateJob(el, j){
     const rb = m.querySelector('[data-retry]');
     if(rb) rb.onclick = async ()=>{
       try{
-        const r = await api(`/api/jobs/${j.id}/retry`, {method:'POST'});
+        // new_seed=1：换一个新种子。后端默认就是 1，这里显式传，防止以后默认改了
+        // 又把「换个版本」变回「出一模一样的音频」。
+        const alt = j.status === 'done';
+        const fd2 = new FormData(); fd2.append('new_seed', '1');
+        const r = await api(`/api/jobs/${j.id}/retry`, {method:'POST', body:fd2});
         if(!r.ok){ const d = await r.json().catch(()=>({detail:t('noRetry')})); toast(d.detail||t('noRetry')); return; }
+        if(alt) toast(t('altVerDone'));
         resetJobs(); poll();
       }catch(e){}
     };
