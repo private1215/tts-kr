@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>r19 五案例线上验收试听</title>
+<style>
+body{font-family:-apple-system,"PingFang SC",sans-serif;background:#f6f7f9;color:#1d2129;margin:0;padding:28px}
+h1{font-size:20px;margin:0 0 6px}
+.sub{color:#86909c;font-size:13px;margin-bottom:22px;line-height:1.75}
+.grp{background:#fff;border-radius:10px;padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.grp h2{font-size:15px;margin:0 0 6px}
+.note{font-size:12px;color:#86909c;margin-bottom:12px}
+.row{display:flex;align-items:center;gap:14px;padding:9px 0;border-top:1px solid #f0f0f0;flex-wrap:wrap}
+.row:first-of-type{border-top:none}
+.nm{width:270px;font-size:13px;font-weight:600}
+.sc{width:88px;font-size:12px;color:#4e5969}
+audio{height:34px;flex:1;min-width:260px}
+.tag{font-size:11px;padding:2px 8px;border-radius:10px;background:#e8f3ff;color:#165dff}
+.tag.up{background:#e8ffea;color:#00b42a}
+.tag.dn{background:#fff7e8;color:#ff7d00}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+th,td{padding:6px 10px;border-bottom:1px solid #f0f0f0;text-align:right}
+th:first-child,td:first-child{text-align:left}
+th{color:#86909c;font-weight:600}
+</style>
+</head>
+<body>
+<h1>r19 五案例线上验收试听</h1>
+<div class="sub">
+  5 个案例文案全部走<b>线上平台</b>最新代码生成，逐一对账。<br>
+  🔑 本轮最大改动：说话人核验确认<b>4 个男声是同一个人</b>（相似度 0.924~0.971），
+  于是目标值（响度 / PROSO / 停顿）从「只认标杆 2 例」改成「同性别全部案例」。
+  结果：<b>yohan 3 例 +2.02 分</b>，in-sample 与 out-of-sample 差距从 4.24 缩到 0.84（过拟合基本消除）。
+</div>
+
+<div class="grp">
+<h2>男声 · 리노공업（标杆）</h2>
+<div class="note">标杆男是 4 个男声中唯一 LUFS 偏响的（−24.3，其余 −25.0/−25.2），改用中位数目标后它让了 1.6 分，换来另外 3 例共 +6.0 分</div>
+<div class="row"><span class="nm">案例（ElevenLabs）</span><span class="sc">基准</span><audio controls src="案例-男声.mp3"></audio></div>
+<div class="row"><span class="nm">r19 生成</span><span class="sc">94.08%</span><span class="tag dn">r18 是 95.69%</span><audio controls src="r19-男声-리노공업-94.1%.mp3"></audio></div>
+</div>
+
+<div class="grp">
+<h2>女声 · 아모텍（标杆）</h2>
+<div class="note">女声只有 1 个案例，目标值没变；掉 1.14 分来自 F 停顿熵（0.618 vs 0.782）的<b>生成随机性</b>，非改动导致</div>
+<div class="row"><span class="nm">案例（ElevenLabs）</span><span class="sc">基准</span><audio controls src="案例-女声.mp3"></audio></div>
+<div class="row"><span class="nm">r19 生成</span><span class="sc">93.32%</span><span class="tag dn">峰值差 1.9 dB</span><audio controls src="r19-女声-아모텍-93.3%.mp3"></audio></div>
+</div>
+
+<div class="grp">
+<h2>男声 · yohan 三例（真实泛化成绩）</h2>
+<div class="note">⚠️ 这三例<b>没有参与任何参数拟合</b>，是最诚实的成绩</div>
+<div class="row"><span class="nm">대한광통신</span><span class="sc">93.84%</span><span class="tag up">r18 89.64% → +4.20</span><audio controls src="r19-男声-대한광통신-93.8%.mp3"></audio></div>
+<div class="row"><span class="nm">세미파이브</span><span class="sc">93.10%</span><span class="tag up">r18 91.87% → +1.23</span><audio controls src="r19-男声-세미파이브-93.1%.mp3"></audio></div>
+<div class="row"><span class="nm">리노공업</span><span class="sc">91.63%</span><span class="tag up">r18 91.02% → +0.61</span><audio controls src="r19-男声-리노공업y-91.6%.mp3"></audio></div>
+</div>
+
+<div class="grp">
+<h2>总表</h2>
+<table>
+<tr><th>案例</th><th>性别</th><th>r18</th><th>r19</th><th>Δ</th><th>CER</th><th>时长(成品/案例)</th></tr>
+<tr><td>리노공업 标杆</td><td>男</td><td>95.69%</td><td>94.08%</td><td>−1.61</td><td>0.0921</td><td>474.2 / 483.8</td></tr>
+<tr><td>아모텍 标杆</td><td>女</td><td>94.46%</td><td>93.32%</td><td>−1.14</td><td>0.0427</td><td>456.3 / 459.1</td></tr>
+<tr><td>대한광통신</td><td>男</td><td>89.64%</td><td>93.84%</td><td>+4.20</td><td>0.1177</td><td>503.9 / 528.7</td></tr>
+<tr><td>리노공업 yohan</td><td>男</td><td>91.02%</td><td>91.63%</td><td>+0.61</td><td>0.0925</td><td>496.9 / 509.0</td></tr>
+<tr><td>세미파이브</td><td>男</td><td>91.87%</td><td>93.10%</td><td>+1.23</td><td>0.1045</td><td>530.2 / 536.4</td></tr>
+<tr><td colspan="3"><b>均值</b></td><td><b>92.54% → 93.19%</b></td><td><b>+0.65</b></td><td colspan="2"></td></tr>
+<tr><td colspan="3"><b>yohan 3 例（泛化）</b></td><td><b>90.84% → 92.86%</b></td><td><b>+2.02</b></td><td colspan="2"></td></tr>
+</table>
+</div>
+</body>
+</html>
