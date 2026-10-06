@@ -313,7 +313,65 @@ details.adv summary:hover{color:var(--txt2)}
     <h3 data-i18n="caseTitle">标杆案例</h3>
     <div class="msub" data-i18n="caseSub">听一遍对标目标，勾选你觉得好听的地方。攒够反馈后按标签排序，就知道下一步该修哪一项。</div>
 
+    <!-- 上传入口：案例越多，拆出来的规律越稳（后端上传后会自动跑韵律六维拆解） -->
+    <div id="caseTop" style="display:flex;align-items:center;gap:10px;margin:10px 0">
+      <button class="mini primary" id="csAdd" data-i18n="upBtn">+ 上传案例</button>
+      <span class="hint" data-i18n="upTip">多上传几份，拆出来的规律才稳</span>
+    </div>
+
     <div id="caseList"><span class="hint" data-i18n="loading">加载中...</span></div>
+
+    <div id="caseUpload" style="display:none">
+      <div class="row" style="align-items:center;margin-bottom:8px">
+        <h3 style="font-size:14px;margin:0" data-i18n="upTitle">上传标杆案例</h3>
+        <button class="mini" id="upBack" data-i18n="caseBack" style="margin-left:auto">← 返回列表</button>
+      </div>
+      <div class="hint" data-i18n="upSub" style="margin-bottom:12px"></div>
+
+      <label data-i18n="upName">案例名称</label>
+      <input id="upName" type="text" data-i18n-ph="upNamePh" style="width:100%" />
+
+      <div class="row" style="gap:10px;margin-top:10px">
+        <div style="flex:1">
+          <label data-i18n="upGender">性别</label>
+          <select id="upGender" style="width:100%">
+            <option value="male" data-i18n="sexMale">男声</option>
+            <option value="female" data-i18n="sexFemale">女声</option>
+            <option value="unknown" data-i18n="upUnknown">未知</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <label data-i18n="upSource">来源平台</label>
+          <select id="upSource" style="width:100%">
+            <option value="elevenlabs">ElevenLabs</option>
+            <option value="qwen">Qwen3-TTS</option>
+            <option value="cosyvoice3">CosyVoice3</option>
+            <option value="other" data-i18n="upOther">其它</option>
+            <option value="unknown" data-i18n="upUnknown">未知</option>
+          </select>
+        </div>
+      </div>
+
+      <label style="margin-top:10px" data-i18n="upTags">标签（英文逗号分隔，选填）</label>
+      <input id="upTags" type="text" data-i18n-ph="upTagsPh" style="width:100%" />
+
+      <label style="margin-top:10px" data-i18n="upAudio">音频文件（可多选）</label>
+      <input id="upAudio" type="file" accept="audio/*,.mp3,.wav,.m4a,.flac" multiple style="width:100%" />
+
+      <label style="margin-top:10px" data-i18n="upText">文案文件（可多选，选填）</label>
+      <input id="upText" type="file" accept=".txt,.text" multiple style="width:100%" />
+      <div class="hint" data-i18n="upTextTip" style="margin-top:4px"></div>
+
+      <label style="margin-top:10px" data-i18n="upNote2">备注（选填）</label>
+      <textarea id="upNote" rows="2" style="width:100%;resize:vertical"></textarea>
+
+      <div class="err" id="upErr" style="margin-top:10px"></div>
+      <div class="hint" id="upMsg" style="margin-top:6px"></div>
+      <div class="acts">
+        <button id="upCancel" data-i18n="close">关闭</button>
+        <button class="primary" id="upSubmit" data-i18n="upSubmit">上传并自动拆解</button>
+      </div>
+    </div>
 
     <div id="caseDetail" style="display:none">
       <div class="casehdr">
@@ -353,6 +411,9 @@ details.adv summary:hover{color:var(--txt2)}
       <div class="sub" data-i18n="subtitle">Qwen3-TTS-12Hz-1.7B · RTX 3060 · 任务排队串行推理</div>
     </div>
     <div class="head-right">
+      <!-- 案例库是「数据资产」入口，原来只藏在任务队列那一栏，太深，提到页头 -->
+      <button class="menubtn" id="btnCasesTop" data-i18n="caseBtn"
+              style="margin-right:6px">标杆案例</button>
       <div class="menuwrap">
         <button class="menubtn" id="langBtn">
           <svg class="gl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
@@ -599,6 +660,19 @@ const I18N = {
     dlChunk:(i)=>`下载第 ${i} 段`,
     chunkHint:(n)=>`共 ${n} 段，按文案自动分块（句末断开，未拼接）`,
     caseBtn:'标杆案例', caseTitle:'标杆案例',
+    upBtn:'+ 上传案例', upTip:'多上传几份，拆出来的规律才稳',
+    upTitle:'上传标杆案例',
+    upSub:'一段音频配一份文案，多个文件按文件名一一对应（1.mp3 ↔ 1.txt）。没给文案的段会自动用 ASR 转写补上，之后可校对。',
+    upName:'案例名称', upNamePh:'比如：EL-男声-财经播报-第3期',
+    upGender:'性别', upSource:'来源平台', upTags:'标签（英文逗号分隔，选填）',
+    upTagsPh:'财经,播报,中速',
+    upAudio:'音频文件（可多选）', upText:'文案文件（可多选，选填）',
+    upTextTip:'传 1 个整篇＝按各段时长占比自动切分（推荐）；传 N 个＝按文件名一一对应；不传＝自动 ASR 转写。多段请命名 01、02…，裸数字 10 会排到 2 前面',
+    upNote2:'备注（选填）', upSubmit:'上传并自动拆解',
+    upDoing:'上传中…韵律六维拆解会在后台跑几十秒',
+    upDone:'上传完成，韵律六维正在后台拆解',
+    upFail:'上传失败', upNeed:'请填案例名称，并至少选一个音频文件',
+    upGMale:'男声', upGFemale:'女声', upUnknown:'未知', upOther:'其它',
     caseSub:'听一遍对标目标，勾选你觉得好听的地方。攒够反馈后按标签排序，就知道下一步该修哪一项。',
     caseBack:'← 返回列表', caseEmpty:'还没有标杆案例', caseFail:'案例加载失败',
     caseNosrc:'（无音频）',
@@ -700,6 +774,20 @@ const I18N = {
     dlChunk:(i)=>`Download part ${i}`,
     chunkHint:(n)=>`${n} parts, auto-split at sentence ends (not merged)`,
     caseBtn:'Benchmarks', caseTitle:'Benchmark cases',
+    upBtn:'+ Upload', upTip:'More cases = more reliable patterns',
+    upTitle:'Upload benchmark case',
+    upSub:'One audio per script file, matched by filename order (1.mp3 \u2194 1.txt). Segments without a script are transcribed by ASR and can be corrected later.',
+    upName:'Case name', upNamePh:'e.g. EL-male-finance-ep03',
+    upGender:'Gender', upSource:'Source platform',
+    upTags:'Tags (comma separated, optional)', upTagsPh:'finance,newscast,medium',
+    upAudio:'Audio files (multiple)', upText:'Script files (multiple, optional)',
+    upTextTip:'One full script = auto-split by segment duration (recommended); N files = matched by filename; none = ASR. Name segments 01, 02... (bare 10 sorts before 2)',
+    upNote2:'Note (optional)', upSubmit:'Upload & analyze',
+    upDoing:'Uploading\u2026 prosody analysis runs in background for a while',
+    upDone:'Uploaded \u2014 prosody analysis is running in background',
+    upFail:'Upload failed',
+    upNeed:'Please enter a name and pick at least one audio file',
+    upGMale:'Male', upGFemale:'Female', upUnknown:'Unknown', upOther:'Other',
     caseSub:'Listen to the reference clips and tick what you like. Once enough votes land in, sorting by tag tells us what to fix next.',
     caseBack:'← Back to list', caseEmpty:'No benchmark cases yet', caseFail:'Failed to load cases',
     caseNosrc:'(no audio)',
@@ -801,6 +889,20 @@ const I18N = {
     dlChunk:(i)=>`${i}파트 다운로드`,
     chunkHint:(n)=>`총 ${n}개 파트, 문장 끝에서 자동 분할(병합 안 함)`,
     caseBtn:'标杆案例', caseTitle:'标杆案例',
+    upBtn:'+ 사례 업로드', upTip:'사례가 많을수록 패턴이 안정적입니다',
+    upTitle:'벤치마크 사례 업로드',
+    upSub:'오디오와 스크립트를 파일명 순서로 1:1 매칭합니다(1.mp3 \u2194 1.txt). 스크립트가 없으면 ASR로 자동 전사하며 나중에 수정할 수 있습니다.',
+    upName:'사례 이름', upNamePh:'예: EL-남성-경제-3회',
+    upGender:'성별', upSource:'출처 플랫폼', upTags:'태그(쉼표 구분, 선택)',
+    upTagsPh:'경제,보도,중간속도',
+    upAudio:'오디오 파일(복수 선택)', upText:'스크립트 파일(복수 선택, 선택사항)',
+    upTextTip:'전문 1개=구간 길이 비율로 자동 분할(권장) / N개=파일명 순서 매칭 / 없음=ASR 자동 전사. 구간 이름은 01, 02…로 (10이 2보다 앞에 옴)',
+    upNote2:'메모(선택)', upSubmit:'업로드하고 분석',
+    upDoing:'업로드 중\u2026 운율 분석은 백그라운드에서 진행됩니다',
+    upDone:'업로드 완료 \u2014 운율 분석이 백그라운드에서 실행 중입니다',
+    upFail:'업로드 실패',
+    upNeed:'이름을 입력하고 오디오 파일을 하나 이상 선택하세요',
+    upGMale:'남성', upGFemale:'여성', upUnknown:'알 수 없음', upOther:'기타',
     caseSub:'对标 목소리를 한 번 들어보고, 좋았던 부분을 골라 주세요. 의견이 쌓이면 태그별로 정렬해서 다음에 고칠 항목을 알 수 있습니다.',
     caseBack:'← 목록으로', caseEmpty:'아직标杆案例가 없습니다', caseFail:'案例 불러오기 실패',
     caseNosrc:'(오디오 없음)',
@@ -902,6 +1004,20 @@ const I18N = {
     dlChunk:(i)=>`パート${i}をダウンロード`,
     chunkHint:(n)=>`全${n}パート、文末で自動分割（結合なし）`,
     caseBtn:'标杆案例', caseTitle:'标杆案例',
+    upBtn:'+ 事例をアップロード', upTip:'事例が多いほど法則が安定します',
+    upTitle:'ベンチマーク事例をアップロード',
+    upSub:'音声と原稿はファイル名順に1対1で対応します（1.mp3 \u2194 1.txt）。原稿がない場合はASRが自動文字起こしし、後で修正できます。',
+    upName:'事例名', upNamePh:'例: EL-男性-経済-第3回',
+    upGender:'性別', upSource:'出典プラットフォーム',
+    upTags:'タグ（カンマ区切り、任意）', upTagsPh:'経済,報道,中速',
+    upAudio:'音声ファイル（複数可）', upText:'原稿ファイル（複数可、任意）',
+    upTextTip:'全文1個=各区間の長さ比で自動分割(推奨) / N個=ファイル名順で対応 / 無し=ASR自動文字起こし。区間名は01,02…（10は2より前に並ぶ）',
+    upNote2:'メモ（任意）', upSubmit:'アップロードして分析',
+    upDoing:'アップロード中\u2026韻律分析はバックグラウンドで数十秒かかります',
+    upDone:'アップロード完了 \u2014 韻律分析をバックグラウンドで実行中',
+    upFail:'アップロード失敗',
+    upNeed:'名前を入力し、音声ファイルを1つ以上選んでください',
+    upGMale:'男性', upGFemale:'女性', upUnknown:'不明', upOther:'その他',
     caseSub:'目標音声を一度聴いて、良いと思った点にチェックを入れてください。票数が溜まったらタグ順に並べ、次に直す項目が分かります。',
     caseBack:'← 一覧へ', caseEmpty:'标杆案例はまだありません', caseFail:'読み込みに失敗しました',
     caseNosrc:'（音声なし）',
@@ -1439,20 +1555,86 @@ let CASES = [], CUR_CASE = null, CUR_FB = null;
 const FB_TAGS = ['pace','intonation','emotion','clarity','pausing','timbre','natural','other'];
 const fbTagName = k => (I18N[UI].fbTag && I18N[UI].fbTag[k]) || k;
 
-$('#btnCases').onclick = ()=>{ $('#caseMask').style.display='flex'; loadCases(); };
+const openCases = ()=>{ $('#caseMask').style.display='flex'; loadCases(); };
+$('#btnCases').onclick    = openCases;   // 任务队列那一栏
+$('#btnCasesTop').onclick = openCases;   // 页头导航（新加，入口不再藏两层）
+$('#csAdd').onclick    = ()=>{ showCaseUpload(); };
+$('#upBack').onclick   = ()=>{ backCaseList(); };
+$('#upCancel').onclick = ()=>{ backCaseList(); };
+$('#upSubmit').onclick = submitCaseUpload;
 $('#csClose').onclick  = ()=>{ $('#caseMask').style.display='none'; stopCaseAudio(); };
-$('#csBack').onclick   = ()=>{ stopCaseAudio(); $('#caseDetail').style.display='none'; $('#caseList').style.display=''; };
+$('#csBack').onclick   = ()=>{ stopCaseAudio(); $('#caseDetail').style.display='none'; $('#caseTop').style.display='flex'; $('#caseList').style.display=''; };
 $('#caseMask').onclick = e =>{ if(e.target.id === 'caseMask'){ $('#caseMask').style.display='none'; stopCaseAudio(); } };
 function stopCaseAudio(){ const a = $('#csAudio'); if(a){ a.pause(); a.removeAttribute('src'); a.load(); } }
 
+/* ---------- 案例上传 ----------
+   上传后后端会自动起后台线程跑韵律六维拆解（server.CASE_PROSODY），
+   所以这里不用再调 /analyze，回到列表等几秒刷新就能看到六维数据。 */
+function showCaseUpload(){
+  stopCaseAudio();
+  $('#caseList').style.display='none';
+  $('#caseDetail').style.display='none';
+  $('#caseTop').style.display='none';
+  $('#caseUpload').style.display='';
+  $('#upErr').textContent=''; $('#upMsg').textContent='';
+}
+
+function backCaseList(){
+  $('#caseUpload').style.display='none';
+  $('#caseDetail').style.display='none';
+  $('#caseTop').style.display='flex';
+  $('#caseList').style.display='';
+  loadCases();
+}
+
+async function submitCaseUpload(){
+  const name = ($('#upName').value || '').trim();
+  const aud  = $('#upAudio').files;
+  if(!name || !aud.length){ $('#upErr').textContent = t('upNeed'); return; }
+  $('#upErr').textContent = '';
+  $('#upMsg').textContent = t('upDoing');
+  $('#upSubmit').disabled = true;
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('gender', $('#upGender').value);
+  fd.append('source', $('#upSource').value);
+  fd.append('tags', ($('#upTags').value || '').trim());
+  fd.append('note', ($('#upNote').value || '').trim());
+  for(const f of aud) fd.append('files', f);
+  for(const f of $('#upText').files) fd.append('text_files', f);
+  try{
+    const r = await fetch('/api/cases', {method:'POST', body:fd});
+    if(!r.ok) throw new Error((await r.text()).slice(0, 200));
+    toast(t('upDone'));
+    $('#upName').value=''; $('#upTags').value=''; $('#upNote').value='';
+    $('#upAudio').value=''; $('#upText').value='';
+    backCaseList();
+  }catch(e){
+    $('#upErr').textContent = t('upFail') + '：' + (e.message || e);
+  }finally{
+    $('#upMsg').textContent = '';
+    $('#upSubmit').disabled = false;
+  }
+}
+
 async function loadCases(){
-  $('#caseDetail').style.display='none'; $('#caseList').style.display='';
+  $('#caseDetail').style.display='none'; $('#caseUpload').style.display='none';
+  $('#caseTop').style.display='flex'; $('#caseList').style.display='';
   $('#caseList').innerHTML = `<span class="hint">${esc(t('loading'))}</span>`;
   let list;
   try{ list = await (await api('/api/cases')).json(); }
   catch(e){ $('#caseList').innerHTML = `<span class="hint">${esc(t('caseFail'))}</span>`; return; }
   CASES = Array.isArray(list) ? list : [];
-  if(!CASES.length){ $('#caseList').innerHTML = `<div class="empty">${esc(t('caseEmpty'))}</div>`; return; }
+  if(!CASES.length){
+    $('#caseList').innerHTML =
+      `<div class="empty">${esc(t('caseEmpty'))}</div>
+       <div style="margin-top:14px;text-align:center">
+         <button class="mini primary" id="emptyAdd">${esc(t('upBtn'))}</button>
+         <div class="hint" style="margin-top:8px">${esc(t('upTip'))}</div>
+       </div>`;
+    $('#emptyAdd').onclick = ()=>showCaseUpload();
+    return;
+  }
   $('#caseList').innerHTML = CASES.map(c=>{
     const n = c.fb_count || 0, r = c.fb_rating;
     const top = Object.entries(c.fb_tags || {}).sort((a,b)=>b[1]-a[1]).slice(0,3);

@@ -229,9 +229,18 @@ DYN_MIN_CHARS = int(os.environ.get("TTS_DYN_MIN_CHARS", "120"))
 # LUFS -23.4 vs -25.0；女 15.20 vs 14.45、14.40 vs 11.57、-23.5 vs -23.0。
 TONE_EQ_FILTER = os.environ.get(
     "TTS_TONE_EQ_FILTER",
-    "superequalizer=1b=1.585:2b=1.778:3b=1.638:4b=1.428:5b=1.393:6b=1.283:"
-    "7b=1.116:8b=1.012:9b=0.977:10b=0.977:11b=0.955:12b=1.000:13b=1.059:"
-    "14b=1.143:15b=1.259:16b=1.0:17b=1.0:18b=1.0").strip()
+    "superequalizer=1b=1.585:2b=1.108:3b=1.016:4b=1.138:5b=1.241:6b=1.264:"
+    "7b=1.279:8b=1.290:9b=1.447:10b=1.083:11b=1.044:12b=1.176:13b=1.061:"
+    "14b=0.953:15b=1.084:16b=1.0:17b=1.0:18b=1.0").strip()
+# ↑↑ 2026-10-06 迭代过一轮（r13 之后）。上面注释里那组旧值是 2026-09-30 口径下
+#    fitted 的，实测**方向反了**：成品低频已比案例多 4 dB，旧值还在加 4~5 dB。
+#    新值 = 旧值 × 补偿，补偿量来自长时平均谱（LTAS）量出的男女同向偏差，
+#    方法见 /tmp/ltas.py 与 /tmp/eqcheck.py，数据见 docs/r13 §7。
+#    离线试算（对现有成品叠加补偿，等价于从头用新 EQ）：
+#      平均绝对偏差(<11kHz)  男 1.97 -> 0.59 dB   女 2.81 -> 1.72 dB
+#    残差（下一轮再迭代，用同样方法）：1047Hz 仍缺 ~1.8 dB、4186 缺 1.6；
+#      女声 185Hz 差 6.5 dB 是「男女同向取保守值」策略主动放弃的
+#      —— 那里是基频/第一共振峰区，强对齐会改掉音色身份，不能动。
 TONE_EQ = os.environ.get("TTS_TONE_EQ", "1") != "0"
 
 # ---- 高频空气感：补 11~13.5 kHz 的"亮" ----------------------------------
@@ -294,6 +303,44 @@ GAIN_MALE_DB = float(os.environ.get("TTS_GAIN_MALE_DB", "-1.7"))
 GAIN_FEMALE_DB = float(os.environ.get("TTS_GAIN_FEMALE_DB", "0.5"))
 F0_SPLIT_HZ = float(os.environ.get("TTS_F0_SPLIT_HZ", "220"))
 
+# ---- 成品响度归一化：把整篇拉到案例的响度（2026-10-06 r14）--------------
+# 实测（EBU R128 积分响度，ffmpeg ebur128）：
+#     案例男 -24.3 LUFS    我们 r13 -31.5   → 差 7.0 dB
+#     案例女 -22.9 LUFS    我们 r13 -27.9   → 差 4.3 dB
+# 7 dB 是最容易被耳朵抓住的差别（"不像同一个节目"），比频谱差更要命。
+#
+# 为什么不用静态常数补：上面的 -4.5 / -1.7 / +0.5 只对**当前这两个音色**
+# 成立。换参考音频、换性别、换文案，合成出来的电平就变了，常数立刻失效，
+# 而团队会持续录入新音色，不能每次手工重标一遍。
+# 所以改成**逐块实测再反算增益**：先量未压缩 wav 的 LUFS，反推要补多少 dB。
+#
+# LOUD_CHAIN_DB 是后面「音色 EQ + 空气感」链路自身带来的响度变化
+# （实测：新 EQ 男 +0.2 / 女 +0.7 dB）。我们量的是链路**前**的 wav，
+# 不减掉它会系统性偏响。
+# LOUD_LIMITER 是兜底限幅：案例真峰值男 -1.7 / 女 -2.4 dBFS，
+# 照着这个卡（0.822 ≈ -1.7 dBFS），正常只在最热的几个瞬态上动 ~1 dB。
+LOUD_NORM = os.environ.get("TTS_LOUD_NORM", "1") != "0"
+# 兜底值 = 2026-10-06 实测的两份 ElevenLabs 案例（只有两点，不是定理）
+LOUD_TARGET_MALE = float(os.environ.get("TTS_LOUD_TARGET_MALE", "-24.3"))
+LOUD_TARGET_FEMALE = float(os.environ.get("TTS_LOUD_TARGET_FEMALE", "-22.9"))
+LOUD_TARGET_DEFAULT = float(os.environ.get("TTS_LOUD_TARGET", "-23.6"))
+# ⚠️ 2026-10-06 连改两次才对（都记录在案，别再踩）：
+#   初版 0.5 —— 拿「整篇 LUFS」减「单块 LUFS」反推的，两边口径不一致，
+#     结果系统性偏响 2.5~3.1 dB（成品男 -21.8 / 女 -19.8，目标是 -24.3 / -22.9）。
+#   二版 3.0 —— 按单块重算，但仍差 1.6 dB。
+#   现版 4.6 —— 单块实测反推：I_pre -25.9、增益 -1.4、首编成品 -22.70。
+# 它只是**初值**：下面还有一道闭环复检兜底，填错了也不会让成品跑飞，
+# 只是多花一次重编码。所以别再手工精调这个数，改链路时让它自愈。
+LOUD_CHAIN_DB = float(os.environ.get("TTS_LOUD_CHAIN_DB", "4.6"))
+# 0.79 ≈ -2.05 dBFS。卡到这个数的理由：
+#   案例峰值因数（峰值 - LUFS）= -1.7 - (-24.3) = 22.6 dB。
+#   限幅设 -1.7 时成品峰值冲到 -0.2（lame 过冲 ~1.5 dB，会削波）；
+#   设 -3.2 时成品 -3.3，峰值因数只有 21.0，比案例憋 1.6 dB。
+#   -2.05 是折中：过冲后约 -2.0，峰值因数 ≈ 22.3，与案例差 0.3 dB 且不削波。
+LOUD_LIMITER = os.environ.get(
+    "TTS_LOUD_LIMITER",
+    "alimiter=limit=0.79:attack=5:release=50").strip()
+
 # ---- 块首尾静音：对齐案例的换气量 ----------------------------------------
 # ⚠️ 2026-10-05 用案例库重测，推翻了原先「案例段落间 0.45~0.66 s」的说法
 #    （那次是在别的素材上量的，且含底噪）。案例库两个样本逐段量首尾静音：
@@ -317,6 +364,15 @@ PROSO_A_FEMALE = float(os.environ.get("TTS_PROSO_A_FEMALE", "9.498"))
 PROSO_E_FEMALE = float(os.environ.get("TTS_PROSO_E_FEMALE", "33.511"))
 PROSO_A_DEFAULT = float(os.environ.get("TTS_PROSO_A_DEFAULT", "9.50"))
 PROSO_E_DEFAULT = float(os.environ.get("TTS_PROSO_E_DEFAULT", "39.50"))
+# 目标值改为从案例库动态聚合（2026-10-06）：上传的案例越多，目标值越稳。
+# 上面那几个常量退化成「案例库里没有对应性别时」的兜底值。
+# ⚠️ 必须用案例的 **Praat 口径** A/E（case["proso"]），不能用六维报告里的
+#    pyin 口径 —— 两口径在 PSOLA 重合成后的换算系数会变（docs/r13 §5）。
+PROSO_FROM_CASES = os.environ.get("TTS_PROSO_FROM_CASES", "1") != "0"
+# 只把「标杆平台」的案例当目标。我们自己的输出（source=qwen）不能当自己的尺子，
+# 否则会自我强化、越跑越偏。
+PROSO_CASE_SOURCE = set(filter(None, os.environ.get(
+    "TTS_PROSO_CASE_SOURCE", "elevenlabs").split(",")))
 
 EDGE_HEAD_S = float(os.environ.get("TTS_EDGE_HEAD_S", "0.06"))
 EDGE_TAIL_S = float(os.environ.get("TTS_EDGE_TAIL_S", "0.22"))
@@ -1036,10 +1092,9 @@ async def run_job(job):
         # 所以不会破坏下面的首尾判定；反过来放则会被重合成轻微扰动首尾。
         if PROSO and proso is not None and len(chunk_text) >= PROSO_MIN_CHARS:
             _male = job.get("_is_male")
-            _ta = PROSO_A_MALE if _male else PROSO_A_FEMALE if _male is False \
-                else PROSO_A_DEFAULT
-            _te = PROSO_E_MALE if _male else PROSO_E_FEMALE if _male is False \
-                else PROSO_E_DEFAULT
+            # 目标值来自案例库聚合（proso_targets），案例不够时才回落常量
+            _g = "male" if _male else "female" if _male is False else "unknown"
+            _ta, _te = proso_targets(_g)
             try:
                 _segs, _cuts, _hop = prosody_report.sent_windows(audio, sr)
                 _ca, _ce = proso.ae_of(audio, sr, is_male=_male, segs=_segs)
@@ -1055,12 +1110,41 @@ async def run_job(job):
                 log.warning("任务 %s 第 %d 块 韵律移植失败（跳过）: %r",
                             jid, ci + 1, _e)
 
-        # ⚠️ 阈值必须按「成品电平」补偿：下面 ffmpeg 还会施加 _gain_db
-        # （OUT_GAIN_DB + 性别偏移，男声合计约 -6.2 dB）。不补偿的话，
-        # pre-encode 判为「响」的极弱起振段（-40 dB 量级）在成品里会掉到
-        # -45 dB 以下，于是成品量出来的头静音还是 0.22 s —— 表现就是
+        # ---- 增益：优先按实测响度反算，量不出来才用静态常数 ----------------
+        # ⚠️ 阈值必须按「成品电平」补偿：下面 ffmpeg 还会施加 _gain_db。
+        # 不补偿的话，pre-encode 判为「响」的极弱起振段（-40 dB 量级）在成品里
+        # 会掉到 -45 dB 以下，于是成品量出来的头静音还是 0.22 s —— 表现就是
         # 「日志说修好了、实测没变」。2026-10-05 排查就是这个坑。
+        # 所以这里必须先定下 _gain_db，再去做首尾静音（顺序不能反）。
         _gain_db = OUT_GAIN_DB + float(job.get("_gain_off") or 0.0)
+        _tgt_lufs = None
+        if LOUD_NORM:
+            _male_l = job.get("_is_male")
+            _gl = "male" if _male_l else "female" if _male_l is False else "unknown"
+            _tgt = loudness_targets(_gl)
+            if _tgt is not None:
+                _tgt_lufs = _tgt
+                _mw = os.path.join(folder_path, f".loud_{jid}_{ci}.wav")
+                try:
+                    sf.write(_mw, audio, sr)
+                    _il, _tp = measure_lufs(_mw)
+                    if _il is not None and _il > -70:
+                        _gain_db = _tgt - (_il + LOUD_CHAIN_DB)
+                        log.info("任务 %s 第 %d 块 响度归一 %s: 实测 %.1f LUFS "
+                                 "-> 目标 %.1f, 增益 %+.2f dB（常数原为 %+.2f）",
+                                 jid, ci + 1, _gl, _il, _tgt, _gain_db,
+                                 OUT_GAIN_DB + float(job.get("_gain_off") or 0.0))
+                    else:
+                        log.warning("任务 %s 第 %d 块 响度测量失败，回落常数",
+                                    jid, ci + 1)
+                except Exception as _e:
+                    log.warning("任务 %s 第 %d 块 响度归一失败（回落常数）: %r",
+                                jid, ci + 1, _e)
+                finally:
+                    try:
+                        os.remove(_mw)
+                    except OSError:
+                        pass
         if EDGE_HEAD_S > 0 or EDGE_TAIL_S > 0:
             try:
                 _h0, _t0, _d0 = sil_edges(audio, sr)
@@ -1110,12 +1194,46 @@ async def run_job(job):
                     _af.append(AIR_EQ)
             if abs(_gain_db) > 1e-3:
                 _af.append(f"volume={_gain_db:.2f}dB")
+            # 限幅兜底：响度归一只管平均电平，峰值仍可能顶穿。案例真峰值
+            # 男 -1.7 / 女 -2.4 dBFS，这里照 -1.7 卡，避免 mp3 编码过冲削波。
+            # 放在链路最后，且必须在 volume 之后。
+            if LOUD_NORM and LOUD_LIMITER:
+                _af.append(LOUD_LIMITER)
+            _tail = ["-codec:a", "libmp3lame", "-b:a", MP3_BITRATE,
+                     "-ar", str(OUT_SR), mp3_abs]
             if _af:
                 _cmd += ["-filter:a", ",".join(_af)]
-            _cmd += ["-codec:a", "libmp3lame", "-b:a", MP3_BITRATE,
-                     "-ar", str(OUT_SR), mp3_abs]
+            _cmd += _tail
             # 滤波链里多了 FIR 卷积，给足时间；超时不能让整单失败。
             subprocess.run(_cmd, check=True, timeout=600)
+
+            # ---- 响度闭环复检：编完实测成品，偏了就用残差重编一次 --------
+            # LOUD_CHAIN_DB 只是初值，链路一改（换 EQ、换空气感参数、换音色）
+            # 它就不准。与其每次手工重标常数，不如编完再量一次成品 mp3：
+            # 偏差超过 0.5 dB 就把残差补进增益重编。多一次编码（几秒），
+            # 换来「改链路不用重标常数」。最多重编一次，不兜圈子。
+            if _tgt_lufs is not None:
+                try:
+                    _il2, _tp2 = measure_lufs(mp3_abs)
+                    if _il2 is not None and abs(_il2 - _tgt_lufs) > 0.5:
+                        _fix = _tgt_lufs - _il2
+                        _gain_db += _fix
+                        _af2 = [a for a in _af if not a.startswith("volume=")]
+                        _af2.append(f"volume={_gain_db:.2f}dB")
+                        _cmd2 = (["ffmpeg", "-y", "-loglevel", "error",
+                                  "-i", tmp_wav, "-filter:a", ",".join(_af2)]
+                                 + _tail)
+                        subprocess.run(_cmd2, check=True, timeout=600)
+                        log.info("任务 %s 第 %d 块 响度闭环复检: 成品 %.2f "
+                                 "LUFS（目标 %.2f）→ 补 %+.2f dB 重编",
+                                 jid, ci + 1, _il2, _tgt_lufs, _fix)
+                    elif _il2 is not None:
+                        log.info("任务 %s 第 %d 块 响度复检 OK: %.2f LUFS"
+                                 "（目标 %.2f, 峰值 %s dBFS）",
+                                 jid, ci + 1, _il2, _tgt_lufs, _tp2)
+                except Exception as _e:
+                    log.warning("任务 %s 第 %d 块 响度复检失败（保留首编）: %r",
+                                jid, ci + 1, _e)
         except Exception as e:
             log.warning("mp3 转码失败 %s: %s", mp3_abs, e)
         finally:
@@ -2102,6 +2220,18 @@ def _snap_sentence_end(t, pos, window=400):
     return best
 
 
+def _natkey(name):
+    """自然排序键：让 2.mp3 排在 10.mp3 前面。
+
+    ⚠️ 案例动辄十几段，命名常是裸数字（1.mp3 … 12.mp3）。
+    直接用 sorted(key=filename) 是**字符串排序**，"10.mp3" < "2.mp3"，
+    音频与文案会整组错位——不报错、不警告，只是静默把第 2 段音频配到
+    第 10 段的文案上，后面所有「拆解规律」的结论全部作废。
+    """
+    return [int(s) if s.isdigit() else s.lower()
+            for s in re.split(r"(\d+)", name or "")]
+
+
 def _align_texts(texts, durs):
     """把文案对齐到各音频段。返回 ([(文本, (char_start, char_end))...], 方式)。
 
@@ -2155,6 +2285,109 @@ def _case_dir(cid):
     return os.path.join(CASE_DIR, cid)
 
 
+def measure_lufs(path):
+    """量积分响度（LUFS）。走 ffmpeg ebur128，不额外引依赖。
+
+    返回 (integrated_lufs, true_peak_dbfs)，失败返回 (None, None)。
+    """
+    try:
+        r = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-nostats", "-i", path,
+             "-filter:a", "ebur128=peak=true", "-f", "null", "-"],
+            capture_output=True, text=True, timeout=900)
+    except Exception:
+        return None, None
+    tail = (r.stderr or "")[-4000:]
+    # ebur128 会先滚动输出、最后给一段 Summary，取最后一段才准
+    seg = tail[tail.rfind("Summary"):] if "Summary" in tail else tail
+    il, tp = None, None
+    for ln in seg.split("\n"):
+        if "I:" in ln and "LUFS" in ln:
+            try:
+                il = float(ln.split("I:")[1].split("LUFS")[0])
+            except Exception:
+                pass
+        if "Peak:" in ln and "dBFS" in ln:
+            try:
+                tp = float(ln.split("Peak:")[1].split("dBFS")[0])
+            except Exception:
+                pass
+    return il, tp
+
+
+def loudness_targets(gender):
+    """响度目标值：从案例库按性别取中位数，取不到回落到常量。
+
+    与 proso_targets 同一套约定：只认 source 在白名单里的案例（默认
+    elevenlabs），我们自己的产物不能当自己的尺子。
+    """
+    if not LOUD_NORM:
+        return None
+    vals = []
+    for c in cases.values():
+        if c.get("gender") != gender:
+            continue
+        if PROSO_CASE_SOURCE and c.get("source") not in PROSO_CASE_SOURCE:
+            continue
+        v = c.get("lufs")
+        if v is None:
+            continue
+        try:
+            vals.append(float(v))
+        except (TypeError, ValueError):
+            pass
+    if not vals:
+        if gender == "male":
+            return LOUD_TARGET_MALE
+        if gender == "female":
+            return LOUD_TARGET_FEMALE
+        return LOUD_TARGET_DEFAULT
+    vals.sort()
+    n = len(vals)
+    return vals[n // 2] if n % 2 else 0.5 * (vals[n // 2 - 1] + vals[n // 2])
+
+
+def proso_targets(gender):
+    """PROSO 的目标 A/E：从案例库按性别取中位数，取不到才回落到常量。
+
+    「多上传案例 → 规律更稳」就靠这里闭环：每份案例在后台拆解时会顺带算出
+    Praat 口径的 A/E，这里按时取中位数当该性别的目标值。
+
+    ⚠️ 只取 case["proso"]（Praat 口径，由 proso.ae_of 算），
+       不取 case["prosody"]["A"]（pyin 口径）—— 后者换算到 Praat 会失效。
+    """
+    def fallback():
+        if gender == "male":
+            return PROSO_A_MALE, PROSO_E_MALE
+        if gender == "female":
+            return PROSO_A_FEMALE, PROSO_E_FEMALE
+        return PROSO_A_DEFAULT, PROSO_E_DEFAULT
+
+    if not PROSO_FROM_CASES:
+        return fallback()
+    vals = []
+    for c in cases.values():
+        if c.get("gender") != gender:
+            continue
+        p = c.get("proso") or {}
+        if p.get("A") is None or p.get("E") is None:
+            continue
+        if PROSO_CASE_SOURCE and c.get("source") not in PROSO_CASE_SOURCE:
+            continue
+        vals.append((float(p["A"]), float(p["E"])))
+    if not vals:
+        return fallback()
+    vals.sort()
+    n = len(vals)
+    mid = n // 2
+    if n % 2:
+        a, e = vals[mid]
+    else:
+        a = (vals[mid - 1][0] + vals[mid][0]) / 2.0
+        e = (vals[mid - 1][1] + vals[mid][1]) / 2.0
+    return a, e
+
+
 def _analyze_case(cid):
     """后台算韵律六维并回写 cases.json。失败只记日志，不影响案例本身。"""
     try:
@@ -2169,6 +2402,30 @@ def _analyze_case(cid):
         c["prosody"] = {k: m.get(k) for k in
                         ("A", "B", "C", "D", "E", "F", "segs", "pauses")}
         c["prosody_done"] = True
+        # Praat 口径的 A/E：PROSO 拿它当目标，必须同源。
+        # 算一次存下来，生成时直接取，避免每次生成都跑一遍 Praat。
+        if proso is not None:
+            try:
+                import soundfile as sf
+                _x, _sr = sf.read(merged, dtype="float32")
+                if getattr(_x, "ndim", 1) > 1:
+                    _x = _x.mean(axis=1)
+                _segs, _cuts, _hop = prosody_report.sent_windows(_x, _sr)
+                _a, _e = proso.ae_of(_x, _sr,
+                                     is_male=(c.get("gender") == "male"),
+                                     segs=_segs)
+                c["proso"] = {"A": round(float(_a), 3),
+                              "E": round(float(_e), 3)}
+                log.info("案例 %s PROSO 口径 A/E = %.3f / %.3f", cid, _a, _e)
+            except Exception as e:
+                    log.warning("案例 %s PROSO 口径分析失败: %s", cid, e)
+        # 响度：成品要对标的就是这个数（loudness_targets 按时取中位数）。
+        _il, _tp = measure_lufs(merged)
+        if _il is not None:
+            c["lufs"] = round(float(_il), 2)
+            c["peak_dbfs"] = round(float(_tp), 2) if _tp is not None else None
+            log.info("案例 %s 响度 = %.2f LUFS（峰值 %s dBFS）",
+                     cid, _il, c["peak_dbfs"])
         save_cases(cases)
         log.info("案例 %s 韵律分析完成: %s", cid, c["prosody"])
     except Exception as e:
@@ -2186,8 +2443,11 @@ async def upload_case(request: Request,
                       text_files: Optional[List[UploadFile]] = File(None)):
     """上传一份案例（可多段音频 + 对应文本）。
 
-    约定：音频与文本都按文件名排序后一一对应（案例常是 1.mp3 / 2.mp3 + 1.txt / 2.txt）。
-    没给文本的段会自动用 ASR 转写补上并标注 text_src=asr，方便人工校对。
+    文案怎么和音频对上（三种都支持）：
+      · 传 N 个 txt  → 与音频按文件名**自然序**一一对应（1 在 2 前，2 在 10 前）
+      · 传 1 个整篇  → 按各段音频的时长占比切到句末分给各段（ElevenLabs 的
+                       产物本来就是「一篇文案被平台切成 N 块」，推荐这种）
+      · 不传        → 每段自动 ASR 转写补上并标注 text_src=asr，方便人工校对
 
     source / tags 是给后续「拆解它是怎么生成的」用的：
     案例多来自 ElevenLabs，能标出 voice / model / speed 这类生成参数，
@@ -2209,7 +2469,7 @@ async def upload_case(request: Request,
     texts = []
     if text_files:
         for tf in sorted([f for f in text_files if f.filename],
-                         key=lambda f: f.filename):
+                         key=lambda f: _natkey(f.filename)):
             raw = await tf.read()
             texts.append(raw.decode("utf-8", errors="ignore").strip())
 
@@ -2217,7 +2477,8 @@ async def upload_case(request: Request,
     d = _case_dir(cid)
     os.makedirs(d, exist_ok=True)
 
-    order = sorted([f for f in files if f.filename], key=lambda f: f.filename)
+    order = sorted([f for f in files if f.filename],
+                   key=lambda f: _natkey(f.filename))
 
     # ---------- 第一遍：先处理音频，拿到每段时长 ----------
     # 必须先拿时长：文本对齐要按时长比例分配，而时长只有解码后才知道。

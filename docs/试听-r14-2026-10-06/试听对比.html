@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>r14 试听对比（案例 ElevenLabs / r13 / r14-响度归一）</title>
+<style>
+  :root{ --bg:#f7f8fa; --card:#fff; --bd:#e3e6ea; --tx:#1f2328; --sub:#6b7280; --hi:#2563eb; }
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:var(--bg);color:var(--tx);
+       font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--sub);margin-bottom:20px}
+  .tabs{display:flex;gap:8px;margin-bottom:18px}
+  .tab{padding:7px 20px;border:1px solid var(--bd);background:var(--card);
+       border-radius:8px;cursor:pointer;font-size:14px}
+  .tab.on{background:var(--hi);color:#fff;border-color:var(--hi)}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px}
+  .card.ref{border-color:#f0b429;background:#fffdf5}
+  .tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;
+       background:#eef2f7;color:var(--sub);margin-bottom:8px}
+  .card.ref .tag{background:#fdf0d0;color:#92610a}
+  .card.new .tag{background:#e0edff;color:#1d4ed8}
+  h3{margin:2px 0 10px;font-size:15px}
+  audio{width:100%;margin:6px 0 10px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td{padding:3px 0;border-bottom:1px solid #f0f2f5}
+  td:first-child{color:var(--sub)}
+  td.n{text-align:right;font-variant-numeric:tabular-nums}
+  .ok{color:#15803d}.warn{color:#b45309}.bad{color:#b91c1c}
+  .note{margin-top:18px;padding:12px 14px;background:#fff;border:1px solid var(--bd);
+        border-radius:10px;color:var(--sub);font-size:13px}
+  .hide{display:none}
+  ul{margin:6px 0 0 18px;padding:0}
+</style>
+</head>
+<body>
+<h1>r14 试听对比：响度归一 + 新音色 EQ</h1>
+<div class="sub">同一文案 · 案例 / r13 / r14 三方并排 · 建议顺序：<b>先听案例 → 再听 r13 → 最后听 r14</b></div>
+
+<div class="tabs">
+  <div class="tab on" data-g="male">男声</div>
+  <div class="tab" data-g="female">女声</div>
+</div>
+
+<div id="pane-male" class="grid">
+  <div class="card ref">
+    <span class="tag">标杆（目标）</span>
+    <h3>ElevenLabs 案例</h3>
+    <audio controls preload="none" src="../试听-r11-2026-09-30/case-男声.mp3"></audio>
+    <table>
+      <tr><td>响度 LUFS</td><td class="n">-24.3</td></tr>
+      <tr><td>真峰值</td><td class="n">-1.7 dBFS</td></tr>
+      <tr><td>韵律 A 句内动态</td><td class="n">8.362</td></tr>
+      <tr><td>韵律 E 句尾多样性</td><td class="n">34.559</td></tr>
+      <tr><td>时长</td><td class="n">463.6 s</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <span class="tag">上一版</span>
+    <h3>r13（韵律移植）</h3>
+    <audio controls preload="none" src="../试听-r13-2026-10-06/r13-男声.mp3"></audio>
+    <table>
+      <tr><td>响度 LUFS</td><td class="n bad">-31.5（-7.2 dB）</td></tr>
+      <tr><td>真峰值</td><td class="n bad">-8.7（-7.0）</td></tr>
+      <tr><td>韵律 A</td><td class="n">9.100 <span class="ok">+8.8%</span></td></tr>
+      <tr><td>韵律 E</td><td class="n">33.090 <span class="ok">-4.3%</span></td></tr>
+      <tr><td>时长</td><td class="n">468.1 s</td></tr>
+    </table>
+  </div>
+  <div class="card new">
+    <span class="tag">本版 r14</span>
+    <h3>响度归一 + 新 EQ</h3>
+    <audio controls preload="none" src="r14-男声.mp3"></audio>
+    <table>
+      <tr><td>响度 LUFS</td><td class="n ok">-24.2（+0.1 dB）</td></tr>
+      <tr><td>真峰值</td><td class="n ok">-1.9（-0.2）</td></tr>
+      <tr><td>韵律 A</td><td class="n">9.150 <span class="ok">+9.4%</span></td></tr>
+      <tr><td>韵律 E</td><td class="n">29.848 <span class="warn">-13.6%</span></td></tr>
+      <tr><td>时长</td><td class="n">467.4 s</td></tr>
+      <tr><td>CER</td><td class="n ok">0.093 / 0.090</td></tr>
+    </table>
+  </div>
+</div>
+
+<div id="pane-female" class="grid hide">
+  <div class="card ref">
+    <span class="tag">标杆（目标）</span>
+    <h3>ElevenLabs 案例</h3>
+    <audio controls preload="none" src="../试听-r11-2026-09-30/case-女声.mp3"></audio>
+    <table>
+      <tr><td>响度 LUFS</td><td class="n">-22.9</td></tr>
+      <tr><td>真峰值</td><td class="n">-2.4 dBFS</td></tr>
+      <tr><td>韵律 A 句内动态</td><td class="n">9.470</td></tr>
+      <tr><td>韵律 E 句尾多样性</td><td class="n">34.410</td></tr>
+      <tr><td>时长</td><td class="n">458.5 s</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <span class="tag">上一版</span>
+    <h3>r13（韵律移植）</h3>
+    <audio controls preload="none" src="../试听-r13-2026-10-06/r13-女声.mp3"></audio>
+    <table>
+      <tr><td>响度 LUFS</td><td class="n bad">-27.9（-5.0 dB）</td></tr>
+      <tr><td>真峰值</td><td class="n bad">-8.7（-6.3）</td></tr>
+      <tr><td>韵律 A</td><td class="n">9.617 <span class="ok">+1.5%</span></td></tr>
+      <tr><td>韵律 E</td><td class="n">31.399 <span class="warn">-8.8%</span></td></tr>
+      <tr><td>时长</td><td class="n">462.9 s</td></tr>
+    </table>
+  </div>
+  <div class="card new">
+    <span class="tag">本版 r14</span>
+    <h3>响度归一 + 新 EQ</h3>
+    <audio controls preload="none" src="r14-女声.mp3"></audio>
+    <table>
+      <tr><td>响度 LUFS</td><td class="n ok">-22.9（±0.0 dB）</td></tr>
+      <tr><td>真峰值</td><td class="n ok">-2.6（-0.2）</td></tr>
+      <tr><td>韵律 A</td><td class="n">9.808 <span class="ok">+3.6%</span></td></tr>
+      <tr><td>韵律 E</td><td class="n">36.163 <span class="ok">+5.1%</span></td></tr>
+      <tr><td>时长</td><td class="n">463.2 s</td></tr>
+      <tr><td>CER</td><td class="n ok">0.039 / 0.049</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="note">
+  <b>本版改了什么</b>
+  <ul>
+    <li><b>响度归一（最大变化，+5.0~7.3 dB）</b>：原来是写死的静态增益常数，只对当前两个音色成立；改成逐块实测 LUFS 再反算增益，并加一道「编完再量一次、偏了就重编」的闭环。结果：男 -31.5→-24.2、女 -27.9→-22.9 LUFS，与案例差 ≤0.1 dB。</li>
+    <li><b>限幅对齐案例峰值</b>：libmp3lame 会过冲约 1.5 dB，限幅设在 -2.05 dBFS，成品峰值落在 -1.9 / -2.6，与案例 -1.7 / -2.4 差 0.2 dB。</li>
+    <li><b>音色 EQ 反向修正</b>：r13 那组值方向反了（低频已多 4 dB 还在加 4~5 dB）。男声 &lt;11kHz 平均绝对偏差 1.97→<b>0.58 dB</b>。</li>
+    <li><b>案例上传改名EMAT</b>：按自然序配对（原来 10.mp3 会排到 2.mp3 前面，导致整组错配）。</li>
+  </ul>
+  <b>还没到位的（下一轮）</b>
+  <ul>
+    <li>男声韵律 E 句尾多样性 -13.6%（唯一的红项，女声已修好 +5.1%）。</li>
+    <li>女声停顿熵 F -14.3%，句段数仍偏多（男 +7.8% / 女 +13.0%）——「偏碎」的老倾向。</li>
+    <li>女声频谱平均偏差 1.73 dB：185 Hz 差 6.5 dB 是主动放弃的（那是基频/第一共振峰区，强对齐会改掉音色身份）。</li>
+  </ul>
+  <b>⚠️ 听的时候请注意</b>：韵律数值单次测量波动可达 ±5 个百分点（生成端随机性），同一段复听/复测会有起伏，别拿单次数字下结论。
+</div>
+
+<script>
+  document.querySelectorAll('.tab').forEach(function(t){
+    t.onclick = function(){
+      document.querySelectorAll('.tab').forEach(function(x){x.classList.remove('on')});
+      t.classList.add('on');
+      var g = t.dataset.g;
+      document.getElementById('pane-male').classList.toggle('hide', g !== 'male');
+      document.getElementById('pane-female').classList.toggle('hide', g !== 'female');
+    };
+  });
+</script>
+</body>
+</html>
