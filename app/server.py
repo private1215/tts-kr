@@ -2373,14 +2373,18 @@ CASE_GENDERS = ("male", "female", "unknown")
 # 来源平台：案例是「标准答案」，必须能追溯它是谁生成的，
 # 否则后面做横向规律分析时，不同平台的样本会混在一起互相污染结论。
 CASE_SOURCES = ("elevenlabs", "qwen", "cosyvoice3", "other", "unknown")
-# 🔴 r15：标杆只认打了「标杆」tag 的案例。
-#    起因：员工上传了 3 个「yohan」案例（另一个音色，lufs −25.0/−25.2），
-#    它们同样是 male + elevenlabs，被算进中位数后男声响度目标从
-#    案例的 −24.3 被稀释成 −25.0，成品整体轻 0.7 dB；停顿样本也从 162
-#    涨到 688，把原音色的节奏搅了。
-#    原案例入库时本来就打了 `tags=...;标杆`，这里沿用这个约定即可，
-#    不用动数据模型。**没有任何案例打标杆 tag 时才回落到同性别全部**。
-CASE_BENCHMARK_TAG = os.environ.get("TTS_CASE_BENCHMARK_TAG", "标杆").strip()
+# 🔴 r19（2026-10-07）：默认**不再只认「标杆」tag**，改为同性别 + source 白名单全收。
+#    ⚠️ 推翻 r15 的旧注释：r15 说「yohan 3 例是另一个音色」——那是凭 LUFS 差 0.7 dB
+#    猜的，**从没做过说话人核验**。r19 用 CosyVoice3 自带 campplus 提嵌入实测：
+#        标杆男 ↔ yohan 三例 = 0.935 / 0.943 / 0.924（同人阈值 0.75）
+#        标杆女 ↔ 四个男声  = 0.309~0.328
+#    → **4 个男声是同一个人**。所以把它们算进来不是「稀释」，而是同人多样本、
+#      估计更稳（响度中位数 −25.0、停顿样本 162 → 688，后者本就是原设计的意图）。
+#    → 也意味着这 4 例可以混在一起做微调（男声已有 ~34 分钟同人数据）。
+#    想回到旧行为：设 TTS_CASE_BENCHMARK_TAG=标杆。
+# ⚠️ 真正的排异依据是 **source 白名单 + 说话人身份**，不是 tag。
+#    tag 是人工标注，员工新增案例很容易忘打，结果就是「加了案例却不生效」。
+CASE_BENCHMARK_TAG = os.environ.get("TTS_CASE_BENCHMARK_TAG", "").strip()
 # 韵律六维（pyin）很慢，几分钟音频要 1~2 分钟，默认后台跑，不卡上传请求。
 # 设 TTS_CASE_PROSODY=0 可整体关掉。
 CASE_PROSODY = os.environ.get("TTS_CASE_PROSODY", "1").strip().lower() not in (
