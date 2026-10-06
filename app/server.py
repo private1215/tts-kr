@@ -15,6 +15,7 @@ import hmac
 import base64
 import hashlib
 import secrets
+import random
 import asyncio
 import logging
 import shutil
@@ -148,6 +149,18 @@ COSY_FALLBACK_CER = float(os.environ.get("TTS_COSY_FALLBACK_CER", "0.15"))
 # 定下来的：男声句数 96→72（案例 70）、女声 42→24（案例 23），9 项韵律指标
 # 里 8 项改善。设成 1.0 即完全关闭（等价于旧行为）。详见 app/pba.py 文件头。
 PBA_ALPHA = float(os.environ.get("TTS_PBA_ALPHA", "0.8"))
+# ⚠️ r15 起分性别：α=0.8 下男声 pauses 171.5 对案例 170（+0.9%，刚好），
+#    但女声 189 对 154（**+22.7%**）——女声的冗余停顿明显更多，同一档 α
+#    压不动。女声收到 0.74：压得更狠 → 更多短停顿掉到 VAD 阈值以下被合并，
+#    剩下的再由 reshuffle 拉到案例均值，于是「停顿更少、每个更长」。
+PBA_ALPHA_MALE = float(os.environ.get("TTS_PBA_ALPHA_MALE", "0.8"))
+# ⚠️ 0.74 那档**被数据证伪了，改回 0.8**。实测两档对比（女声）：
+#    α=0.8  pauses +21.4% / +13.0%   F 0.820 / 0.677
+#    α=0.74 pauses +28.6% / +14.9%   F 0.807 / 0.696 / **0.535**
+#    收 α 既没减少停顿数，还引入了更大的 F 波动（最低掉到 −32%）。
+#    结论：女声停顿多是**模型行为**，压 α 解决不了，得在 VAD 合并层面想办法。
+#    这两个常量保留，方便下一轮继续试。
+PBA_ALPHA_FEMALE = float(os.environ.get("TTS_PBA_ALPHA_FEMALE", "0.8"))
 # 低于这个字数不值得做（太短的片段本来就没有几句，压缩了反而显得赶）。
 PBA_MIN_CHARS = int(os.environ.get("TTS_PBA_MIN_CHARS", "120"))
 # ---- 停顿重排：修「卡顿」的另一半（等长停顿 = 机械感）------------------
@@ -158,6 +171,11 @@ PBA_MIN_CHARS = int(os.environ.get("TTS_PBA_MIN_CHARS", "120"))
 # 详见 app/pba.py 的 reshuffle() 文件头。
 PBA_RESHAPE = os.environ.get("TTS_PBA_RESHAPE", "1") != "0"
 PBA_CV = float(os.environ.get("TTS_PBA_CV", "0.28"))
+# 停顿的**形状**照抄案例实测经验分布（r15）。关掉则回落旧的对数正态。
+# 为什么需要：2026-10-06 实测女声 我们 CV 0.476 > 案例 0.374，但熵 F 0.675
+# < 案例 0.834 —— 差的不是"变化量"是"分布形状"（我们前两桶 73% vs 案例 46%）。
+# 小 CV 的对数正态恰恰会把停顿挤成一坨，调 CV 是南辕北辙。
+PAUSE_FROM_CASES = os.environ.get("TTS_PAUSE_FROM_CASES", "1") != "0"
 
 # ---- 包络整形：修「咬字含糊（舌头没展开）」--------------------------------
 # 2026-09-30 员工反馈「听着跟舌头没展开似的」，用调制谱定位到真因：
@@ -227,11 +245,27 @@ DYN_MIN_CHARS = int(os.environ.get("TTS_DYN_MIN_CHARS", "120"))
 # 案例 44.1k mp3 在那里的能量只是编码噪声，照搬会变成沙沙声。
 # 效果（修正后 vs 案例）：男 100-300Hz 21.72 vs 25.44、1-3k 21.65 vs 20.87、
 # LUFS -23.4 vs -25.0；女 15.20 vs 14.45、14.40 vs 11.57、-23.5 vs -23.0。
+# ⚠️ r15 起**分性别**：男女各一套。
+#    原来是共用的，只取「男女同向的保守值」，结果女声 1480Hz 的 3.26 dB
+#    缺口只补了 0.72 dB（EQ 残差 1.7 dB 下不去）。而「同向」这个约束
+#    本来只是「一套 EQ 服务两个性别」的妥协——分性别后就不需要了，
+#    方向相反的频段（65/262/370/740…）是男女音色本身的差异，不是误差。
+# 求法：/tmp/eqsolve.py 迭代 3 轮（LTAS 按总能量归一，是零和游戏，
+#    一次性补偿只兑现约 60%，必须迭代），补偿量 clip 到 [0.85, 1.6]。
+#    女声 1.74 -> 0.66 dB，男声 1.7 -> 0.50 dB（185Hz 主动放弃，见下）。
+TONE_EQ_FILTER_MALE = os.environ.get(
+    "TTS_TONE_EQ_FILTER_MALE",
+    "superequalizer=1b=1.347:2b=1.458:3b=0.864:4b=1.138:5b=1.343:6b=1.119:"
+    "7b=1.334:8b=1.223:9b=1.858:10b=1.273:11b=0.977:12b=1.350:13b=1.290:"
+    "14b=0.906:15b=0.931:16b=1.0:17b=1.0:18b=1.0").strip()
+TONE_EQ_FILTER_FEMALE = os.environ.get(
+    "TTS_TONE_EQ_FILTER_FEMALE",
+    "superequalizer=1b=2.221:2b=1.358:3b=0.870:4b=1.138:5b=1.065:6b=1.340:"
+    "7b=1.464:8b=1.432:9b=1.864:10b=1.733:11b=1.202:12b=1.736:13b=1.478:"
+    "14b=1.113:15b=0.961:16b=1.0:17b=1.0:18b=1.0").strip()
+# 兼容旧环境变量：没分性别时用男声那套（保持单性别场景行为不变）
 TONE_EQ_FILTER = os.environ.get(
-    "TTS_TONE_EQ_FILTER",
-    "superequalizer=1b=1.585:2b=1.108:3b=1.016:4b=1.138:5b=1.241:6b=1.264:"
-    "7b=1.279:8b=1.290:9b=1.447:10b=1.083:11b=1.044:12b=1.176:13b=1.061:"
-    "14b=0.953:15b=1.084:16b=1.0:17b=1.0:18b=1.0").strip()
+    "TTS_TONE_EQ_FILTER", TONE_EQ_FILTER_MALE).strip()
 # ↑↑ 2026-10-06 迭代过一轮（r13 之后）。上面注释里那组旧值是 2026-09-30 口径下
 #    fitted 的，实测**方向反了**：成品低频已比案例多 4 dB，旧值还在加 4~5 dB。
 #    新值 = 旧值 × 补偿，补偿量来自长时平均谱（LTAS）量出的男女同向偏差，
@@ -340,6 +374,21 @@ LOUD_CHAIN_DB = float(os.environ.get("TTS_LOUD_CHAIN_DB", "4.6"))
 LOUD_LIMITER = os.environ.get(
     "TTS_LOUD_LIMITER",
     "alimiter=limit=0.79:attack=5:release=50").strip()
+# ⚠️ r15 起**分性别限幅**。
+#    起因是女声 seed42 峰值冲到 −0.80 dBFS（案例 −2.40），只按这一次
+#    测就想把女声压到 0.66 是错的——seed777 同配置却是 −3.80，
+#    **峰值单次波动达 3 dB**，中位数 −2.30 本来就已经对准案例 −2.40。
+#    （又一次踩 §6-7：别为单次波动调参。）
+#    0.74 那一版也错了：改完两个种子都是 −4.30，中位比案例低 1.9 dB。
+#    最终**回到 0.79**（与男声一致）——r15d 在 0.79 下的中位 −2.30
+#    本来就对准案例 −2.40（差 0.1 dB），−0.80 那个种子虽余量小但并未削波。
+#    保留分性别这两个常量，是为了以后某一性别需要单独微调时不用再改结构。
+LOUD_LIMITER_MALE = os.environ.get(
+    "TTS_LOUD_LIMITER_MALE",
+    "alimiter=limit=0.79:attack=5:release=50").strip()
+LOUD_LIMITER_FEMALE = os.environ.get(
+    "TTS_LOUD_LIMITER_FEMALE",
+    "alimiter=limit=0.79:attack=5:release=50").strip()
 
 # ---- 块首尾静音：对齐案例的换气量 ----------------------------------------
 # ⚠️ 2026-10-05 用案例库重测，推翻了原先「案例段落间 0.45~0.66 s」的说法
@@ -364,6 +413,37 @@ PROSO_A_FEMALE = float(os.environ.get("TTS_PROSO_A_FEMALE", "9.498"))
 PROSO_E_FEMALE = float(os.environ.get("TTS_PROSO_E_FEMALE", "33.511"))
 PROSO_A_DEFAULT = float(os.environ.get("TTS_PROSO_A_DEFAULT", "9.50"))
 PROSO_E_DEFAULT = float(os.environ.get("TTS_PROSO_E_DEFAULT", "39.50"))
+
+# ---- 🔴 目标值校准系数：Praat 达标 ≠ pyin 达标（2026-10-06 r14 实测）------
+# 现象（job 08b47b0d 男 / e027e8af 女，整篇同文案）：
+#     男 处理前 Praat E 40.07 --k_tail=1.153--> 目标 45.49，
+#        但成品用 pyin 量只有 **29.848**，案例 pyin 是 **34.559**（−13.6%）
+#     男 处理前 Praat A 9.64 --k=0.985--> 目标 9.49，成品 pyin 9.150 vs 案例 8.362（+9.4%）
+# 即：**k 精确算到位了、Praat 口径也到目标了，pyin 口径却差一大截**。
+# 根因见 MEMORY §6-5：两口径的换算系数在 PSOLA 重合成后失效
+#   （案例 Praat/pyin 比：A 1.135、E 1.316；我们处理后：A 1.09、E 1.52）。
+# 所以只能**按实测反推校准目标值**，不能用理论比值换算。
+#
+# 系数 = (案例 pyin / 成品 pyin) ^ γ，γ=0.85 是保守指数：
+#   全量（γ=1）在单次波动 ±5% 的前提下容易过冲，而且 PSOLA 的 artifacts
+#   与位移量成正比（Interspeech 2020 实测），男 E 的 k_tail 会从 1.15 涨到
+#   1.31，拉太满有金属感风险。留 15% 余量，下一轮按复跑结果再收敛。
+PROSO_CAL_A_MALE = float(os.environ.get("TTS_PROSO_CAL_A_MALE", "0.926"))
+# ⚠️ r15 第二轮改回 1.0：1.133 是拿 r14（旧链路）的 E=29.848 反推的，
+#    但 r15 把停顿加长到案例水平后，**链路本身就把 E 抬上去了**——
+#    同样 CAL=1.133 下成品 E 中位 38.416 vs 案例 34.559，冲过零点 +11.2%。
+#    用案例的口径比（成品 pyin / 目标 Praat = 34.559/45.49 = 0.760）反推，
+#    新链路下 CAL=1.0 应给出 45.49×0.760 = 34.57 ≈ 案例值。
+#    教训：**校准系数不能跨链路搬**，链路一动就要重新实测反推。
+PROSO_CAL_E_MALE = float(os.environ.get("TTS_PROSO_CAL_E_MALE", "1.0"))
+PROSO_CAL_A_FEMALE = float(os.environ.get("TTS_PROSO_CAL_A_FEMALE", "0.971"))
+# 同 CAL_E_MALE：0.959 也是按旧链路反推的，r15c 实测女声 E 中位 31.578
+# vs 案例 34.410（−8.2%）。用案例口径比（34.410/33.51 = 1.027）反推，
+# CAL=1.0 时目标 33.51 应给出 ≈34.4。
+PROSO_CAL_E_FEMALE = float(os.environ.get("TTS_PROSO_CAL_E_FEMALE", "1.0"))
+PROSO_CAL_DEFAULT = float(os.environ.get("TTS_PROSO_CAL_DEFAULT", "1.0"))
+CAL = {"male": (PROSO_CAL_A_MALE, PROSO_CAL_E_MALE),
+       "female": (PROSO_CAL_A_FEMALE, PROSO_CAL_E_FEMALE)}
 # 目标值改为从案例库动态聚合（2026-10-06）：上传的案例越多，目标值越稳。
 # 上面那几个常量退化成「案例库里没有对应性别时」的兜底值。
 # ⚠️ 必须用案例的 **Praat 口径** A/E（case["proso"]），不能用六维报告里的
@@ -742,6 +822,16 @@ async def run_job(job):
     _preset = EMOTION_PRESETS.get(_emotion) or EMOTION_PRESETS[DEFAULT_EMOTION]
     _engine_name = (job.get("engine") or _preset["engine"]).strip()
     _cosy_instruct = _preset.get("instruct") or "neutral"
+    # ⚠️ 引擎不可用就**现在**退回 Qwen，不要等到 vram.switch_to 才发现：
+    #    那时 Qwen 已经被卸出显存，失败后还得重新加载一次，白花一两分钟
+    #    装卸时间，员工只看到「正在分段」卡住。2026-10-06 加。
+    if _engine_name != "qwen" and not engine_available(_engine_name):
+        log.warning("任务 %s 情感=%s 需要引擎 %s，但该引擎当前不可用 -> 直接用 qwen",
+                    job["id"], _emotion, _engine_name)
+        job["fallback_from"] = _engine_name
+        job["fallback_reason"] = "engine_unavailable"
+        _engine_name = "qwen"
+        _cosy_instruct = ""
     job["engine"] = _engine_name
     job["emotion"] = _emotion
     log.info("任务 %s 情感=%s -> 引擎=%s", job["id"], _emotion, _engine_name)
@@ -1004,39 +1094,10 @@ async def run_job(job):
             agg["asr_skipped"] += 1
         detail_all.extend(st.get("segments_detail") or [])
 
-        # 停顿预算对齐（PBA）：只切静音，不动任何有声样本，无音质损失。
-        # 丢掉的静音时间在下面用 atempo 拉回，总时长与发音速率一起回到
-        # 案例原声的水平。放在 ASR 回检之后——CER 要量的是模型的原始输出。
-        _pba_ratio = 1.0
-        if PBA_ALPHA < 0.999 and len(chunk_text) >= PBA_MIN_CHARS:
-            audio, _pba_ratio = pba.align(audio, sr, PBA_ALPHA)
-        # 停顿重排（在压缩之后）：压缩只管句数，这里把停顿长度重新分布，
-        # 改掉的时长同样由下面的 atempo 拉回。
-        if PBA_RESHAPE and len(chunk_text) >= PBA_MIN_CHARS:
-            try:
-                audio, _rs_ratio = pba.reshuffle(audio, sr, PBA_CV)
-                _pba_ratio *= _rs_ratio
-            except Exception as _e:
-                log.warning("任务 %s 第 %d 块 停顿重排失败（跳过）: %r",
-                            jid, ci + 1, _e)
-
-        # 包络整形：补音节瞬态（修「舌头没展开」）。放在 PBA 之后——
-        # PBA 靠 VAD 判静音，先整形会改变 VAD 结果。不动频谱、不动时长。
-        if ENV_SHAPE and len(chunk_text) >= ENV_MIN_CHARS:
-            try:
-                audio, _es_sharp, _es_before, _es_after = envshape.fit(
-                    audio, sr, ENV_TARGET, ENV_COMP)
-                if _es_sharp:
-                    log.info("任务 %s 第 %d 块 包络整形 sharp=%.3f "
-                             "8~16Hz %.4f -> %.4f（目标 %.4f）",
-                             jid, ci + 1, _es_sharp, _es_before,
-                             _es_after, ENV_TARGET)
-            except Exception as _e:
-                log.warning("任务 %s 第 %d 块 包络整形失败（跳过）: %r",
-                            jid, ci + 1, _e)
-
         # ---- 性别判定：整段只判一次（同一个音色不会有男女混着的情况）------
-        # 提前到能量扩展之前：扩展的目标值是分性别的（案例男 14.4 / 女 15.1）。
+        # r15 起提前到 PBA 之前：停顿重排要按性别取案例的停顿样本，能量扩展
+        # 的目标值也是分性别的（案例男 14.4 / 女 15.1）。
+        # PBA/包络整形都不改有声样本，F0 判性别早判晚判结果一致。
         if "_gain_off" not in job:
             _off = 0.0
             job["_is_male"] = None
@@ -1055,6 +1116,64 @@ async def run_job(job):
                     log.info("任务 %s 性别判定 f0=%.0fHz -> %s，响度偏移 %+.1f dB",
                              jid, _f0, "男" if _male else "女", _off)
             job["_gain_off"] = _off
+        # 停顿样本只取一次并缓存到任务上：调 pause_targets 要遍历案例库，
+        # 8 分钟的长篇有几十块，没必要每块都重算。
+        if "_pause_samples" not in job:
+            _g = ("male" if job.get("_is_male") else
+                  "female" if job.get("_is_male") is False else None)
+            try:
+                job["_pause_samples"] = pause_targets(_g) if _g else None
+            except Exception as _e:
+                log.warning("任务 %s 停顿样本取用失败: %r", jid, _e)
+                job["_pause_samples"] = None
+            if job["_pause_samples"]:
+                log.info("任务 %s 停顿分布借案例经验分布：%d 个样本",
+                         jid, len(job["_pause_samples"]))
+
+        # 停顿预算对齐（PBA）：只切静音，不动任何有声样本，无音质损失。
+        # 丢掉的静音时间在下面用 atempo 拉回，总时长与发音速率一起回到
+        # 案例原声的水平。放在 ASR 回检之后——CER 要量的是模型的原始输出。
+        _pba_ratio = 1.0
+        # 分性别 α：女声冗余停顿比男声多 22.7%，同一档压不动
+        _alpha = (PBA_ALPHA_MALE if job.get("_is_male") else
+                  PBA_ALPHA_FEMALE if job.get("_is_male") is False
+                  else PBA_ALPHA)
+        if _alpha < 0.999 and len(chunk_text) >= PBA_MIN_CHARS:
+            audio, _pba_ratio = pba.align(audio, sr, _alpha)
+        # 停顿重排（在压缩之后）：把停顿长度重新分布成案例的形状+均值。
+        #
+        # ⚠️ r15：reshuffle 加长的这部分**不进 _pba_ratio**，也就是不参加
+        #    下面的 atempo 拉回。原因：拉回 = 把总时长压回原值 = 把有声段
+        #    加速。而"静音占比只有案例的 6 成、听着赶"正是要靠加长静音来
+        #    修的，再加速就完全抵消了（实测会把有声段从 4.21 字/s 拉到
+        #    4.60，离案例更远）。只有 align 压缩掉的那部分需要拉回——
+        #    不拉回的话整段会变慢，那是 r9 就验证过的老行为。
+        #    代价：成品总时长会比原时长长（静音占比向案例看齐的必然结果，
+        #    案例本身就比我们长 3.5%）。
+        if PBA_RESHAPE and len(chunk_text) >= PBA_MIN_CHARS:
+            try:
+                audio, _rs_ratio = pba.reshuffle(
+                    audio, sr, PBA_CV,
+                    target_samples=job.get("_pause_samples"))
+                job.setdefault("_rs_ratio_log", []).append(round(_rs_ratio, 4))
+            except Exception as _e:
+                log.warning("任务 %s 第 %d 块 停顿重排失败（跳过）: %r",
+                            jid, ci + 1, _e)
+
+        # 包络整形：补音节瞬态（修「舌头没展开」）。放在 PBA 之后——
+        # PBA 靠 VAD 判静音，先整形会改变 VAD 结果。不动频谱、不动时长。
+        if ENV_SHAPE and len(chunk_text) >= ENV_MIN_CHARS:
+            try:
+                audio, _es_sharp, _es_before, _es_after = envshape.fit(
+                    audio, sr, ENV_TARGET, ENV_COMP)
+                if _es_sharp:
+                    log.info("任务 %s 第 %d 块 包络整形 sharp=%.3f "
+                             "8~16Hz %.4f -> %.4f（目标 %.4f）",
+                             jid, ci + 1, _es_sharp, _es_before,
+                             _es_after, ENV_TARGET)
+            except Exception as _e:
+                log.warning("任务 %s 第 %d 块 包络整形失败（跳过）: %r",
+                            jid, ci + 1, _e)
 
         # ---- 能量动态扩展：补「轻重音」（韵律 C）----------------------------
         # 放在包络整形之后：整形补的是音节内瞬态（8~16Hz），这里补的是
@@ -1183,7 +1302,12 @@ async def run_job(job):
             # 音色对齐放在变速之后：atempo 只改时长不改频谱，顺序无副作用，
             # 但 EQ 一定要在 volume 之前，否则先衰减再提增益会白损失动态余量。
             if TONE_EQ and TONE_EQ_FILTER:
-                _af.append(TONE_EQ_FILTER)
+                # r15 起分性别：男女频谱差异远大于各自与案例的偏差，
+                # 共用一套只能取「同向保守值」，两边都补不到位。
+                _eq = (TONE_EQ_FILTER_MALE if job.get("_is_male") else
+                       TONE_EQ_FILTER_FEMALE
+                       if job.get("_is_male") is False else TONE_EQ_FILTER)
+                _af.append(_eq)
             # 高频空气感：先重采样到 44.1k（否则 12k 以上放不下），
             # 再生成谐波 + FIR 精确整形。
             if AIR:
@@ -1198,7 +1322,10 @@ async def run_job(job):
             # 男 -1.7 / 女 -2.4 dBFS，这里照 -1.7 卡，避免 mp3 编码过冲削波。
             # 放在链路最后，且必须在 volume 之后。
             if LOUD_NORM and LOUD_LIMITER:
-                _af.append(LOUD_LIMITER)
+                # 分性别：女声 EQ 补偿量大，峰值被推得比男声高 1.6 dB
+                _af.append(LOUD_LIMITER_MALE if job.get("_is_male") else
+                           LOUD_LIMITER_FEMALE
+                           if job.get("_is_male") is False else LOUD_LIMITER)
             _tail = ["-codec:a", "libmp3lame", "-b:a", MP3_BITRATE,
                      "-ar", str(OUT_SR), mp3_abs]
             if _af:
@@ -1559,6 +1686,35 @@ SPEAKER_DEFAULT = {
 }
 
 
+# ---- 引擎真实可用性（给「情感」下拉用）----------------------------------
+# 为什么要这个：CosyVoice3 没部署时，选「激昂/亲切/严肃」会走到
+# vram.switch_to("cosyvoice3") 失败、再回退 Qwen —— 任务**不报错**，
+# 员工拿到的是和「平稳」逐字节一样的成品，还白等了一轮排队。
+# 2026-10-06 实测三项 emotion 全部 fallback=cosyvoice3。
+# 与其事后静默回退，不如在下拉里就标出来。
+_ENGINE_AVAIL = {"ts": 0.0, "cosyvoice3": False}
+_ENGINE_AVAIL_TTL = 60.0
+
+
+def engine_available(name):
+    """某引擎现在能不能真的用。带 60 秒缓存，避免每次 /api/meta 都去连端口。"""
+    if name == "qwen":
+        return True
+    if name != "cosyvoice3":
+        return False
+    now = time.time()
+    if now - _ENGINE_AVAIL["ts"] < _ENGINE_AVAIL_TTL:
+        return _ENGINE_AVAIL["cosyvoice3"]
+    ok = False
+    try:
+        ok = bool(cosy_client.health(timeout=3.0)[0])
+    except Exception:
+        ok = False
+    _ENGINE_AVAIL["ts"] = now
+    _ENGINE_AVAIL["cosyvoice3"] = ok
+    return ok
+
+
 @app.get("/api/meta")
 async def meta(request: Request):
     require(request)
@@ -1593,12 +1749,13 @@ async def meta(request: Request):
         # 默认 1.0 生成的语速比原声快 11.5~11.9%，降到 0.9 后偏差缩到 +0.4% / +0.7%。
         "speed_default": 0.9,
         "speed_min": SPEED_MIN, "speed_max": SPEED_MAX,
-        # 员工只需要选「情感」；引擎/指令/参数由后端自动分流
+        # 员工只需要选「情感」；引擎/指令/参数由后端自动分流。
+        # ⚠️ available=false 的项前端会置灰：它的引擎当前连不上，选了也只是
+        #    静默回退 Qwen（出和「平稳」一样的成品）。
         "emotions": [
-            {"key": "standard", "engine": "qwen"},
-            {"key": "excited", "engine": "cosyvoice3"},
-            {"key": "warm", "engine": "cosyvoice3"},
-            {"key": "serious", "engine": "cosyvoice3"},
+            dict({"key": k, "engine": v["engine"]},
+                 available=engine_available(v["engine"]))
+            for k, v in EMOTION_PRESETS.items()
         ],
         "emotion_default": DEFAULT_EMOTION,
     }
@@ -1811,7 +1968,15 @@ async def delete_job(request: Request, jid: str):
 
 
 @app.post("/api/jobs/{jid}/retry")
-async def retry_job(request: Request, jid: str):
+async def retry_job(request: Request, jid: str, new_seed: int = Form(1)):
+    """重跑一个任务。
+
+    ⚠️ new_seed=1（默认）会换一个随机种子。原来无条件复制旧 seed，
+    于是「重试」出来的是**逐字节相同**的音频，等于没有这个按钮 ——
+    而模型本身有随机性缺陷（官方 #239/#290），遇到某段别扭时，
+    正确对策恰恰是**换种子再抽一次**。所以默认改成换种子。
+    new_seed=0 保留原种子（想精确复现某一版时用）。
+    """
     u = require(request)
     j = jobs.get(jid)
     if not j:
@@ -1821,6 +1986,10 @@ async def retry_job(request: Request, jid: str):
     if not j.get("text"):
         raise HTTPException(400, "原文案已丢失，无法重试，请重新提交")
     new = dict(j)
+    if new_seed:
+        new["seed"] = random.randint(1, 2 ** 31 - 1)
+        new["retried_from"] = jid
+        log.info("任务 %s 换种子重试: %s -> %s", jid, j.get("seed"), new["seed"])
     new["id"] = uuid.uuid4().hex[:12]
     new["status"] = "queued"
     new["progress"] = {"done": 0, "total": 0}
@@ -2201,6 +2370,14 @@ CASE_GENDERS = ("male", "female", "unknown")
 # 来源平台：案例是「标准答案」，必须能追溯它是谁生成的，
 # 否则后面做横向规律分析时，不同平台的样本会混在一起互相污染结论。
 CASE_SOURCES = ("elevenlabs", "qwen", "cosyvoice3", "other", "unknown")
+# 🔴 r15：标杆只认打了「标杆」tag 的案例。
+#    起因：员工上传了 3 个「yohan」案例（另一个音色，lufs −25.0/−25.2），
+#    它们同样是 male + elevenlabs，被算进中位数后男声响度目标从
+#    案例的 −24.3 被稀释成 −25.0，成品整体轻 0.7 dB；停顿样本也从 162
+#    涨到 688，把原音色的节奏搅了。
+#    原案例入库时本来就打了 `tags=...;标杆`，这里沿用这个约定即可，
+#    不用动数据模型。**没有任何案例打标杆 tag 时才回落到同性别全部**。
+CASE_BENCHMARK_TAG = os.environ.get("TTS_CASE_BENCHMARK_TAG", "标杆").strip()
 # 韵律六维（pyin）很慢，几分钟音频要 1~2 分钟，默认后台跑，不卡上传请求。
 # 设 TTS_CASE_PROSODY=0 可整体关掉。
 CASE_PROSODY = os.environ.get("TTS_CASE_PROSODY", "1").strip().lower() not in (
@@ -2324,11 +2501,7 @@ def loudness_targets(gender):
     if not LOUD_NORM:
         return None
     vals = []
-    for c in cases.values():
-        if c.get("gender") != gender:
-            continue
-        if PROSO_CASE_SOURCE and c.get("source") not in PROSO_CASE_SOURCE:
-            continue
+    for c in _bench_cases(gender):     # 共用标杆筛选，见 CASE_BENCHMARK_TAG
         v = c.get("lufs")
         if v is None:
             continue
@@ -2357,22 +2530,19 @@ def proso_targets(gender):
        不取 case["prosody"]["A"]（pyin 口径）—— 后者换算到 Praat 会失效。
     """
     def fallback():
+        ca, ce = CAL.get(gender, (PROSO_CAL_DEFAULT, PROSO_CAL_DEFAULT))
         if gender == "male":
-            return PROSO_A_MALE, PROSO_E_MALE
+            return PROSO_A_MALE * ca, PROSO_E_MALE * ce
         if gender == "female":
-            return PROSO_A_FEMALE, PROSO_E_FEMALE
-        return PROSO_A_DEFAULT, PROSO_E_DEFAULT
+            return PROSO_A_FEMALE * ca, PROSO_E_FEMALE * ce
+        return PROSO_A_DEFAULT * ca, PROSO_E_DEFAULT * ce
 
     if not PROSO_FROM_CASES:
         return fallback()
     vals = []
-    for c in cases.values():
-        if c.get("gender") != gender:
-            continue
+    for c in _bench_cases(gender):     # 共用标杆筛选，见 CASE_BENCHMARK_TAG
         p = c.get("proso") or {}
         if p.get("A") is None or p.get("E") is None:
-            continue
-        if PROSO_CASE_SOURCE and c.get("source") not in PROSO_CASE_SOURCE:
             continue
         vals.append((float(p["A"]), float(p["E"])))
     if not vals:
@@ -2385,7 +2555,55 @@ def proso_targets(gender):
     else:
         a = (vals[mid - 1][0] + vals[mid][0]) / 2.0
         e = (vals[mid - 1][1] + vals[mid][1]) / 2.0
-    return a, e
+    # 最后乘校准系数：Praat 口径达标不等于 pyin 口径达标，详见 CAL 的注释。
+    ca, ce = CAL.get(gender, (PROSO_CAL_DEFAULT, PROSO_CAL_DEFAULT))
+    return a * ca, e * ce
+
+
+def _bench_cases(gender):
+    """标杆案例：优先只认打了「标杆」tag 的，否则回落同性别全部。
+
+    ⚠️ 三个目标值函数（pause / proso / loudness）必须共用这一套筛选，
+       否则「多上传案例 → 规律更稳」会变成「多上传案例 → 标杆被稀释」。
+    """
+    base = [c for c in cases.values()
+            if c.get("gender") == gender
+            and (not PROSO_CASE_SOURCE
+                 or c.get("source") in PROSO_CASE_SOURCE)]
+    if not CASE_BENCHMARK_TAG:
+        return base
+    tagged = [c for c in base
+              if CASE_BENCHMARK_TAG in (c.get("tags") or "")]
+    return tagged or base
+
+
+def pause_targets(gender):
+    """停顿分布的目标样本：把该性别所有合规案例的停顿样本拼起来。
+
+    与 proso_targets / loudness_targets 同一套白名单约定。拼多份案例是为了
+    样本量够——单份 100~200 个停顿，分 8 桶做分位映射时边界抖动大。
+
+    ⚠️ 借的是**形状**不是均值：reshuffle 拿到后会整体缩放到它自己的 mu 回归
+       值上（mu 由句均时长决定，我们句子比案例碎，均值不能照抄）。
+    """
+    if not PAUSE_FROM_CASES:
+        return None
+    out = []
+    for c in _bench_cases(gender):     # 共用标杆筛选，见 CASE_BENCHMARK_TAG
+        ps = c.get("pause_samples")
+        if not ps:
+            continue
+        try:
+            # 🔴 防御：只收 0.1~5 秒。出过一次事故——某个案例的
+            #    pause_samples 因换算 bug 变成几百秒，拼进来后
+            #    reshuffle 的目标 mu 变成 172 秒，成品被拉成 4.7 小时。
+            #    分布形状本来就该落在「人能做出的停顿」范围内，
+            #    超出的必然是脏数据，直接丢掉不要让整单报废。
+            out.extend(v for v in (float(x) for x in ps)
+                       if 0.1 <= v <= 5.0)
+        except (TypeError, ValueError):
+            pass
+    return out or None
 
 
 def _analyze_case(cid):
@@ -2419,6 +2637,25 @@ def _analyze_case(cid):
                 log.info("案例 %s PROSO 口径 A/E = %.3f / %.3f", cid, _a, _e)
             except Exception as e:
                     log.warning("案例 %s PROSO 口径分析失败: %s", cid, e)
+        # 停顿样本：r15 起 reshuffle 直接借案例的经验分布（分布**形状**，
+        # 不是均值）。只留 ≥0.28s 的——与 prosody_report 算 F 的口径同源，
+        # 否则形状对不上。上限 400 个够了（再多只是同一分布的重复采样）。
+        try:
+            # ⚠️🔴 不要再乘 _hop：cuts 里已经是**样本索引**（sent_windows 内部
+            #    存的就是 i*hop）。2026-10-06 这里写成 (j-i)*hop/sr，24k 下
+            #    整体放大 480 倍，员工上传的新案例 pause_samples 变成
+            #    max=470 秒，reshuffle 的目标 mu 跟着变成 172 秒，
+            #    成品被拉成 **4.7 小时**（232.90s -> 16854.56s）。
+            _runs = [(_j - _i) / float(_sr) for _i, _j in _cuts]
+            _runs = sorted(r for r in _runs if r >= 0.28)
+            if len(_runs) >= 8:
+                c["pause_samples"] = [round(float(r), 4) for r in _runs[:400]]
+                log.info("案例 %s 停顿样本 %d 个 均值 %.3fs 中位 %.3fs "
+                         "最长 %.3fs", cid, len(_runs),
+                         float(np.mean(_runs)), float(np.median(_runs)),
+                         float(_runs[-1]))
+        except Exception as e:
+            log.warning("案例 %s 停顿样本提取失败: %s", cid, e)
         # 响度：成品要对标的就是这个数（loudness_targets 按时取中位数）。
         _il, _tp = measure_lufs(merged)
         if _il is not None:

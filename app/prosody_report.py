@@ -126,7 +126,12 @@ def measure(p, name=""):
         slopes.append(np.polyfit(np.arange(len(semi)), semi, 1)[0] * (sr / 256))
     E = float(np.std(slopes)) if len(slopes) >= 2 else None
 
-    runs = np.array([(j - i) * hop / sr for i, j in cuts])
+    # ⚠️ r15 修：cuts 里已经是**样本索引**（sent_windows 内部存的是 i*hop），
+    #    旧代码写成 (j-i)*hop/sr 多乘了一次 hop（24k 下 480 倍）。
+    #    对 F 没影响（直方图 8 桶按 min~max 均分，整体线性缩放不改变归一化
+    #    熵，所以历史 F 值仍然可比）；但均值/sd/CV 全错，`>= 0.28` 过滤也
+    #    形同虚设（放大后全部通过）。修完后 pauses 会比历史值少一些。
+    runs = np.array([(j - i) / sr for i, j in cuts])
     runs = runs[runs >= 0.28]
     F = None
     if len(runs) >= 5:

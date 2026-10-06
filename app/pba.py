@@ -87,6 +87,29 @@ def _intervals(y16):
     return [(s, e) for s, e in out if (e - s) / SR_A >= MIN_SENT]
 
 
+def _intervals_report(y, sr):
+    """用 prosody_report.sent_windows 的口径切有声区间。
+
+    为什么另开一个口径：案例的停顿样本（target_samples）是 sent_windows 量的，
+    验收的 F/静音占比也是同一口径；而 `_intervals` 用的是 librosa
+    effects.split —— 两者检出的停顿数差很多（男声实测 98 vs 172）。
+    拿 A 口径的目标去改 B 口径的停顿，等于跨口径做减法：r15 首轮
+    reshuffle 只改到 57% 的停顿，F 因此只从 0.786 挪到 0.802。
+
+    ⚠️ 用 cuts 反推有声区间，而**不**用 sent_windows 返回的 segs ——
+       segs 过滤掉了 <0.6s 的碎段，拿它重建音频会真的丢内容。
+    """
+    import prosody_report
+    _, cuts, _ = prosody_report.sent_windows(
+        np.asarray(y, dtype=np.float32).flatten(), sr)
+    bnd = [0]
+    for a, b in cuts:
+        bnd += [int(a), int(b)]
+    bnd.append(len(y))
+    iv = [(bnd[k], bnd[k + 1]) for k in range(0, len(bnd) - 1, 2)]
+    return [(s, e) for s, e in iv if e > s]
+
+
 def _fit_seg(seg, need):
     """把静音片段 seg 裁/补到 need 个样本。
 
@@ -122,7 +145,8 @@ def _fit_seg(seg, need):
 _SR_HINT = 44100
 
 
-def reshuffle(y, sr, cv=0.28, a=0.463, b=0.0143, lo=0.26, hi=0.65):
+def reshuffle(y, sr, cv=0.28, a=0.5725, b=0.00769, lo=0.26, hi=0.65,
+              target_samples=None):
     """停顿重排（Pause Reshuffle）——修「卡顿」的另一半。
 
     ## 为什么需要它
@@ -141,32 +165,59 @@ def reshuffle(y, sr, cv=0.28, a=0.463, b=0.0143, lo=0.26, hi=0.65):
     ## 目标均值从哪来（只有两个样本点，是拟合不是定理）
     案例的停顿均值跟**句均时长**强相关，两点正好定一条直线：
 
-        男声 句均 3.32s -> 停顿均值 0.416s
-        女声 句均 10.6s -> 停顿均值 0.312s
+        男声 句均 3.32s -> 停顿均值 0.547s
+        女声 句均 10.6s -> 停顿均值 0.491s
 
-        mu = 0.463 - 0.0143 * sent_dur      （clamp 到 [0.26, 0.65]）
+        mu = 0.5725 - 0.00769 * sent_dur     （clamp 到 [0.26, 0.65]）
 
-    代进去：男 3.44s -> 0.414s（要 +25%），女 9.65s -> 0.325s（+0.3%，
-    基本不用动）。**正好只修男声**，女声不受影响 —— 这就是为什么不能直接
-    写死一个停顿倍数，而要用句均时长回归。
+    ⚠️ r15 修正：旧系数是 0.463 / 0.0143，源头是 prosody_report 的一个
+       换算 bug —— `measure()` 里把已经是样本索引的 cuts 又乘了一次 hop
+       （24k 下放大 480 倍）。旧实测「男 0.416 / 女 0.312」因此是错的，
+       真值是 0.547 / 0.491。旧 mu 比案例低 24%(男) / 34%(女)，这正是
+       「句段偏多、听着赶」的量化根因（我们静音占比 9.2% vs 案例 15.7%）。
+       熵 F 不受该 bug 影响（直方图按 min~max 均分，整体线性缩放不改变
+       归一化熵），所以历史上基于 F 的结论仍然成立。
 
     ## 分布形状
     CV 固定 0.28（男 0.26 / 女 0.31 的中点），用对数正态做**保序分位映射**：
     原来偏长的停顿映射后依然偏长，只是整体拉开成案例那种有长有短的形状。
+
+    ## ⚠️ 2026-10-06 r15：对数正态这个假设是错的，改用案例实测的经验分布
+    整篇实测（cmp14 口径，停顿 ≥0.28s 分 8 桶）：
+        女声  我们 CV 0.476 / 熵 F 0.675     案例 CV 0.374 / 熵 F 0.834
+        —— **我们 CV 更大，熵却更低**。说明差的不是"变化量"，是**分布形状**：
+           我们  直方图 [96, 40, 16,  1,  6, 19, 5, 2]  前两桶占 73%
+           案例  直方图 [28,  8,  8,  5,  3, 18, 3, 6]  前两桶占 46%
+        大部分停顿挤在最短路那两格 = 断句太碎，每个断句配一个短停顿。
+    小 CV 的对数正态恰恰会把停顿挤成一坨（这正是"节拍器感"的来源），
+    所以调 CV 是南辕北辙。改法：传 `target_samples`（案例实测的停顿时长
+    数组）进来，**形状直接借案例的经验分布**，均值仍走上面的 mu 回归。
     """
     y = np.asarray(y)
     if y.size < SR_A:
         return y, 1.0
-    try:
-        y16 = _to16(y, sr)
-        ss = _intervals(y16)
-    except Exception as e:
-        log.warning("PBA reshuffle: VAD 失败，跳过（%s）", repr(e)[:120])
-        return y, 1.0
-    if len(ss) < 2:
-        return y, 1.0
-    k = float(sr) / SR_A
-    ss_o = [(int(round(s * k)), int(round(e * k))) for s, e in ss]
+    # VAD 口径：给了案例样本就用 sent_windows（与样本、与验收同源），
+    # 否则沿用 _intervals（α 的标定口径）。
+    ss_o = None
+    if target_samples is not None:
+        try:
+            _iv = _intervals_report(y, sr)
+            if len(_iv) >= 2:
+                ss_o = [(int(s), int(e)) for s, e in _iv]
+        except Exception as e:
+            log.warning("PBA reshuffle: sent_windows 口径 VAD 失败，"
+                        "回落 _intervals（%s）", repr(e)[:120])
+    if ss_o is None:
+        try:
+            y16 = _to16(y, sr)
+            ss = _intervals(y16)
+        except Exception as e:
+            log.warning("PBA reshuffle: VAD 失败，跳过（%s）", repr(e)[:120])
+            return y, 1.0
+        if len(ss) < 2:
+            return y, 1.0
+        k = float(sr) / SR_A
+        ss_o = [(int(round(s * k)), int(round(e * k))) for s, e in ss]
     ps_o = [(ss_o[i][1], ss_o[i + 1][0]) for i in range(len(ss_o) - 1)]
     ps_o = [(s, e) for s, e in ps_o if e > s]
     if len(ps_o) < 3:
@@ -176,17 +227,46 @@ def reshuffle(y, sr, cv=0.28, a=0.463, b=0.0143, lo=0.26, hi=0.65):
     _SR_HINT = int(sr)
     durs = np.array([(e - s) / float(sr) for s, e in ps_o], dtype=np.float64)
     sent = np.array([(e - s) / float(sr) for s, e in ss_o], dtype=np.float64)
-    mu = float(np.clip(a - b * float(sent.mean()), lo, hi))
-    s2 = float(np.log1p(cv * cv))
-    try:
-        from statistics import NormalDist
-        nd = NormalDist()
-        q = (np.arange(len(ps_o)) + 0.5) / len(ps_o)
-        z = np.array([nd.inv_cdf(float(t)) for t in q])
-    except Exception:
-        z = np.zeros(len(ps_o))
-    tgt = np.exp(np.log(mu) - s2 / 2.0 + np.sqrt(s2) * z)
-    tgt = np.clip(tgt, lo, hi)
+    # 均值：有案例样本就直接用案例实测均值（真 1:1），否则走回归。
+    # 二者差很多——回归只有两个样本点，案例均值是 147~162 个实测的中位。
+    mu_reg = float(np.clip(a - b * float(sent.mean()), lo, hi))
+    mu = mu_reg
+    q = (np.arange(len(ps_o)) + 0.5) / len(ps_o)
+    tgt = None
+    # ① 优先用案例实测的经验分布：形状照抄案例，均值直接用案例的
+    if target_samples is not None:
+        try:
+            ts = np.sort(np.asarray(target_samples, dtype=np.float64))
+            # 🔴 最后一道防线：只认 0.1~5 秒。出过事故——案例样本的换算
+            #    bug 让 mu 变成 172 秒，成品被拉成 4.7 小时。人做不出
+            #    几百秒的停顿，超范围一律当脏数据丢掉。
+            ts = ts[np.isfinite(ts) & (ts >= 0.1) & (ts <= 5.0)]
+            if ts.size >= 8 and float(ts.mean()) <= 2.0:
+                mu = float(ts.mean())
+                pos = q * (ts.size - 1)
+                tgt = np.interp(pos, np.arange(ts.size), ts)
+                # 硬夹到案例的**实测范围**内（而不是 lo/hi 这两个拍脑袋的界）。
+                # 为什么必须夹：F（停顿熵）的 8 桶是按 min~max 均分的，
+                # 尾巴只要比案例长一点，桶宽就被拉大、短停顿全挤进前两桶，
+                # 熵反而掉下去。r15 首轮实测：我们最长 1.400s vs 案例 1.080s
+                # → 前两桶 57.5% vs 案例 45.7%，F 0.797 vs 0.886。
+                tgt = np.clip(tgt, float(ts.min()), float(ts.max()))
+        except Exception as e:
+            log.warning("PBA reshuffle: 经验分布目标失败，回落对数正态（%s）",
+                        repr(e)[:120])
+            tgt = None
+            mu = mu_reg
+    # ② 回落：对数正态（旧行为）
+    if tgt is None:
+        s2 = float(np.log1p(cv * cv))
+        try:
+            from statistics import NormalDist
+            nd = NormalDist()
+            z = np.array([nd.inv_cdf(float(t)) for t in q])
+        except Exception:
+            z = np.zeros(len(ps_o))
+        tgt = np.exp(np.log(mu) - s2 / 2.0 + np.sqrt(s2) * z)
+        tgt = np.clip(tgt, lo, hi)
     rank = np.argsort(np.argsort(durs))
     new = tgt[rank]
 
@@ -199,9 +279,11 @@ def reshuffle(y, sr, cv=0.28, a=0.463, b=0.0143, lo=0.26, hi=0.65):
     y2 = np.concatenate(pieces)
     ratio = len(y2) / float(len(y))
     log.info("PBA reshuffle: 停顿 %d 处 均值 %.3fs->%.3fs sd %.3f->%.3f "
-             "(目标 mu=%.3f cv=%.2f)，时长 %.2fs -> %.2fs (ratio %.4f)",
+             "(目标 mu=%.3f[回归 %.3f] cv=%.2f 分布=%s)，时长 %.2fs -> %.2fs "
+             "(ratio %.4f)",
              len(ps_o), float(durs.mean()), float(new.mean()),
-             float(durs.std()), float(new.std()), mu, cv,
+             float(durs.std()), float(new.std()), mu, mu_reg, cv,
+             "案例经验" if target_samples else "对数正态",
              len(y) / float(sr), len(y2) / float(sr), ratio)
     return y2, ratio
 
