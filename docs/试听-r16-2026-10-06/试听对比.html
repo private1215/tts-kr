@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>r16 试听对比：案例 / r15现状 / r16铺底噪</title>
+<style>
+  :root{--bg:#f7f7f8;--card:#fff;--bd:#e3e3e6;--tx:#1a1a1e;--tx2:#6b6b73;--hl:#b45309}
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:var(--bg);color:var(--tx);
+       font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--tx2);font-size:13px;margin-bottom:20px}
+  .sec{margin:0 0 26px;background:var(--card);border:1px solid var(--bd);
+       border-radius:10px;padding:16px 18px}
+  .sec h2{font-size:15px;margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--bd)}
+  .row{display:grid;grid-template-columns:120px 1fr;gap:10px;align-items:center;
+       padding:8px 0;border-bottom:1px dashed #eee}
+  .row:last-child{border-bottom:0}
+  .lab{font-size:13px;color:var(--tx2)}
+  audio{width:100%;height:34px}
+  .note{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;
+        padding:12px 14px;margin:14px 0;font-size:13px;color:#78350f}
+  .note b{color:var(--hl)}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+  th,td{border:1px solid var(--bd);padding:5px 8px;text-align:center}
+  th{background:#f0f0f2;font-weight:600}
+  td.l{text-align:left}
+  .bad{color:#b91c1c;font-weight:600}
+  .good{color:#15803d;font-weight:600}
+  code{background:#f0f0f2;padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<h1>r16 试听对比：案例 / r15 现状 / r16 铺底噪</h1>
+<div class="sub">2026-10-06 · 韩语金融广播 · 同一文案</div>
+
+<div class="note">
+  <b>这一轮要你用耳朵判的是「铺底噪」。</b>
+  量到一件事：ElevenLabs 案例的「停顿」根本不是静音，是 <b>−53 ~ −65 dB 的房间底噪</b>
+  （room tone），而我们的停顿是 <b>−120 dB 的数字真零</b>，差 50~67 dB。
+  也就是说 —— 案例停顿时还有房间声在，我们一停顿就是彻彻底底的死寂，
+  段落切换处会「咔」一下。这可能就是「空 / 假 / AI 感」的一个来源。<br>
+  下面的 <b>r16 铺底噪</b> 版本是从案例静音段取的真实 room tone 铺上去的（电平对齐案例）。
+  <b>注意：戴上耳机、把音量开到平时听成品的水平</b>，重点听「句子之间」——
+  是觉得更自然，还是觉得有杂音。这个只有你能判。
+</div>
+
+<div class="sec">
+  <h2>男声（案例 483.8s / r15 477.3s）</h2>
+  <div class="row"><div class="lab">案例 ElevenLabs</div><audio controls src="案例-男声.mp3"></audio></div>
+  <div class="row"><div class="lab">r15 现状</div><audio controls src="r15-男声.mp3"></audio></div>
+  <div class="row"><div class="lab">r16 铺底噪（新）</div><audio controls src="r16-男声-铺底噪.mp3"></audio></div>
+</div>
+
+<div class="sec">
+  <h2>女声（案例 459.1s / r15 456.8s）</h2>
+  <div class="row"><div class="lab">案例 ElevenLabs</div><audio controls src="案例-女声.mp3"></audio></div>
+  <div class="row"><div class="lab">r15 现状</div><audio controls src="r15-女声.mp3"></audio></div>
+  <div class="row"><div class="lab">r16 铺底噪（新）</div><audio controls src="r16-女声-铺底噪.mp3"></audio></div>
+</div>
+
+<div class="sec">
+  <h2>本轮诊断结论（数据）</h2>
+  <table>
+    <tr><th>项</th><th>案例-男</th><th>r15-男</th><th>案例-女</th><th>r15-女</th><th>判读</th></tr>
+    <tr><td class="l">底噪（p10 以下均值）</td><td>−64.7 dB</td>
+        <td class="bad">−115.0 dB</td><td>−53.0 dB</td><td class="bad">−77.3 dB</td>
+        <td class="l">我们停顿是数字真零</td></tr>
+    <tr><td class="l">真零帧(&lt;−100dB)占比</td><td>0.000</td><td class="bad">0.083</td>
+        <td>0.000</td><td class="bad">0.020</td><td class="l">案例一帧真零都没有</td></tr>
+    <tr><td class="l">D 语速CV</td><td>0.128</td><td class="bad">0.161</td><td>0.150</td>
+        <td>0.129</td><td class="l">男高女低，方向不一致</td></tr>
+    <tr><td class="l">D_voiced（按有声时间归一）</td><td>0.129</td><td class="good">0.119</td>
+        <td>0.137</td><td class="good">0.123</td>
+        <td class="l"><b>我们其实更均匀</b></td></tr>
+    <tr><td class="l">pauses（≥0.28s）</td><td>162</td><td>175</td><td>147</td>
+        <td class="bad">189</td><td class="l">女声 +28.6% 唯一硬伤</td></tr>
+  </table>
+  <div style="margin-top:10px;font-size:13px;color:var(--tx2)">
+    1) <b>铺底噪不改变 D</b>（实测 0.161 → 0.161）。所以它不解决指标，只解决听感。<br>
+    2) <b>D 不是「忽快忽慢」</b>：按有声时间归一化后（D_voiced）我们男女都已优于案例。
+       男声 D 偏高是因为合成音频能量分布「双峰」（要么很响要么真零），
+       真人录音有大量中间态低能量帧，导致同一个相对阈值在两边切出的静音比例不同。
+       5 次同配置重跑 D 分布 0.137~0.161（中位 0.147），是系统性偏差，但根因在度量口径。<br>
+    3) <b>女声 pauses +28.6% 已试算过两种修法，都会砸 E</b>：
+       合并最短 42 个 → pauses 149✅ 但 E 37.65→29.97（<span class="bad">−12.9%</span>）；
+       压短到 0.20~0.275s → pauses 156、F 保住，但 E→31.67（<span class="bad">−8.0%</span>）。
+       男声同样：压短 13 个 → pauses 164✅ 但 E 32.55→27.92（<span class="bad">−19.2%</span>）。
+       原因：我们的 E 有一部分来自「句内微停顿前的收尾」，案例没有句内停顿、
+       E 全部来自真句尾 —— <b>两边的 E 不是同一个东西</b>，动停顿必然动 E。
+  </div>
+</div>
+
+<div class="sec">
+  <h2>CosyVoice3 本轮打通了（原以为卡死）</h2>
+  <div style="font-size:13px">
+    之前记录「卡在 openai-whisper 没有 py3.12 wheel」—— 实际已装上（20250625）。
+    真正的卡点是一串缺失小依赖，现已全部补齐：
+    <code>setuptools&lt;81</code>（84 版移除了 pkg_resources）、<code>gdown</code>、
+    <code>wget</code>、<code>x_transformers</code>、<code>loguru</code>、
+    <code>einx</code>、<code>frozendict</code>、<code>torch_einops_utils</code>、
+    <code>rotary-embedding-torch</code>。<br><br>
+    <b>冒烟测试结果</b>：模型加载成功，韩语零样本克隆出声，
+    显存峰值 <b>3.57 GiB</b>（3090 24G 完全够，与 3060 上的 Qwen 物理隔离）。
+    ASR 回检：原文 <code>오늘 코스피는 외국인 매수세에 힘입어 전 거래일보다 12포인트 오른 2,610선에서 마감했습니다.</code>
+    → 转出 <code>오늘 코스피는 외국인 매소스의 힘입어 전 거래일보다 12포인트홀은 2,6 한자된 텐션에서 마감했습니다.</code>
+    主体正确，<b>韩语可用</b>。<br><br>
+    <b>唯一硬伤</b>：文本前端 <code>contains_chinese()</code> 为假时一律走英文分支，
+    把数字念成英文（<code>12</code>→<code>twelve</code>、<code>2,610</code>→<code>two,six hundred and ten</code>）。
+    金融播报全是数字，必须先修这个才能用。
+  </div>
+</div>
+
+</body>
+</html>
