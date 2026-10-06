@@ -191,6 +191,67 @@ def _resolve_instruct(name: str) -> str:
     return s if s.endswith("<|endofprompt|>") else s + "<|endofprompt|>"
 
 
+# ── 韩语数字归一化 ────────────────────────────────────────────────────
+# 为什么必须自己做：cosyvoice/cli/frontend.py 的 text_normalize() 里
+# `contains_chinese(text)` 为假时**一律走英文分支**，spell_out_number() 会把
+# 12 念成 twelve、2,610 念成 two,six hundred and ten。金融播报全是数字，
+# 这是硬伤。⚠️ 与 wetext 无关（没装也一样），spell_out_number 无条件执行。
+# 对策：自己把阿拉伯数字转成韩语汉字词读法，并让 text_frontend=False 绕开 TN。
+_DIG = ["영", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"]
+_SMALL = ["", "십", "백", "천"]
+_BIG = ["", "만", "억", "조"]
+_NUM_RE = re.compile(r"-?[0-9][0-9,]*(?:\.[0-9]+)?%?")
+
+
+def _group4(n):
+    if n == 0:
+        return ""
+    out = ""
+    for p in range(3, -1, -1):
+        d = (n // (10 ** p)) % 10
+        if d == 0:
+            continue
+        out += ("" if (d == 1 and p > 0) else _DIG[d]) + _SMALL[p]
+    return out
+
+
+def _num2ko(m):
+    raw = m.group(0)
+    pct = raw.endswith("%")
+    neg = raw[:1] in "-−"
+    s = raw.rstrip("%").lstrip("-−").replace(",", "")
+    if "." in s:
+        a, b = s.split(".", 1)
+        head = _num2ko(re.match(r"-?[0-9][0-9,]*", a)) if a else "영"
+        out = head + "점" + "".join(_DIG[int(c)] for c in b if c.isdigit())
+    else:
+        try:
+            n = int(s)
+        except ValueError:
+            return raw
+        if n == 0:
+            out = "영"
+        else:
+            parts, g = [], 0
+            while n > 0 and g < len(_BIG):
+                cur = n % 10000
+                if cur:
+                    parts.append(_group4(cur) + _BIG[g])
+                n //= 10000
+                g += 1
+            out = "".join(reversed(parts))
+    if neg:
+        out = "마이너스" + out
+    if pct:
+        out += "퍼센트"
+    return out
+
+
+def normalize_ko_numbers(text: str) -> str:
+    """阿拉伯数字 -> 韩语读法（案例文案本身已是读法，此步主要给业务输入兜底）"""
+    return _NUM_RE.sub(_num2ko, text)
+
+
 def _split_sentences(text: str, max_chars: int = 160):
     """按句末标点切句，再把短句合并到 max_chars 以内。
 
@@ -226,7 +287,10 @@ def synth(req: SynthReq):
 
     instruct = _resolve_instruct(req.instruct)
     prompt_text = instruct + (req.ref_text or "")
-    chunks = _split_sentences(req.text, max_chars=req.max_chars)
+    # ⚠️ 先转韩语数字，再切块。切块后每块仍独立走 text_frontend=False，
+    #    绕开官方英文 TN（否则 12→twelve、2,610→two,six hundred and ten）
+    chunks = _split_sentences(normalize_ko_numbers(req.text),
+                              max_chars=req.max_chars)
     log.info("synth: %d字 -> %d块  instruct=%s speed=%s max_chars=%d",
              len(req.text), len(chunks), req.instruct, req.speed, req.max_chars)
 
@@ -237,9 +301,12 @@ def synth(req: SynthReq):
             _PROG[req.rid] = {"done": 0, "total": n_chunk}
     for i, c in enumerate(chunks):
         try:
+            # ⚠️ 传**字符串**、逐块独立调用：官方 generator 通道会触发 bistream，
+            #    实测韩语长文本会跑飞（重复句子 + 后半段全胡话，2026-10-06）。
+            #    逐块独立调用内容 100% 正确，跑飞不会跨块累积。
             for o in cosy.inference_zero_shot(c, prompt_text, req.ref_wav,
                                               stream=False, speed=req.speed,
-                                              text_frontend=req.text_frontend):
+                                              text_frontend=False):
                 outs.append(o["tts_speech"])
         except Exception as e:
             log.warning("第 %d 块生成失败: %s", i, repr(e)[:200])

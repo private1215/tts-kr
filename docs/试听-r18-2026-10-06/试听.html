@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>r18 试听对比（还原度：女 96.45% / 男 94.48%）</title>
+<style>
+body{font-family:-apple-system,"PingFang SC",sans-serif;background:#f6f7f9;color:#1d2129;margin:0;padding:28px}
+h1{font-size:20px;margin:0 0 6px}
+.sub{color:#86909c;font-size:13px;margin-bottom:22px;line-height:1.7}
+.grp{background:#fff;border-radius:10px;padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.grp h2{font-size:15px;margin:0 0 14px;color:#1d2129}
+.row{display:flex;align-items:center;gap:14px;padding:9px 0;border-top:1px solid #f0f0f0;flex-wrap:wrap}
+.row:first-of-type{border-top:none}
+.nm{width:260px;font-size:13px;font-weight:600}
+.sc{width:96px;font-size:12px;color:#4e5969}
+audio{height:34px;flex:1;min-width:280px}
+.tag{font-size:11px;padding:2px 8px;border-radius:10px;background:#e8f3ff;color:#165dff}
+.tag.best{background:#e8ffea;color:#00b42a}
+.tag.bad{background:#ffece8;color:#f53f3f}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+th,td{padding:6px 10px;border-bottom:1px solid #f0f0f0;text-align:right}
+th:first-child,td:first-child{text-align:left}
+th{color:#86909c;font-weight:600}
+</style>
+</head>
+<body>
+<h1>r18 试听对比 · 还原度测量口径修正 + 女声 EQ 重做</h1>
+<div class="sub">
+  本轮<b>没有改生成链路</b>，只改了两件事：① 修掉三个<b>度量错误</b>（详见报告），真实还原度其实是
+  <b>男 94.48% / 女 96.45%</b>，不是上一轮报的 84%；② 女声 EQ 重做，音色偏差 0.696 → 0.476 dB。<br>
+  r17（逐句语速平滑）与 r19（句间停顿砍半）都被<b>证伪</b>，仅留作对照，请勿采用。
+</div>
+
+<div class="grp">
+<h2>女声 · 阿모텍（案例 vs 我们）</h2>
+<div class="row"><span class="nm">案例（ElevenLabs）</span><span class="sc">基准</span><audio controls src="案例-女声.mp3"></audio></div>
+<div class="row"><span class="nm">r18 女声（新 EQ，推荐）</span><span class="sc">96.45%</span><span class="tag best">音色 0.29 dB</span><audio controls src="r18-女声-新EQ-还原度96.5%.mp3"></audio></div>
+</div>
+
+<div class="grp">
+<h2>男声 · 리노공업（案例 vs 我们）</h2>
+<div class="row"><span class="nm">案例（ElevenLabs）</span><span class="sc">基准</span><audio controls src="案例-男声.mp3"></audio></div>
+<div class="row"><span class="nm">r18 男声（r15 链路，推荐）</span><span class="sc">94.48%</span><span class="tag best">音色 0.41 dB</span><audio controls src="r18-男声-还原度94.5%.mp3"></audio></div>
+</div>
+
+<div class="grp">
+<h2>对照 · 已证伪 / 备选引擎（男声）</h2>
+<div class="row"><span class="nm">r17 逐句语速平滑</span><span class="sc">93.59%</span><span class="tag bad">稳健 CV 反而变差</span><audio controls src="对照-r17男声-逐句平滑.mp3"></audio></div>
+<div class="row"><span class="nm">r19 句间停顿砍半</span><span class="sc">90.72%</span><span class="tag bad">停顿熵 −41.8%</span><audio controls src="对照-r19男声-句间砍半.mp3"></audio></div>
+<div class="row"><span class="nm">CosyVoice3（原始输出，未走后处理）</span><span class="sc">—</span><span class="tag">句子偏碎 segs 211 vs 154</span><audio controls src="对照-CosyVoice3-男声.mp3"></audio></div>
+</div>
+
+<div class="grp">
+<h2>逐项对比（r18 最终口径）</h2>
+<table>
+<tr><th>维度</th><th>权重</th><th>男 案例</th><th>男 我们</th><th>偏差</th><th>女 案例</th><th>女 我们</th><th>偏差</th></tr>
+<tr><td>A 句内音高动态</td><td>0.10</td><td>8.362</td><td>8.522</td><td>1.9%</td><td>9.470</td><td>9.195</td><td>2.9%</td></tr>
+<tr><td>B 全局音高跨度</td><td>0.08</td><td>14.500</td><td>14.600</td><td>0.7%</td><td>14.300</td><td>14.500</td><td>1.4%</td></tr>
+<tr><td>E 句尾多样性</td><td>0.12</td><td>34.559</td><td>31.107</td><td>10.0%</td><td>34.410</td><td>32.393</td><td>5.9%</td></tr>
+<tr><td>D_voiced 语速</td><td>0.08</td><td>0.129</td><td>0.109</td><td>14.9%</td><td>0.137</td><td>0.127</td><td>7.6%</td></tr>
+<tr><td>F 停顿熵</td><td>0.08</td><td>0.886</td><td>0.942</td><td>6.4%</td><td>0.782</td><td>0.776</td><td>0.8%</td></tr>
+<tr><td>静音占比</td><td>0.07</td><td>0.188</td><td>0.209</td><td>11.7%</td><td>0.161</td><td>0.180</td><td>11.8%</td></tr>
+<tr><td>C 能量动态</td><td>0.08</td><td>14.516</td><td>15.300</td><td>5.4%</td><td>15.070</td><td>16.130</td><td>7.0%</td></tr>
+<tr><td>LUFS</td><td>0.06</td><td>−24.30</td><td>−24.30</td><td>0.0%</td><td>−22.90</td><td>−22.90</td><td>0.0%</td></tr>
+<tr><td>峰值 dBFS</td><td>0.06</td><td>−1.70</td><td>−2.20</td><td>8.3%</td><td>−2.40</td><td>−2.40</td><td>0.0%</td></tr>
+<tr><td>时长 s</td><td>0.10</td><td>483.76</td><td>477.30</td><td>1.3%</td><td>459.13</td><td>456.77</td><td>0.5%</td></tr>
+<tr><td>音色 LTAS dB</td><td>0.07</td><td>—</td><td>0.41</td><td>6.9%</td><td>—</td><td>0.29</td><td>4.8%</td></tr>
+<tr><td colspan="4"><b>综合还原度</b></td><td><b>94.48%</b></td><td colspan="3"></td><td><b>96.45%</b></td></tr>
+</table>
+</div>
+</body>
+</html>
