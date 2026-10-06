@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>r21 试听 — 标杆男 / 标杆女（v3 口径）</title>
+<style>
+  body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif;
+         max-width: 920px; margin: 32px auto; padding: 0 20px; color: #222; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #888; font-size: 12px; margin-bottom: 24px; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 28px; }
+  th, td { border: 1px solid #e2e2e2; padding: 8px 10px; text-align: left; }
+  th { background: #f7f7f7; font-weight: 600; }
+  audio { width: 100%; height: 36px; }
+  .bg { background: #fcfcfc; }
+  code { background: #f2f2f2; padding: 1px 5px; border-radius: 3px; }
+  .note { background: #fff8e1; border-left: 3px solid #f0ad4e;
+          padding: 10px 14px; margin: 20px 0; }
+</style>
+</head>
+<body>
+<h1>r21 试听：标杆男 / 标杆女</h1>
+<div class="sub">2026-10-07 · 线上最新代码（男声多案例联合拟合 EQ）· 同一案例文案 · v3 评分口径</div>
+
+<div class="note">
+  <b>这一轮的结论：</b>攻「峰值/CF」和「C 能量动态」两轮都<b>证伪并回退</b>了
+  （详见 <code>docs/r21-瞬态整形与C标定-2026-10-07.md</code>）。
+  所以本页的音频 = r20 配置，也就是目前<b>实测最优</b>的一版：
+  标杆男 <b>94.52%</b>、标杆女 <b>94.88%</b>、五案例均值 <b>93.52%</b>。
+</div>
+
+<h3>标杆男 — 리노공업（案例 483.8s / 我们 475.3s）</h3>
+<table>
+  <tr><th style="width:20%">音源</th><th>播放</th><th style="width:14%">还原度</th></tr>
+  <tr><td>案例原声（ElevenLabs）</td><td><audio controls src="案例-标杆男.mp3"></audio></td><td>基准</td></tr>
+  <tr class="bg"><td>我们（第 1 段）</td><td><audio controls src="r21-标杆男-1.mp3"></audio></td><td rowspan="2">94.52%</td></tr>
+  <tr class="bg"><td>我们（第 2 段）</td><td><audio controls src="r21-标杆男-2.mp3"></audio></td></tr>
+</table>
+
+<h3>标杆女 — 아모텍（案例 459.1s / 我们 457.0s）</h3>
+<table>
+  <tr><th style="width:20%">音源</th><th>播放</th><th style="width:14%">还原度</th></tr>
+  <tr><td>案例原声（ElevenLabs）</td><td><audio controls src="案例-标杆女.mp3"></audio></td><td>基准</td></tr>
+  <tr class="bg"><td>我们（第 1 段）</td><td><audio controls src="r21-标杆女-1.mp3"></audio></td><td rowspan="2">94.88%</td></tr>
+  <tr class="bg"><td>我们（第 2 段）</td><td><audio controls src="r21-标杆女-2.mp3"></audio></td></tr>
+</table>
+
+<h3>剩余差距（带符号均值，五案例）</h3>
+<table>
+  <tr><th>维度</th><th>权重</th><th>偏差</th><th>性质</th></tr>
+  <tr><td>D_voiced 语速 CV</td><td>0.08</td><td>−14.5%</td><td>系统性：句内速率太平（神经 codec 属性）</td></tr>
+  <tr><td>C 能量动态</td><td>0.08</td><td>+8.2%</td><td>系统性，但<b>与 CF 此消彼长</b>，压它会砸峰值</td></tr>
+  <tr><td>音色 LTAS</td><td>0.07</td><td>+7.0%</td><td>系统性，r20 已做多案例联合拟合</td></tr>
+  <tr><td>F 停顿熵</td><td>0.08</td><td>+4.3%</td><td>系统性但小</td></tr>
+  <tr><td>峰值 dBFS</td><td>0.06</td><td>~11%</td><td>部分不可修（案例之间本身差 2.2 dB）</td></tr>
+  <tr><td>A / E</td><td>0.10 / 0.12</td><td>−0.4% / +1.3%</td><td><b>非系统性</b>：围绕零点摆动，再调只是换噪声</td></tr>
+</table>
+
+<p class="sub">下一站：用案例音频做说话人微调（<code>docs/说话人微调路线图.md</code>），
+男声同人数据 34 分钟已达门槛。后处理这条路上，能修的系统性偏差基本修完了。</p>
+</body>
+</html>

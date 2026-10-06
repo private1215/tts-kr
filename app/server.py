@@ -243,7 +243,19 @@ DYN_C_DEFAULT = float(os.environ.get("TTS_DYN_C", "14.7"))
 # 分性别是必须的：女声 CF 差 1.80 dB、男声只差 0.60 dB，差 3 倍，
 # 根因是女声 F0 高 → PSOLA 周期短 → 重叠相加平均得更狠 → 波形更平。
 # 标定见 app/transient.py 文件头（标杆女扫描：0.2 档 CF 20.50 = 案例 20.50）。
-TRANSIENT = os.environ.get("TTS_TRANSIENT", "1") != "0"
+# 🔴 r21 最终结论：**默认关**。离线标定（/tmp/tshaper.py）在标杆女上
+#    amount=0.20 能把 CF 从 18.70 抬到 20.50（= 案例），看着是 +1.8 dB 的大胜。
+#    但连跑三轮线上五案例都没兑现：
+#        r21  整形@链前（错位置）  标杆女峰值 −4.20 → **−5.10**
+#        r21b 只保留整形          标杆女峰值 −4.20 → **−5.10**
+#        r21c 整形改到 EQ/空气感后 标杆女峰值 −4.20 → **−5.00**
+#    根因：离线标定量的是**整形后的 wav**，而线上成品是 wav → **libmp3lame** →
+#    mp3（验收还要再解码到 24k）。最后那一道编码把峰值基本重新定了，
+#    我们在 wav 上抬起来的 0.8 dB 到 mp3 里只剩 0.1 dB。
+#    → 沉淀为测量陷阱 #18：**抬峰值类的改动必须在「成品口径」上标定**，
+#      在中间 wav 上量出来的收益不能外推。
+#    模块保留（TTS_TRANSIENT=1 可开），但不在默认链路里。
+TRANSIENT = os.environ.get("TTS_TRANSIENT", "0") != "0"
 TRANSIENT_MALE = float(os.environ.get("TTS_TRANSIENT_MALE", "0.06"))
 TRANSIENT_FEMALE = float(os.environ.get("TTS_TRANSIENT_FEMALE", "0.20"))
 TRANSIENT_DEFAULT = float(os.environ.get("TTS_TRANSIENT_AMOUNT", "0.12"))
