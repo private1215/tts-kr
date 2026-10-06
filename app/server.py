@@ -1325,30 +1325,13 @@ async def run_job(job):
         mp3_abs = os.path.join(folder_path, mp3_name)
         job["stage"] = "encoding"
         tmp_wav = os.path.join(folder_path, f".enc_{jid}_{ci}.wav")
-        # ---- 瞬态整形：抬 CF / 峰值（r21）--------------------------------
-        # 放在所有 numpy 级处理之后、编码链之前：它是纯时变增益，不动 F0、
-        # 不动时长，所以 PROSO / PBA 的结果不受影响；而放在 EQ 之前可以让
-        # 响度归一的闭环照常收敛（整形会略微抬 LUFS，闭环会补回来）。
-        if TRANSIENT and len(chunk_text) >= TRANSIENT_MIN_CHARS:
-            _male = job.get("_is_male")
-            _amt = (TRANSIENT_MALE if _male else
-                    TRANSIENT_FEMALE if _male is False else
-                    TRANSIENT_DEFAULT)
-            try:
-                _p0 = transient.peak_dbfs(audio)
-                audio = transient.shape(audio, sr, _amt)
-                log.info("任务 %s 第 %d 块 瞬态整形 amount=%.2f "
-                         "峰值 %.2f -> %.2f dBFS",
-                         jid, ci + 1, _amt, _p0,
-                         transient.peak_dbfs(audio))
-            except Exception as _e:
-                log.warning("任务 %s 第 %d 块 瞬态整形失败（跳过）: %r",
-                            jid, ci + 1, _e)
+        # 瞬态整形用的中间产物（44.1k、已过 EQ 与空气感、**未**过 volume/限幅）
+        pre_wav = os.path.join(folder_path, f".pre_{jid}_{ci}.wav")
         try:
             sf.write(tmp_wav, audio, sr)
             # 语速：模型无 speed 接口（见文件头 SPEED_MIN 注释），用 atempo 在
             # 未压缩的 wav 上做一次——只经过一次 mp3 编码，且 atempo 变速不变调。
-            _cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", tmp_wav]
+            # 真正的命令在下面拼（源可能是 tmp_wav 也可能是 pre_wav）
             _af = []
             if abs(_atempo - 1.0) > 1e-3:
                 _af.append(f"atempo={_atempo:.4f}")
@@ -1369,6 +1352,45 @@ async def run_job(job):
                     _af.append(AIR_EXCITER)
                 if AIR_EQ:
                     _af.append(AIR_EQ)
+            # ---- 🔴 瞬态整形必须插在 EQ/空气感**之后**、volume/限幅**之前** ---
+            # r21 第一版把它放在整条链之前（24k 的裸 wav 上），实测**反效果**：
+            #   标杆女峰值 −4.20 → **−5.10**、리노y 偏差 0% → 36.7%。
+            # 而离线标定（/tmp/tshaper.py）明明是 +1.8 dB —— 差别就在**位置**：
+            #   离线是叠在**成品**上（EQ/空气感/响度归一全走完），
+            #   线上却是叠在**进链之前**，后面 EQ 重采样 + aexciter + 响度闭环
+            #   把刚抬起来的瞬态又抹回去了。
+            # 所以这里把编码拆成两段：先出 44.1k 的 pre_wav，numpy 整形后再
+            # 单独跑 volume + 限幅 + mp3。响度闭环只需重跑第二段，pre_wav 复用。
+            _pre_needed = (TRANSIENT
+                           and len(chunk_text) >= TRANSIENT_MIN_CHARS)
+            if _pre_needed:
+                _cmd_pre = ["ffmpeg", "-y", "-loglevel", "error",
+                            "-i", tmp_wav, "-filter:a", ",".join(_af),
+                            "-ar", str(OUT_SR), "-ac", "1", "-f", "wav",
+                            pre_wav]
+                subprocess.run(_cmd_pre, check=True, timeout=600)
+                try:
+                    _pa, _psr = sf.read(pre_wav, dtype="float32")
+                    if getattr(_pa, "ndim", 1) > 1:
+                        _pa = _pa.mean(axis=1)
+                    _male = job.get("_is_male")
+                    _amt = (TRANSIENT_MALE if _male else
+                            TRANSIENT_FEMALE if _male is False else
+                            TRANSIENT_DEFAULT)
+                    _p0 = transient.peak_dbfs(_pa)
+                    _pa = transient.shape(_pa, _psr, _amt)
+                    sf.write(pre_wav, _pa, _psr)
+                    log.info("任务 %s 第 %d 块 瞬态整形 amount=%.2f "
+                             "峰值 %.2f -> %.2f dBFS（%d Hz）",
+                             jid, ci + 1, _amt, _p0,
+                             transient.peak_dbfs(_pa), _psr)
+                except Exception as _e:
+                    log.warning("任务 %s 第 %d 块 瞬态整形失败（跳过）: %r",
+                                jid, ci + 1, _e)
+                _src = pre_wav            # 第二段从整形后的 pre_wav 开始
+                _af = []                  # EQ/空气感已跑过，别再跑一遍
+            else:
+                _src = tmp_wav
             if abs(_gain_db) > 1e-3:
                 _af.append(f"volume={_gain_db:.2f}dB")
             # 限幅兜底：响度归一只管平均电平，峰值仍可能顶穿。案例真峰值
@@ -1381,6 +1403,9 @@ async def run_job(job):
                            if job.get("_is_male") is False else LOUD_LIMITER)
             _tail = ["-codec:a", "libmp3lame", "-b:a", MP3_BITRATE,
                      "-ar", str(OUT_SR), mp3_abs]
+            # ⚠️ 源可能是 tmp_wav（不整形）也可能是 pre_wav（整形后），
+            #    所以这里重新拼命令，别复用上面那条写死 tmp_wav 的 _cmd。
+            _cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", _src]
             if _af:
                 _cmd += ["-filter:a", ",".join(_af)]
             _cmd += _tail
@@ -1401,7 +1426,7 @@ async def run_job(job):
                         _af2 = [a for a in _af if not a.startswith("volume=")]
                         _af2.append(f"volume={_gain_db:.2f}dB")
                         _cmd2 = (["ffmpeg", "-y", "-loglevel", "error",
-                                  "-i", tmp_wav, "-filter:a", ",".join(_af2)]
+                                  "-i", _src, "-filter:a", ",".join(_af2)]
                                  + _tail)
                         subprocess.run(_cmd2, check=True, timeout=600)
                         log.info("任务 %s 第 %d 块 响度闭环复检: 成品 %.2f "
@@ -1419,6 +1444,10 @@ async def run_job(job):
         finally:
             try:
                 os.remove(tmp_wav)
+            except OSError:
+                pass
+            try:
+                os.remove(pre_wav)
             except OSError:
                 pass
         # 变速后实际时长 = 原时长 / speed，展示给员工和统计都要按这个值
