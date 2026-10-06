@@ -80,8 +80,12 @@ def expand(x, sr, target=None, k=None, max_gain_db=9.0, smooth=3):
         if not target:
             return x, 1.0, c0, c0
         k = float(target) / c0
-    k = float(np.clip(k, 1.0, 2.0))
-    if k <= 1.002:
+    # ⚠️ r21 起允许 k<1（**压缩**）。旧版 clip(k,1.0,2.0) 只能扩不能压，
+    #    而 r20 五案例实测成品 C 系统性**偏高** 8.2%（慢包络被后级越抬越宽），
+    #    不打开这一档就没法把 C 压回案例值。压缩同样是绕 center 的单调映射，
+    #    与扩展同一条公式，只是 (k-1) 变负 —— 没有新的音质风险。
+    k = float(np.clip(k, 0.70, 2.0))
+    if abs(k - 1.0) <= 0.002:
         return x, 1.0, c0, c0
 
     db, pos, W, H = _frames(x, sr)

@@ -40,6 +40,7 @@ import engine_select
 import pba
 import envshape
 import dyn
+import transient           # 瞬态整形：抬 CF / 峰值（r21）
 import prosody_report
 try:
     import proso          # 韵律 A/E 的 F0 重映射（依赖 parselmouth/Praat）
@@ -224,9 +225,28 @@ ENV_MIN_CHARS = int(os.environ.get("TTS_ENV_MIN_CHARS", "120"))
 # 静音帧统一夹紧，句数 / 停顿熵不会被误伤（那是 PBA 管的）。
 # 详见 app/dyn.py 文件头。设 TTS_DYN=0 关闭。
 DYN_EXPAND = os.environ.get("TTS_DYN", "1") != "0"
-DYN_C_MALE = float(os.environ.get("TTS_DYN_C_MALE", "14.4"))
-DYN_C_FEMALE = float(os.environ.get("TTS_DYN_C_FEMALE", "15.1"))
-DYN_C_DEFAULT = float(os.environ.get("TTS_DYN_C", "14.7"))
+# ⚠️ r21 重标定：这两个数**不是**案例的 C，是「dyn 这一档」的目标值。
+#    dyn 之后还有 atempo / EQ / 空气感 / 响度归一 / mp3，实测把 C 又抬高了
+#    男 +1.23 dB、女 +0.91 dB；r21 新加的瞬态整形再抬 男 +0.22 / 女 +0.60。
+#    所以目标 = 案例中位（男 14.157 / 女 15.070）− 抬高量：
+#        男 14.157 − 1.23 − 0.22 ≈ **12.7**
+#        女 15.070 − 0.91 − 0.60 ≈ **13.6**
+#    🔴 与瞬态整形**成对标定**：单独上瞬态整形会把 C 推到 +10%，
+#       单独压 dyn 又会压过头。改任一个都要重跑五案例。
+DYN_C_MALE = float(os.environ.get("TTS_DYN_C_MALE", "12.7"))
+DYN_C_FEMALE = float(os.environ.get("TTS_DYN_C_FEMALE", "13.6"))
+DYN_C_DEFAULT = float(os.environ.get("TTS_DYN_C", "13.2"))
+
+# ---- 瞬态整形：修「峰值因数 CF 比案例低」（r21 新增）----------------------
+# 唯一能抬峰值而不被响度归一 1:1 吃掉的办法（compand 向上扩展已证伪）。
+# 分性别是必须的：女声 CF 差 1.80 dB、男声只差 0.60 dB，差 3 倍，
+# 根因是女声 F0 高 → PSOLA 周期短 → 重叠相加平均得更狠 → 波形更平。
+# 标定见 app/transient.py 文件头（标杆女扫描：0.2 档 CF 20.50 = 案例 20.50）。
+TRANSIENT = os.environ.get("TTS_TRANSIENT", "1") != "0"
+TRANSIENT_MALE = float(os.environ.get("TTS_TRANSIENT_MALE", "0.06"))
+TRANSIENT_FEMALE = float(os.environ.get("TTS_TRANSIENT_FEMALE", "0.20"))
+TRANSIENT_DEFAULT = float(os.environ.get("TTS_TRANSIENT_AMOUNT", "0.12"))
+TRANSIENT_MIN_CHARS = int(os.environ.get("TTS_TRANSIENT_MIN_CHARS", "120"))
 DYN_MIN_CHARS = int(os.environ.get("TTS_DYN_MIN_CHARS", "120"))
 
 # ---- 音色对齐：修「空旷感 / 薄 / 贴脸」--------------------------------
@@ -255,9 +275,19 @@ DYN_MIN_CHARS = int(os.environ.get("TTS_DYN_MIN_CHARS", "120"))
 #    女声 1.74 -> 0.66 dB，男声 1.7 -> 0.50 dB（185Hz 主动放弃，见下）。
 TONE_EQ_FILTER_MALE = os.environ.get(
     "TTS_TONE_EQ_FILTER_MALE",
-    "superequalizer=1b=1.347:2b=1.458:3b=0.864:4b=1.138:5b=1.343:6b=1.119:"
-    "7b=1.334:8b=1.223:9b=1.858:10b=1.273:11b=0.977:12b=1.350:13b=1.290:"
-    "14b=0.906:15b=0.931:16b=1.0:17b=1.0:18b=1.0").strip()
+    # ↑↑ 2026-10-07 r20：**多案例联合拟合**（/tmp/eqsolve2.py）。
+    #    旧值只拿标杆男 1 例拟合，换到 yohan 3 例就有 0.56~0.61 dB 偏差。
+    #    新目标谱 = 4 个男声案例的平均 LTAS，误差谱 = 4 个成品的平均 LTAS，
+    #    迭代 3 轮求一组对**所有案例同时最优**的 EQ：
+    #        平均 0.555 -> 0.403 -> **0.345 dB**，且逐例**全都一起变好**
+    #        （0.58/0.61/0.56/0.58 -> 0.36/0.36/0.35/0.35），没有互相牺牲。
+    #    离线试算（只叠补偿倍数，别叠完整新 EQ —— 成品已打过一次 EQ，再打 = 双倍）：
+    #        标杆男 音色 0.49 -> **0.36 dB**、C 4.7% -> 2.9%、总分 93.13% -> **94.60%**。
+    #    补偿倍数 0.594/1.045/0.946/1.0/1.024/0.990/1.015/0.920/0.999/
+    #             1.043/0.974/0.954/1.003/1.072/1.123。185Hz 仍主动放弃。
+    "superequalizer=1b=0.800:2b=1.524:3b=0.817:4b=1.138:5b=1.375:6b=1.108:"
+    "7b=1.354:8b=1.125:9b=1.856:10b=1.328:11b=0.952:12b=1.288:13b=1.294:"
+    "14b=0.971:15b=1.046:16b=1.0:17b=1.0:18b=1.0").strip()
 TONE_EQ_FILTER_FEMALE = os.environ.get(
     "TTS_TONE_EQ_FILTER_FEMALE",
     # ↑↑ 2026-10-06 r18 再迭代 3 轮（旧值 × 补偿倍数 1.085/1.075/1.070/1.0/
@@ -1294,6 +1324,25 @@ async def run_job(job):
         mp3_abs = os.path.join(folder_path, mp3_name)
         job["stage"] = "encoding"
         tmp_wav = os.path.join(folder_path, f".enc_{jid}_{ci}.wav")
+        # ---- 瞬态整形：抬 CF / 峰值（r21）--------------------------------
+        # 放在所有 numpy 级处理之后、编码链之前：它是纯时变增益，不动 F0、
+        # 不动时长，所以 PROSO / PBA 的结果不受影响；而放在 EQ 之前可以让
+        # 响度归一的闭环照常收敛（整形会略微抬 LUFS，闭环会补回来）。
+        if TRANSIENT and len(chunk_text) >= TRANSIENT_MIN_CHARS:
+            _male = job.get("_is_male")
+            _amt = (TRANSIENT_MALE if _male else
+                    TRANSIENT_FEMALE if _male is False else
+                    TRANSIENT_DEFAULT)
+            try:
+                _p0 = transient.peak_dbfs(audio)
+                audio = transient.shape(audio, sr, _amt)
+                log.info("任务 %s 第 %d 块 瞬态整形 amount=%.2f "
+                         "峰值 %.2f -> %.2f dBFS",
+                         jid, ci + 1, _amt, _p0,
+                         transient.peak_dbfs(audio))
+            except Exception as _e:
+                log.warning("任务 %s 第 %d 块 瞬态整形失败（跳过）: %r",
+                            jid, ci + 1, _e)
         try:
             sf.write(tmp_wav, audio, sr)
             # 语速：模型无 speed 接口（见文件头 SPEED_MIN 注释），用 atempo 在
