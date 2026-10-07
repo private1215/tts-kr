@@ -1507,17 +1507,27 @@ async def run_job(job):
     # 字数→时长全靠 cps 换算。而 cps 每个音色都不一样（实测男 8.61 / 女 7.32，
     # 差 18%），写死一个数必然有一个性别切歪。
     # 所以每跑完一单就把实测值写回 voices.json（滑动平均，抗单篇波动）。
+    #
+    # ⚠️ r21 加了**死区**：cps 一动，同一篇文案的分块数就可能在 2 段 / 3 段之间
+    #    跳（分块是按「预估时长 / 250 秒」切的，cps 换算出来的字数上限跟着变）。
+    #    员工看到「上次 2 段、这次 3 段」会以为出了 bug。所以：
+    #      · 相对变化 < 3% 就**不写回**（收敛后彻底静止，分块数稳定）
+    #      · 真的要更新也放慢（0.8/0.2），别被单篇波动带跑
     _vc = job.get("voice")
     _new_cps = agg.get("cps") or 0.0
     if _vc and 4.0 < _new_cps < 14.0 and (agg.get("audio_seconds") or 0) > 60:
         _v = voices.get(_vc)
         if _v is not None:
             _old = float(_v.get("cps") or 0.0)
-            _v["cps"] = round(_new_cps if not _old
-                              else 0.6 * _old + 0.4 * _new_cps, 3)
-            save_voices(voices)
-            log.info("任务 %s 音色 %s 语速自校准 cps %.2f -> %.2f",
-                     jid, _vc, _old or _new_cps, _v["cps"])
+            _skip = False
+            if _old and abs(_new_cps - _old) / _old < 0.03:
+                _skip = True          # 死区内：不动，保证分块数稳定
+            if not _skip:
+                _v["cps"] = round(_new_cps if not _old
+                                  else 0.8 * _old + 0.2 * _new_cps, 3)
+                save_voices(voices)
+                log.info("任务 %s 音色 %s 语速自校准 cps %.2f -> %.2f",
+                         jid, _vc, _old or _new_cps, _v["cps"])
     # 兼容老前端/统计：mp3 指向第一个文件
     job["mp3"] = files[0]["path"] if files else None
     job["stats"] = stats

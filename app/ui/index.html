@@ -511,8 +511,8 @@ details.adv summary:hover{color:var(--txt2)}
         </div>
         <label style="margin-top:10px" data-i18n="engineLabel">这个音色用哪个引擎</label>
         <select id="vengine" style="width:100%">
-          <option value="qwen" data-i18n="engineQwen">千问 Qwen（最准确，语调平稳）</option>
-          <option value="cosyvoice3" data-i18n="engineCosy">CosyVoice3（更有感情，可选激昂/亲切/严肃）</option>
+          <option value="cosyvoice3" data-i18n="engineCosy" selected>CosyVoice3（推荐：有情感，可选激昂/亲切/严肃）</option>
+          <option value="qwen" data-i18n="engineQwen">千问 Qwen（第一代，发音稳但没有情感选项）</option>
         </select>
         <label style="margin-top:10px" data-i18n="refAudio">参考音频（整段录音直接上传，无需自己剪辑）</label>
         <input id="vfile" type="file" accept="audio/*">
@@ -609,8 +609,8 @@ const I18N = {
     paramHint:'保持默认即可：后端会按显存自动收敛到安全值（分段 ≤60、批量 ≤8）。调大不会更快，只会被自动压回。',
     submit:'提交生成', clear:'清空', enroll:'录入声音（声音克隆用）',
     vnamePh:'音色名称，例：韩语女声-知妍', refAudio:'参考音频（整段录音直接上传，无需自己剪辑）',
-    engineLabel:'这个音色用哪个引擎', engineQwen:'千问 Qwen（最准确，语调平稳）', engineCosy:'CosyVoice3（更有感情，可选激昂/亲切/严肃）',
-    vEngine:'引擎', engQwen:'千问 Qwen（最准）', engCosy:'CosyVoice3（有感情）', engSaved:'引擎已保存', engFail:'引擎保存失败',
+    engineLabel:'这个音色用哪个引擎', engineQwen:'千问 Qwen（第一代，发音稳但没有情感选项）', engineCosy:'CosyVoice3（推荐：有情感，可选激昂/亲切/严肃）',
+    vEngine:'引擎', engQwen:'千问 Qwen（无情感）', engCosy:'CosyVoice3（有情感）', engSaved:'引擎已保存', engFail:'引擎保存失败',
     engineHint:'这个音色的默认引擎。员工生成时若选了「激昂/亲切/严肃」，会强制改走 CosyVoice3 —— 千问克隆没有情感入参，给不了情绪。',
     refText:'音频对应的完整文字稿', refTextPh:'把这段录音里说的话完整粘进来（不用挑片段，系统会自动截取对应部分）',
     enrollHint:'怎么用：直接上传整段录音 + 粘贴这段录音的完整文字稿即可，不用自己剪音频、也不用自己对时间轴。系统会自动挑出音质最好的约 15 秒，并把文字稿按实际说话时间对齐截出对应片段。首次录入会多花几秒做分析，之后这个音色就是现成的。',
@@ -656,7 +656,7 @@ const I18N = {
          ono_anna:'Japanese · 女声 · 可爱',ryan:'English · 男声 · 节奏感强',serena:'Chinese · 女声 · 温暖',
          sohee:'Korean · 女声 · 温暖',uncle_fu:'Chinese · 男声 · 沉稳',vivian:'Chinese · 女声 · 明亮'},
     // 内置克隆音色：用稳定 ID 存库，显示名随界面语言切换
-    bv:{builtin_male:'韩语克隆男声',builtin_female:'韩语克隆女声'},
+    bv:{builtin_male:'韩语克隆男声',builtin_female:'韩语克隆女声',EL_male:'韩语克隆男声',EL_female:'韩语克隆女声'},
     builtinTag:'内置', builtinNoDel:'内置音色不可删除',
     chunkLabel:(i,n,s)=>`第 ${i}/${n} 段 · ${Math.round(s)} 秒`,
     dlChunk:(i)=>`下载第 ${i} 段`,
@@ -771,7 +771,7 @@ const I18N = {
     spk:{aiden:'English · male · bright',dylan:'Chinese · male · Beijing accent',eric:'Chinese · male · Sichuan accent',
          ono_anna:'Japanese · female · cute',ryan:'English · male · rhythmic',serena:'Chinese · female · warm',
          sohee:'Korean · female · warm',uncle_fu:'Chinese · male · deep & steady',vivian:'Chinese · female · bright'},
-    bv:{builtin_male:'Korean Clone · Male',builtin_female:'Korean Clone · Female'},
+    bv:{builtin_male:'Korean Clone · Male',builtin_female:'Korean Clone · Female',EL_male:'Korean Clone · Male',EL_female:'Korean Clone · Female'},
     builtinTag:'Built-in', builtinNoDel:'Built-in voices cannot be deleted',
     chunkLabel:(i,n,s)=>`Part ${i}/${n} · ${Math.round(s)}s`,
     dlChunk:(i)=>`Download part ${i}`,
@@ -887,7 +887,7 @@ const I18N = {
     spk:{aiden:'English · 남성 · 밝은',dylan:'Chinese · 남성 · 북경 억양',eric:'Chinese · 남성 · 사천 억양',
          ono_anna:'Japanese · 여성 · 귀여운',ryan:'English · 남성 · 리듬감',serena:'Chinese · 여성 · 따뜻한',
          sohee:'Korean · 여성 · 따뜻한',uncle_fu:'Chinese · 남성 · 차분한',vivian:'Chinese · 여성 · 밝은'},
-    bv:{builtin_male:'한국어 클론 남성',builtin_female:'한국어 클론 여성'},
+    bv:{builtin_male:'한국어 클론 남성',builtin_female:'한국어 클론 여성',EL_male:'한국어 클론 남성',EL_female:'한국어 클론 여성'},
     builtinTag:'내장', builtinNoDel:'내장 음성은 삭제할 수 없습니다',
     chunkLabel:(i,n,s)=>`${i}/${n} 파트 · ${Math.round(s)}초`,
     dlChunk:(i)=>`${i}파트 다운로드`,
@@ -1003,7 +1003,7 @@ const I18N = {
     spk:{aiden:'English · 男性 · 明るい',dylan:'Chinese · 男性 · 北京なまり',eric:'Chinese · 男性 · 四川なまり',
          ono_anna:'Japanese · 女性 · 可愛い',ryan:'English · 男性 · リズム感',serena:'Chinese · 女性 · 温かい',
          sohee:'Korean · 女性 · 温かい',uncle_fu:'Chinese · 男性 · 落ち着いた',vivian:'Chinese · 女性 · 明るい'},
-    bv:{builtin_male:'韓国語クローン・男性',builtin_female:'韓国語クローン・女性'},
+    bv:{builtin_male:'韓国語クローン・男性',builtin_female:'韓国語クローン・女性',EL_male:'韓国語クローン・男性',EL_female:'韓国語クローン・女性'},
     builtinTag:'内蔵', builtinNoDel:'内蔵音声は削除できません',
     chunkLabel:(i,n,s)=>`パート ${i}/${n} · ${Math.round(s)}秒`,
     dlChunk:(i)=>`パート${i}をダウンロード`,
@@ -1228,7 +1228,7 @@ function voiceName(x){
   const m = (I18N[UI] && I18N[UI].bv) || {};
   return m[x] || x;
 }
-function isBuiltin(x){ return x === 'builtin_male' || x === 'builtin_female'; }
+function isBuiltin(x){ return x === 'builtin_male' || x === 'builtin_female' || x === 'EL_male' || x === 'EL_female'; }
 
 function renderVoices(){
   const v = $('#voice'), list = META.voices || [], prev = v.value;
@@ -1272,7 +1272,7 @@ function renderEmotions(){
     ? META.emotions
     : [{key:'standard'},{key:'excited'},{key:'warm'},{key:'serious'}];
   const NAMES = {
-    standard:{zh:'平稳（最准）',en:'Standard (most accurate)',ko:'차분 (가장 정확)',ja:'標準（最も正確）'},
+    standard:{zh:'平稳（发音最稳，无情感）',en:'Standard (no emotion)',ko:'차분 (감정 없음)',ja:'標準（感情なし）'},
     excited: {zh:'激昂',en:'Excited',ko:'격앙',ja:'熱烈'},
     warm:    {zh:'亲切',en:'Warm',ko:'다정',ja:'親しみ'},
     serious: {zh:'严肃',en:'Serious',ko:'엄숙',ja:'厳粛'}
