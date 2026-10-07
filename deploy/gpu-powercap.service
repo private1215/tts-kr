@@ -1,0 +1,18 @@
+[Unit]
+Description=Cap RTX 3090 power limit to 250W (stability)
+After=nvidia-persistenced.service
+Before=cosy-tts.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# -i 1 是 3090（nvidia-smi 编号；torch 编号相反，别混）
+# 250W 而不是默认 350W：2026-10-07 训练到 30 分钟时 3090 掉卡
+# （AER Uncorrectable / SDES Surprise Down -> Xid 79）。前面没有任何
+# 可纠正错误（BadTLP/BadDLLP/Replay 全 0），说明不是链路裕量问题，
+# 而是持续大电流下的供电/接触问题。降功耗是最直接的缓解手段。
+ExecStart=/usr/bin/nvidia-smi -i 1 -pl 250
+ExecStop=/usr/bin/nvidia-smi -i 1 -pl 350
+
+[Install]
+WantedBy=multi-user.target
