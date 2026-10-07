@@ -43,6 +43,7 @@ import envshape
 import dyn
 import transient           # 瞬态整形：抬 CF / 峰值（r21，已证伪默认关）
 import roomtone           # 房间底噪：修「停顿是数字真零」造成的瞬断与电流声（r22）
+import peakfit            # 峰值定点：把真峰值软削到案例的水平（r23）
 import prosody_report
 try:
     import proso          # 韵律 A/E 的 F0 重映射（依赖 parselmouth/Praat）
@@ -1217,6 +1218,12 @@ async def run_job(job):
             except Exception as _e:
                 log.warning("任务 %s 案例语速取用失败: %r", jid, _e)
                 job["_cps_target"] = None
+        if "_peak_target" not in job:
+            try:
+                job["_peak_target"] = peak_target(_g) if _g else None
+            except Exception as _e:
+                log.warning("任务 %s 案例峰值取用失败: %r", jid, _e)
+                job["_peak_target"] = None
 
         # 停顿预算对齐（PBA）：只切静音，不动任何有声样本，无音质损失。
         # 丢掉的静音时间在下面用 atempo 拉回，总时长与发音速率一起回到
@@ -1532,8 +1539,20 @@ async def run_job(job):
                 _nx, _nsr = sf.read(_norm_wav, dtype="float32")
                 if getattr(_nx, "ndim", 1) > 1:
                     _nx = _nx.mean(axis=1)
-                sf.write(_norm_wav, roomtone.apply(_nx, _nsr, _rt_db), _nsr,
-                         subtype="FLOAT")
+                _nx = roomtone.apply(_nx, _nsr, _rt_db)
+                # 峰值定点放在底噪之后：底噪只有 -56/-50 dBFS，对峰值无影响，
+                # 但整个尾段只做一次 wav 往返，顺序上放一起最省事。
+                if peakfit.ENABLED and job.get("_peak_target") is not None:
+                    _p0 = float(np.max(np.abs(_nx))) if len(_nx) else 0.0
+                    _nx = peakfit.fit(_nx, job["_peak_target"])
+                    _p1 = float(np.max(np.abs(_nx))) if len(_nx) else 0.0
+                    if _p1 < _p0 - 1e-6:
+                        log.info("任务 %s 第 %d 块 峰值定点: %.3f -> %.3f "
+                                 "（目标 %.3f, %.2f dBFS）",
+                                 jid, ci + 1, _p0, _p1,
+                                 10.0 ** (job["_peak_target"] / 20.0),
+                                 job["_peak_target"])
+                sf.write(_norm_wav, _nx, _nsr, subtype="FLOAT")
                 subprocess.run(["ffmpeg", "-y", "-loglevel", "error",
                                 "-i", _norm_wav] + _tail,
                                check=True, timeout=600)
@@ -2847,6 +2866,28 @@ def pause_density(gender):
             tot_p += int(p)
             tot_c += int(n)
     return (tot_p / float(tot_c)) if tot_c else None
+
+
+def peak_target(gender):
+    """成品真峰值目标：按性别取标杆案例的中位数（r23）。
+
+    为什么用中位数：评分是 |ΔdB| 的 L1 损失，中位数正是 L1 的最优估计。
+    案例峰值分布很散（男 −0.9 ~ −3.1），众数/均值都不如中位数稳。
+    """
+    vals = []
+    for c in _bench_cases(gender):
+        v = c.get("peak_dbfs")
+        if v is None:
+            continue
+        try:
+            vals.append(float(v))
+        except (TypeError, ValueError):
+            pass
+    if not vals:
+        return None
+    vals.sort()
+    n = len(vals)
+    return vals[n // 2] if n % 2 else 0.5 * (vals[n // 2 - 1] + vals[n // 2])
 
 
 def cps_target(gender):
