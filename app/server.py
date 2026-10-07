@@ -43,7 +43,8 @@ import envshape
 import dyn
 import transient           # 瞬态整形：抬 CF / 峰值（r21，已证伪默认关）
 import roomtone           # 房间底噪：修「停顿是数字真零」造成的瞬断与电流声（r22）
-import peakfit            # 峰值定点：把真峰值软削到案例的水平（r23）
+import peakfit            # 峰值定点：把真峰值软削到案例的水平（r23，已证伪关）
+import slowdyn            # 慢尺度能量轮廓：补段落级轻重，治 AI 味（r25）
 import prosody_report
 try:
     import proso          # 韵律 A/E 的 F0 重映射（依赖 parselmouth/Praat）
@@ -260,6 +261,21 @@ DYN_EXPAND = os.environ.get("TTS_DYN", "1") != "0"
 DYN_C_MALE = float(os.environ.get("TTS_DYN_C_MALE", "14.4"))
 DYN_C_FEMALE = float(os.environ.get("TTS_DYN_C_FEMALE", "15.1"))
 DYN_C_DEFAULT = float(os.environ.get("TTS_DYN_C", "14.7"))
+# ---- r25 慢尺度能量轮廓（治 AI 味的头号病因）------------------------------
+# 目标值来自 24 条案例普查（tools/caseslow.py），分性别存在 slowdyn.py 里。
+# 默认开：五例同向、且与案例零重叠，是诊断出来的系统性缺陷不是噪声。
+SLOWDYN = os.environ.get("TTS_SLOWDYN", "1") != "0"
+SLOWDYN_MIN_CHARS = int(os.environ.get("TTS_SLOWDYN_MIN_CHARS", "120"))
+# ---- r25 全局 f0 基线对齐 --------------------------------------------------
+# 句级 f0 中位我们比案例低 4.5~9.9%（男 181 vs 196.2、女 265.3 vs 280.2）。
+# 目标用**案例库 Praat 口径**的中位（proso_med_targets），当前值也用
+# proso.med_of（Praat 口径）实测 —— 两端同源，不做跨口径换算（陷阱 #4）。
+PROSO_MED = os.environ.get("TTS_PROSO_MED", "1") != "0"
+PROSO_MED_FALLBACK_MALE = float(os.environ.get("TTS_PROSO_MED_MALE", "196.2"))
+PROSO_MED_FALLBACK_FEMALE = float(
+    os.environ.get("TTS_PROSO_MED_FEMALE", "280.2"))
+PROSO_MED_FALLBACK_DEFAULT = float(
+    os.environ.get("TTS_PROSO_MED_DEFAULT", "196.2"))
 
 # ---- 瞬态整形：修「峰值因数 CF 比案例低」（r21 新增）----------------------
 # 唯一能抬峰值而不被响度归一 1:1 吃掉的办法（compand 向上扩展已证伪）。
@@ -1287,6 +1303,37 @@ async def run_job(job):
                 log.warning("任务 %s 第 %d 块 包络整形失败（跳过）: %r",
                             jid, ci + 1, _e)
 
+        # ---- 慢尺度能量轮廓重建（r25，治「AI 味 / 没感情」）----------------
+        # 🔴 必须放在能量扩展 **之前**：slowdyn 会把帧级 C 一起推高，而 C
+        #    是评分项（权重 0.08）且本来就 +2.3~+9.5% 偏高。放前面让 dyn
+        #    做最后校准。dyn 是绕全局 center 等比缩放，**等比缩放不改变
+        #    慢变占比**，所以段落轮廓能完整保住，只有绝对幅度被压一点。
+        # 🔴 头号病因，24 条案例普查坐实：句级能量慢变占比我们 0.18~0.28 vs
+        #    案例 0.390(男)/0.411(女)；ac1 我们 −0.19~−0.32 vs 案例 +0.06~+0.10，
+        #    零重叠。我们不是起伏不够，是起伏全堆在"句到句"、还逐句反相。
+        # 增益只作用于有声帧、均值不变 → 静音占比/F/停顿/LUFS 都不动。
+        if SLOWDYN and len(chunk_text) >= SLOWDYN_MIN_CHARS:
+            _male_s = job.get("_is_male")
+            try:
+                _ssegs, _scuts, _shop = prosody_report.sent_windows(audio, sr)
+                audio, _ks, _kf, _sdiag = slowdyn.apply(
+                    audio, sr, segs=_ssegs, is_male=_male_s)
+                if _ks > 1.002 or _ks < 0.998 or _kf > 1.002 or _kf < 0.998:
+                    _sd = (_sdiag or {}).get("stats") or {}
+                    log.info("任务 %s 第 %d 块 慢尺度轮廓 k_slow=%.3f "
+                             "k_fast=%.3f  慢变占比 %.3f->目标 %.3f  "
+                             "句级sd %.3f->目标 %.3f  增益 %+.2f~%+.2f dB",
+                             jid, ci + 1, _ks, _kf,
+                             _sd.get("share", -1),
+                             slowdyn._slow_target(_male_s),
+                             _sd.get("sd", -1),
+                             slowdyn._sd_target(_male_s),
+                             (_sdiag or {}).get("gain_min", 0),
+                             (_sdiag or {}).get("gain_max", 0))
+            except Exception as _e:
+                log.warning("任务 %s 第 %d 块 慢尺度轮廓失败（跳过）: %r",
+                            jid, ci + 1, _e)
+
         # ---- 能量动态扩展：补「轻重音」（韵律 C）----------------------------
         # 放在包络整形之后：整形补的是音节内瞬态（8~16Hz），这里补的是
         # 词/句级的轻重（慢包络），两者互不干扰，但先定"轻重"再定"咬字"
@@ -1353,14 +1400,36 @@ async def run_job(job):
             try:
                 _segs, _cuts, _hop = prosody_report.sent_windows(audio, sr)
                 _ca, _ce = proso.ae_of(audio, sr, is_male=_male, segs=_segs)
+                # ---- r25 全局 f0 基线 -------------------------------------
+                # ⚠️ 这里用 **pyin 口径**测：PSOLA 施加的是**乘法位移**
+                # （g = f × k_med），实际基频就是乘 k_med，与 PitchTier 和
+                # pyin 的口径差无关 —— 所以只要 cur / target 同口径即可，
+                # 比值天然跨口径不变（陷阱 #4 在这里不成立）。
+                _cur_med = None
+                if PROSO_MED:
+                    try:
+                        _mf = prosody_report.f0_of(audio, sr)
+                        if _mf is not None and len(_mf) >= 32:
+                            _cur_med = float(np.median(_mf))
+                    except Exception:
+                        _cur_med = None
+                _tmed = proso_med_targets(_g)
                 audio, _ka, _kt = proso.fit(
                     audio, sr, target_a=_ta, cur_a=_ca,
-                    target_e=_te, cur_e=_ce, is_male=_male, segs=_segs)
+                    target_e=_te, cur_e=_ce, is_male=_male, segs=_segs,
+                    target_med=_tmed, cur_med=_cur_med)
                 if _ka > 1.002 or _ka < 0.998 or _kt > 1.002 or _kt < 0.998:
                     log.info("任务 %s 第 %d 块 韵律移植 A %.2f->目标 %.2f "
                              "(k=%.3f)  E %.2f->目标 %.2f (k_tail=%.3f)",
                              jid, ci + 1, _ca or -1, _ta, _ka,
                              _ce or -1, _te, _kt)
+                if _cur_med and _tmed:
+                    log.info("任务 %s 第 %d 块 f0基线 %.1f Hz -> 目标 %.1f Hz "
+                             "(k_med=%.4f, %+.2f 半音)", jid, ci + 1,
+                             _cur_med, _tmed,
+                             min(max(_tmed / _cur_med, 0.94), 1.16),
+                             12 * np.log2(min(max(_tmed / _cur_med, 0.94),
+                                              1.16)))
             except Exception as _e:
                 log.warning("任务 %s 第 %d 块 韵律移植失败（跳过）: %r",
                             jid, ci + 1, _e)
@@ -2761,6 +2830,34 @@ def loudness_targets(gender):
     vals.sort()
     n = len(vals)
     return vals[n // 2] if n % 2 else 0.5 * (vals[n // 2 - 1] + vals[n // 2])
+
+
+def proso_med_targets(gender):
+    """r25：全局 f0 基线的目标值（Hz，pyin 口径）。
+
+    数据来源 `tools/caseslow.py` 的 24 条普查结果（/mnt/tts/diag/caseslow.json），
+    取同性别句级 f0 中位的**中位数**：男 196.2、女 280.2。
+    文件不在就回落常量（数值就是普查出来的那两个）。
+    """
+    try:
+        p = os.environ.get("TTS_CASESLOW_JSON",
+                           "/mnt/tts/diag/caseslow.json")
+        if os.path.exists(p):
+            rows = json.load(open(p, encoding="utf-8"))
+            v = [float(r["f0_med"]) for r in rows
+                 if r.get("gender") == gender
+                 and r.get("f0_med") is not None]
+            if v:
+                v.sort()
+                n = len(v)
+                return v[n // 2] if n % 2 else (v[n // 2 - 1] + v[n // 2]) / 2.0
+    except Exception:
+        pass
+    if gender == "male":
+        return PROSO_MED_FALLBACK_MALE
+    if gender == "female":
+        return PROSO_MED_FALLBACK_FEMALE
+    return PROSO_MED_FALLBACK_DEFAULT
 
 
 def proso_targets(gender):

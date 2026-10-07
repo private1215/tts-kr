@@ -25,6 +25,8 @@ C（能量动态）都不受影响（PSOLA 重合成保持原长度与原包络�
     - 缩放限幅 k ∈ [0.75, 1.35]，超出就只走到边界；
     - 必须先离线试算 + 耳朵验收再决定上不上线。
 """
+import os
+
 import numpy as np
 
 try:
@@ -35,6 +37,11 @@ except Exception:                                  # pragma: no cover
     _pcall = None
 
 K_LO, K_HI = 0.75, 1.35          # 单次缩放限幅
+# 🔴 r25：全局 f0 基线平移的限幅。诊断出的偏差只有 4.5~9.9%
+# （男 1.084× ≈ 1.4 半音、女 1.056× ≈ 0.94 半音），限到 ±2.6 半音足够，
+# 且越小的位移 PSOLA 人造感越轻。
+K_MED_LO = float(os.environ.get("TTS_PROSO_KMED_LO", "0.94"))
+K_MED_HI = float(os.environ.get("TTS_PROSO_KMED_HI", "1.16"))
 TAIL_SEC = 0.35                  # 与 prosody_report 的 E 窗口一致
 STEP = 0.01                      # PitchTier 时间步长（秒）
 
@@ -154,18 +161,47 @@ def _clip(k):
     return float(np.clip(k, K_LO, K_HI))
 
 
+def med_of(x, sr, is_male=None):
+    """Praat 口径的浊音帧 f0 中位（Hz）。失败返回 None。
+
+    ⚠️ 必须与 `baseline` 用同一口径：Praat 的 PitchTier ≠ pyin
+    （陷阱 #4），拿 pyin 量出来的数去算 k_med 会系统性偏。
+    """
+    t, f = tier_of(x, sr, is_male=is_male)
+    if t is None:
+        return None
+    v = np.asarray(f, dtype=np.float64)
+    v = v[v > 0]
+    if len(v) < 8:
+        return None
+    return float(np.median(v))
+
+
 def fit(x, sr, target_a=None, target_e=None, cur_a=None, cur_e=None,
-        is_male=None, segs=None, tail_sec=TAIL_SEC, max_semi_shift=4.0):
-    """把 A / E 拉到目标值。
+        is_male=None, segs=None, tail_sec=TAIL_SEC, max_semi_shift=4.0,
+        target_med=None, cur_med=None, k_med_lo=K_MED_LO, k_med_hi=K_MED_HI):
+    """把 A / E 拉到目标值，可选再把**全局 f0 基线**平移到 target_med。
 
     cur_a / cur_e：当前实测值（由 prosody_report 量出来，必须同口径）。
     只在给定的时候才动对应的维度。
+
+    🔴 `target_med` / `cur_med` 是 r25 新加的（2026-10-07）：
+    原来的 A/E 缩放是 `semi' = center + (semi-center)*k`，**绕句中位缩放，
+    数学上不可能改变全局基线**。而诊断发现我们的句级 f0 中位比案例
+    **低 4.5~9.9%**（男 181 vs 案例 196.2、女 265.3 vs 280.2，五例全同向），
+    PROSO 一直没管过这一项。这里在 A/E 缩放之后**再整体乘一个 k_med**补上。
+
+    ⚠️ `cur_med` 必须用 `med_of()`（Praat 口径）量，不能拿 pyin 的数。
+
     返回 (y, k_a_used, k_tail_used)；失败原样返回。
     """
     if parselmouth is None:
         return x, 1.0, 1.0
-    if (target_a is None or cur_a is None or cur_a <= 0) and \
-       (target_e is None or cur_e is None or cur_e <= 0):
+    _want_ae = (target_a is not None and cur_a is not None and cur_a > 0) or \
+               (target_e is not None and cur_e is not None and cur_e > 0)
+    _want_med = (target_med is not None and cur_med is not None
+                 and cur_med > 0)
+    if not _want_ae and not _want_med:
         return x, 1.0, 1.0
     t, f = tier_of(x, sr, is_male=is_male)
     if t is None:
@@ -180,12 +216,28 @@ def fit(x, sr, target_a=None, target_e=None, cur_a=None, cur_e=None,
         k_tail = _clip(target_e / (cur_e * k_a))
     else:
         k_tail = 1.0
-    g = shape(t, f, segs_sec, k_a=k_a, k_tail=k_tail, tail_sec=tail_sec)
-    # 绝对音高整体位移限幅（缩放绕中位，理论上不该跑，兜个底）
-    med_o, med_n = np.median(f), np.median(g)
-    shift = 12.0 * np.log2(med_n / max(med_o, 1e-6))
-    if abs(shift) > max_semi_shift:
-        g = g * np.power(2.0, -(shift - np.sign(shift) * max_semi_shift) / 12.0)
+    if _want_ae:
+        g = shape(t, f, segs_sec, k_a=k_a, k_tail=k_tail, tail_sec=tail_sec)
+        # 绝对音高整体位移限幅（缩放绕中位，理论上不该跑，兜个底）
+        med_o, med_n = np.median(f), np.median(g)
+        shift = 12.0 * np.log2(med_n / max(med_o, 1e-6))
+        if abs(shift) > max_semi_shift:
+            g = g * np.power(2.0, -(shift - np.sign(shift)
+                                    * max_semi_shift) / 12.0)
+    else:
+        g = np.array(f, dtype=np.float64)
+
+    # ---- 全局 f0 基线平移（r25）------------------------------------------
+    # 放在 A/E 缩放之后：A/E 是"绕中位缩放"，基线是"整体平移"，两者正交，
+    # 一次 PSOLA 重合成一起做完，省一次音质损失。
+    k_med = 1.0
+    if _want_med:
+        v = np.asarray(f, dtype=np.float64)
+        v = v[v > 0]
+        if len(v) >= 8:
+            cur_praat = float(np.median(v))
+            k_med = float(np.clip(target_med / cur_med, k_med_lo, k_med_hi))
+            g = g * k_med
     try:
         y = _resynth(x, sr, t, g, is_male=is_male)
     except Exception:
