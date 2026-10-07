@@ -44,7 +44,12 @@ import numpy as np
 # 默认目标由案例库按性别取中位数（见 server.peak_target）；取不到时用这个
 PEAK_DB_MALE = float(os.environ.get("TTS_PEAK_DB_MALE", "-2.3"))
 PEAK_DB_FEMALE = float(os.environ.get("TTS_PEAK_DB_FEMALE", "-2.4"))
-ENABLED = os.environ.get("TTS_PEAK_FIT", "1").strip().lower() not in (
+# ❌ r24 已证伪，默认关：软削波把能量分布的**上端**压下来，而验收的 VAD 是
+#    相对阈值 `帧电平 < p25 + 6 dB`，p25 跟着动 → 判句/停顿检出整体漂移：
+#    r24-1a6c20 实测 E 3.2 -> 14.97、F 2.6 -> 12.14，净值 **-1.57 个点**
+#    （peak 只赚回 +0.20）。属于"改了度量基准"而不是"改好了音频"。
+#    模块留着，等哪天换成**绝对阈值**的判句口径再试。
+ENABLED = os.environ.get("TTS_PEAK_FIT", "0").strip().lower() not in (
     "0", "false", "no")
 # 🔴 安全阀：阈值低于此值就不再削。t=0.45 意味着 −7 dBFS 以上开始被压，
 #    再低就是整体压扁，听感会毁（r21 的教训：压包络 → 音色恶化）。
