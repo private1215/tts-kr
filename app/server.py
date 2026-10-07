@@ -32,7 +32,8 @@ from tts_engine import TTSEngine
 from voice_trim import trim_reference
 from voice_match import get_target
 from pipeline import (CHUNK_MAX_CHARS, split_chunks, chunk_limit_chars,
-                      split_by_seconds, DEFAULT_CPS, CHUNK_MAX_SECONDS)
+                      split_by_seconds, chunk_cps, DEFAULT_CPS,
+                      CHUNK_MAX_SECONDS)
 import asr_check
 import cosy_client
 import vram
@@ -937,10 +938,17 @@ async def run_job(job):
     #   比案例长 40%，而长上下文正是语气漂移的温床。
     #   cps 用该音色的历史实测值（任务跑完自动写回 voices.json），无历史时用
     #   DEFAULT_CPS 起步，跑过一单就收敛。
-    _vcps = float((voices.get(job["voice"]) or {}).get("cps") or 0) or DEFAULT_CPS
+    _vmeta = voices.get(job["voice"]) or {}
+    _vcps = float(_vmeta.get("cps") or 0) or DEFAULT_CPS
+    # 🔴 r22：分块用**锁定**的语速，不用实时 cps —— 否则 cps 每单漂移就会让
+    #    同一篇文案的段数在 2/3 之间跳（ba24c0 实测 r21c 3 块 / r22 2 块）。
+    _vcps_chunk, _need_lock = chunk_cps(_vmeta, _vcps)
+    if _need_lock and job.get("voice") and _vmeta is not None:
+        _vmeta["cps_lock"] = _vcps_chunk
+        save_voices(voices)
     _spd = float(job.get("speed") or 1.0)
-    _limit = chunk_limit_chars(_vcps, _spd)
-    chunks = split_by_seconds(job["text"], cps=_vcps, speed=_spd)
+    _limit = chunk_limit_chars(_vcps_chunk, _spd)
+    chunks = split_by_seconds(job["text"], cps=_vcps_chunk, speed=_spd)
     # 退化路径：整篇没有句末标点时 split_by_seconds 会返回整块，
     # 这时候才回退到字数贪心（它至少能在换行的地方断开）。
     if len(chunks) <= 1 and len(job["text"] or "") > _limit:

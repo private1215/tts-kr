@@ -31,7 +31,8 @@ def main():
     ap.add_argument("--minutes", type=float, default=35.0)
     ap.add_argument("--gb", type=float, default=14.0, help="显存占用 GB")
     ap.add_argument("--uuid", default="GPU-b67eee2c-c672-6915-910d-617c62abebee")
-    ap.add_argument("--log", default="/tmp/gpu_stress.log")
+    # 🔴 不放 /tmp：重启即清空，压测证据就没了
+    ap.add_argument("--log", default="/mnt/tts/diag/gpu_stress.log")
     a = ap.parse_args()
 
     os.environ["CUDA_VISIBLE_DEVICES"] = a.uuid

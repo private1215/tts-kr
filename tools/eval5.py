@@ -34,7 +34,10 @@ USER = os.environ.get("TTS_USER", "admin")
 PASS = os.environ.get("TTS_PASS", "qwer1234")
 CASES_DIR = os.environ.get("TTS_CASES_DIR", "/mnt/tts/data/cases")
 OUT_DIR = os.environ.get("TTS_OUT_DIR", "/mnt/tts/output")
-WORK = os.environ.get("TTS_EVAL_WORK", "/tmp/eval5work")
+# 🔴 默认目录**不能**是 /tmp：2026-10-07 重启把 /tmp 清空，上一版的
+#    fidelity3.py / eval5r20.py / submit5.py 全没了，93.52% 基线一度无法复现。
+#    中间产物（拼好的 wav、评分 json）也落持久盘，重启后还能接着对账。
+WORK = os.environ.get("TTS_EVAL_WORK", "/mnt/tts/diag/eval5work")
 
 # 五案例固定清单（id, 短名, 性别, 生成用音色）
 FIVE = [

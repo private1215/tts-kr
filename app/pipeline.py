@@ -176,6 +176,45 @@ DEFAULT_CPS = float(os.environ.get("TTS_DEFAULT_CPS", "8.0"))
 CHUNK_MIN_TAIL_SEC_RATIO = float(
     os.environ.get("TTS_CHUNK_MIN_TAIL_SEC_RATIO", "0.4"))
 
+# 2026-10-07 r22 修：**碎屑尾块**。贪心在句末断开，装不满的最后一块可能只剩
+# 几个字 —— 实测 ba24c0（4224 字）在 cps=8.45 时被切成 2105 + 2100 + **19 字**，
+# 这 19 字又把「尾块 < 预算 40%」的等分保护触发，于是**从 2 块变成 3 块**。
+# 而 cps 是每单滑动平均写回的，8.45→8.48 一漂，同一篇文案的块数就在 2/3 之间跳
+# （r21c 是 3 块、r22 是 2 块，日志可查）。
+# 🔑 根因不是 cps 抖动，是**把「句子打包的余数」当成了一个真块**。余数不足
+#    limit 的 5%（男声约 106 字 ≈ 12 秒）就并回上一块 —— 这个尺度上它既不是
+#    一段有效的上下文，也不该影响块数。
+# ⚠️ 别把阈值调大：8197d9 的尾块有 253 字（≈30 秒），那是**真的**短块，
+#    并回去会让第二块变成 280 秒，超过预算 12%。
+CHUNK_SLIVER_RATIO = float(os.environ.get("TTS_CHUNK_SLIVER_RATIO", "0.05"))
+
+# 分块语速**锁定**阈值。
+# 🔴 2026-10-07 r22：光有死区还不够。cps 是每单滑动平均写回的，就算只在
+#    8.44~8.52 之间动，也足以让「预估时长 / 250 秒」跨过整数边界 ——
+#    实测 ba24c0（4224 字）在 cps 8.45 时预估 500s → 3 块，8.48 时 498s → 2 块，
+#    同一篇文案两次跑出不同段数（r21c 3 块 / r22 2 块，服务日志可查）。
+#    更麻烦的是：**8197d9（4489 字）在高 cps 下预估 514 秒，和 ba24c0 在低 cps
+#    下的 513 秒完全重合** —— 只要块数由「预估时长」决定，这两篇就不可区分，
+#    任何阈值都会让其中一篇抖动。
+# ✅ 所以块数必须**不吃 cps 的实时漂移**：分块单独用一个锁定值，
+#    只在实测语速偏离锁定值超过 5% 时才重锁（写回 voices.json 的 cps_lock）。
+#    5% 是这么定的：实测男女语速长期稳定在 8.43~8.52 / 7.26~7.27（±1%），
+#    5% 既能吸收这个抖动，又能在换音色/换语速时及时跟上。
+CHUNK_CPS_LOCK_RATIO = float(os.environ.get("TTS_CHUNK_CPS_LOCK_RATIO", "0.05"))
+
+
+def chunk_cps(voice_meta: dict, cps=None) -> tuple:
+    """分块专用语速（锁定值），返回 `(值, 是否需要写回)`。
+
+    ⚠️ 别拿 `cps` 直接分块：它每单都在动，会让段数不可复现。
+    """
+    m = voice_meta or {}
+    c = float(cps if cps is not None else m.get("cps") or 0) or DEFAULT_CPS
+    lock = float(m.get("cps_lock") or 0.0)
+    if not lock or abs(c - lock) / max(lock, 1e-9) > CHUNK_CPS_LOCK_RATIO:
+        return round(c, 3), True
+    return lock, False
+
 
 def chunk_limit_chars(cps: float = DEFAULT_CPS, speed: float = 1.0) -> int:
     """时长驱动的块字数上限 = 时长上限(秒) × 语速(字/秒) × speed。
@@ -225,26 +264,36 @@ def _unit_ends(units: list) -> list:
     return ends
 
 
-def greedy_split(units: list, limit: int) -> list:
+def greedy_split(units: list, limit: int,
+                 sliver_ratio: float = CHUNK_SLIVER_RATIO) -> list:
     """贪心：每块尽量填满 limit，断点必然落在句末/段末。
 
     ⚠️ 长度必须按 render_units 的口径算（句间 ' '、段间 '\\n\\n'），
     否则会残留几十字的孤儿尾块 —— 踩过一次（4091 字切出 1354/1333/1332/24）。
+
+    2026-10-07 r22：末尾不足 `limit * sliver_ratio` 的碎屑**并回上一块**。
+    它是句子打包的余数，不是一段有效上下文；留着它会污染下游的
+    「尾块过短 → 等分」判断，让块数随 cps 抖动在 2/3 之间跳。
     """
-    chunks, buf, buf_len = [], [], 0
+    groups, buf, buf_len = [], [], 0
     for u in units:
         s, pi = u
         add = len(s) if not buf else (
             len(s) + 1 if pi == buf[-1][1] else len(s) + 2)
         if buf and buf_len + add > limit:
-            chunks.append(render_units(buf))
+            groups.append(buf)
             buf, buf_len = [u], len(s)
         else:
             buf.append(u)
             buf_len += add
     if buf:
-        chunks.append(render_units(buf))
-    return [c for c in chunks if c.strip()]
+        groups.append(buf)
+    sliver = limit * max(sliver_ratio, 0.0)
+    while len(groups) >= 2 and sum(len(s) for s, _ in groups[-1]) < sliver:
+        groups[-2] = groups[-2] + groups[-1]
+        groups.pop()
+    out = [render_units(g) for g in groups]
+    return [c for c in out if c.strip()]
 
 
 def even_split(units: list, n: int) -> list:
@@ -321,8 +370,12 @@ def split_by_seconds(text: str, cps: float = DEFAULT_CPS,
     chunks = greedy_split(units, limit)
     if len(chunks) >= 2:
         tail_sec = len(chunks[-1]) / rate
+        # 🔴 2026-10-07 r22：等分用的块数取**贪心实际切出来的块数**，
+        #    不再用上面按 est_sec 算的 n。n 会被 cps 的微小漂移推过整数边界
+        #    （ba24c0 预估 498s → 500s 就让 n 从 2 跳到 3），而贪心块数只受
+        #    limit 影响，稳定得多。同一篇文案的块数必须可复现。
         if tail_sec < max_seconds * CHUNK_MIN_TAIL_SEC_RATIO:
-            chunks = even_split(units, n)
+            chunks = even_split(units, len(chunks))
     return chunks
 
 
