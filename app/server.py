@@ -41,7 +41,8 @@ import engine_select
 import pba
 import envshape
 import dyn
-import transient           # 瞬态整形：抬 CF / 峰值（r21）
+import transient           # 瞬态整形：抬 CF / 峰值（r21，已证伪默认关）
+import roomtone           # 房间底噪：修「停顿是数字真零」造成的瞬断与电流声（r22）
 import prosody_report
 try:
     import proso          # 韵律 A/E 的 F0 重映射（依赖 parselmouth/Praat）
@@ -178,6 +179,26 @@ PBA_CV = float(os.environ.get("TTS_PBA_CV", "0.28"))
 # < 案例 0.834 —— 差的不是"变化量"是"分布形状"（我们前两桶 73% vs 案例 46%）。
 # 小 CV 的对数正态恰恰会把停顿挤成一坨，调 CV 是南辕北辙。
 PAUSE_FROM_CASES = os.environ.get("TTS_PAUSE_FROM_CASES", "1") != "0"
+# ---- 停顿条数预算（r22b）：静音占比是唯一五例同向的系统性缺陷 ----------
+# 2026-10-07 五案例「成品 − 案例」带符号偏差，只有三项方向一致：
+#     sil +7.8 ~ +17.1%（均值 +12.5%） / C +2.3 ~ +9.5% / dur -0.7 ~ -4.1%
+# 拆开 sil 看，均值一样、多的是**条数**：案例 1a6c20 是 162 处 / 90.7s
+# （均值 0.560s），我们是 178 处 / 94.8s（均值 0.533s），按字数归一后
+# 多 11.5% 个停顿。α 是给每条停顿乘系数、mu 是给每条定均值，**条数多了
+# 总量就是多**，两个旋钮都压不动（r15 已实测：α 收到 0.74 反而更糟）。
+# 所以给条数一个预算：案例的「停顿数 / 字数」密度 × 本篇字数，超出的
+# 取最短的压到 FLOOR_MS（60ms，低于 min_sil=0.25s 检不出来）。
+# 1.0 = 全量对齐案例密度；0.6 = 只走六成（保守）；0 = 关。
+PAUSE_BUDGET = float(os.environ.get("TTS_PAUSE_BUDGET", "1.0"))
+# ---- 时长对齐（r22b）：成品时长按案例语速给，不再沿用模型的原生长度 --
+# 我们五例成品**全部**比案例短（−0.7% ~ −4.1%，均值 −2.3%）：PBA 的 atempo
+# 只是把「被 α 压掉的静音」拉回，从没对准过案例的语速。这里按
+# 「案例库 Σ字数 / Σ时长」反推目标时长，用同一档 atempo 实现——
+# atempo 是整体等比缩放，静音占比 / F / A / E 全部不变，只动 dur 一项。
+CPS_ALIGN = os.environ.get("TTS_CPS_ALIGN", "1") != "0"
+# atempo 限幅：极端文本（超短/超长）不至于把语速拉到荒唐的程度
+CPS_ATEMPO_LO = float(os.environ.get("TTS_CPS_ATEMPO_LO", "0.80"))
+CPS_ATEMPO_HI = float(os.environ.get("TTS_CPS_ATEMPO_HI", "1.25"))
 
 # ---- 包络整形：修「咬字含糊（舌头没展开）」--------------------------------
 # 2026-09-30 员工反馈「听着跟舌头没展开似的」，用调制谱定位到真因：
@@ -1172,9 +1193,9 @@ async def run_job(job):
             job["_gain_off"] = _off
         # 停顿样本只取一次并缓存到任务上：调 pause_targets 要遍历案例库，
         # 8 分钟的长篇有几十块，没必要每块都重算。
+        _g = ("male" if job.get("_is_male") else
+              "female" if job.get("_is_male") is False else None)
         if "_pause_samples" not in job:
-            _g = ("male" if job.get("_is_male") else
-                  "female" if job.get("_is_male") is False else None)
             try:
                 job["_pause_samples"] = pause_targets(_g) if _g else None
             except Exception as _e:
@@ -1183,6 +1204,19 @@ async def run_job(job):
             if job["_pause_samples"]:
                 log.info("任务 %s 停顿分布借案例经验分布：%d 个样本",
                          jid, len(job["_pause_samples"]))
+        # 停顿**条数**密度与案例语速：与 _pause_samples 一样每单只算一次
+        if "_pause_density" not in job:
+            try:
+                job["_pause_density"] = pause_density(_g) if _g else None
+            except Exception as _e:
+                log.warning("任务 %s 停顿密度取用失败: %r", jid, _e)
+                job["_pause_density"] = None
+        if "_cps_target" not in job:
+            try:
+                job["_cps_target"] = cps_target(_g) if _g else None
+            except Exception as _e:
+                log.warning("任务 %s 案例语速取用失败: %r", jid, _e)
+                job["_cps_target"] = None
 
         # 停顿预算对齐（PBA）：只切静音，不动任何有声样本，无音质损失。
         # 丢掉的静音时间在下面用 atempo 拉回，总时长与发音速率一起回到
@@ -1206,9 +1240,26 @@ async def run_job(job):
         #    案例本身就比我们长 3.5%）。
         if PBA_RESHAPE and len(chunk_text) >= PBA_MIN_CHARS:
             try:
+                # 停顿条数预算：把「我们比案例多出来的那批最短停顿」压到 60ms。
+                # 削掉的那部分时间**不进 atempo 拉回**——拉回 = 把有声段加速，
+                # 而 sil 偏高的根因正是静音太多，拉回就白削了（与 r15 对
+                # reshuffle 加长部分的处理同一套道理）。
+                _pb = None
+                _dens = job.get("_pause_density")
+                if PAUSE_BUDGET > 0 and _dens and _dens > 0:
+                    _ntgt = _dens * len(chunk_text)
+                    _n_now = None
+                    try:
+                        _iv = pba._intervals_report(audio, sr)
+                        _n_now = max(len(_iv) - 1, 0)
+                    except Exception:
+                        _n_now = None
+                    if _n_now and _n_now > _ntgt:
+                        _pb = _n_now - PAUSE_BUDGET * (_n_now - _ntgt)
                 audio, _rs_ratio = pba.reshuffle(
                     audio, sr, PBA_CV,
-                    target_samples=job.get("_pause_samples"))
+                    target_samples=job.get("_pause_samples"),
+                    pause_budget=_pb)
                 job.setdefault("_rs_ratio_log", []).append(round(_rs_ratio, 4))
             except Exception as _e:
                 log.warning("任务 %s 第 %d 块 停顿重排失败（跳过）: %r",
@@ -1254,6 +1305,30 @@ async def run_job(job):
         # PBA 削掉的静音时间靠这一档 atempo 补回来：最终时长 = 原时长 / speed，
         # 与不开 PBA 时一致，员工侧的时长预估和统计都不受影响。
         _atempo = _speed * _pba_ratio
+        # ---- 时长对齐案例语速（r22b）--------------------------------------
+        # 我们五例成品**全部**比案例短（−0.7% ~ −4.1%，均值 −2.3%）：上面
+        # 这档 atempo 只负责把「被 α 压掉的静音」拉回，从来没对准过案例语速，
+        # 于是模型原生多快、成品就多快。这里按案例库 Σ字数/Σ时长 反推目标
+        # 时长，仍用同一档 atempo 实现 —— atempo 是整体等比缩放，静音占比、
+        # F、A、E 全部不变，只动 dur 一项。
+        if CPS_ALIGN and job.get("_cps_target"):
+            try:
+                _want = (len(chunk_text) / float(job["_cps_target"])
+                         / max(_speed, 0.25))
+                _cur = len(audio) / float(sr)
+                if _want > 1.0 and _cur > 1.0:
+                    _a2 = min(max(_cur / _want, CPS_ATEMPO_LO), CPS_ATEMPO_HI)
+                    if abs(_a2 - _atempo) > 1e-3:
+                        log.info("任务 %s 第 %d 块 时长对齐: %.1fs -> 目标 "
+                                 "%.1fs（%.0f 字 / %.3f 字/s, speed %.2f）"
+                                 " atempo %.4f -> %.4f",
+                                 jid, ci + 1, _cur, _want, len(chunk_text),
+                                 float(job["_cps_target"]), _speed,
+                                 _atempo, _a2)
+                    _atempo = _a2
+            except Exception as _e:
+                log.warning("任务 %s 第 %d 块 时长对齐失败（沿用原 atempo）: %r",
+                            jid, ci + 1, _e)
         # ---- 首尾静音对齐案例的换气量 --------------------------------------
         # 案例逐段量出来：头 0.04~0.08 s、尾 0.16~0.30 s，两块拼起来间隙
         # 0.25~0.36 s。我们模型自带 0.16~0.20 s 头静音、最后一块几乎没有尾巴，
@@ -1411,44 +1486,73 @@ async def run_job(job):
                 _af = []                  # EQ/空气感已跑过，别再跑一遍
             else:
                 _src = tmp_wav
-            if abs(_gain_db) > 1e-3:
-                _af.append(f"volume={_gain_db:.2f}dB")
-            # 限幅兜底：响度归一只管平均电平，峰值仍可能顶穿。案例真峰值
-            # 男 -1.7 / 女 -2.4 dBFS，这里照 -1.7 卡，避免 mp3 编码过冲削波。
-            # 放在链路最后，且必须在 volume 之后。
+            # ---- 尾段：volume → 限幅 →（房间底噪）→ mp3 --------------------
+            # 🔴 房间底噪必须插在**响度归一/限幅之后、libmp3lame 之前**：
+            #   · 叠在归一之前 → 响度闭环会把多出来的能量整体缩回，等于白铺
+            #     （还会把 LUFS 搞偏）；
+            #   · 叠在 mp3 之后 → 低电平段的量化杂散已经烤进成品，修不掉
+            #     （陷阱 #18：链尾 libmp3lame 会重新定一遍电平）。
+            # ffmpeg 滤镜链里没有「我们要的粉红噪声」，所以尾段拆两步：
+            #   先出一份已归一/已限幅的 float wav，numpy 叠完再单独编码。
+            _af_base = list(_af)          # atempo / EQ / 空气感（瞬态路径下为空）
+            _limiter = None
             if LOUD_NORM and LOUD_LIMITER:
                 # 分性别：女声 EQ 补偿量大，峰值被推得比男声高 1.6 dB
-                _af.append(LOUD_LIMITER_MALE if job.get("_is_male") else
-                           LOUD_LIMITER_FEMALE
-                           if job.get("_is_male") is False else LOUD_LIMITER)
+                _limiter = (LOUD_LIMITER_MALE if job.get("_is_male") else
+                            LOUD_LIMITER_FEMALE
+                            if job.get("_is_male") is False else LOUD_LIMITER)
+            _rt_db = None
+            if roomtone.ENABLED:
+                _rt_db = roomtone.level_for(
+                    "male" if job.get("_is_male") else
+                    "female" if job.get("_is_male") is False else "")
+            _norm_wav = os.path.join(folder_path, f".norm_{jid}_{ci}.wav")
             _tail = ["-codec:a", "libmp3lame", "-b:a", MP3_BITRATE,
                      "-ar", str(OUT_SR), mp3_abs]
-            # ⚠️ 源可能是 tmp_wav（不整形）也可能是 pre_wav（整形后），
-            #    所以这里重新拼命令，别复用上面那条写死 tmp_wav 的 _cmd。
-            _cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", _src]
-            if _af:
-                _cmd += ["-filter:a", ",".join(_af)]
-            _cmd += _tail
-            # 滤波链里多了 FIR 卷积，给足时间；超时不能让整单失败。
-            subprocess.run(_cmd, check=True, timeout=600)
+
+            def _encode_mp3(gain):
+                """按给定增益重跑整条尾段。闭环复检复用它，避免两处拼命令。"""
+                af = list(_af_base)
+                if abs(gain) > 1e-3:
+                    af.append(f"volume={gain:.2f}dB")
+                if _limiter:
+                    af.append(_limiter)
+                # ⚠️ 源可能是 tmp_wav（不整形）也可能是 pre_wav（整形后），
+                #    所以这里重新拼命令，别复用上面那条写死 tmp_wav 的 _cmd。
+                c = ["ffmpeg", "-y", "-loglevel", "error", "-i", _src]
+                if af:
+                    c += ["-filter:a", ",".join(af)]
+                if _rt_db is None:
+                    # 没开底噪：一条命令走完，与 r21 及之前**完全一致**
+                    subprocess.run(c + _tail, check=True, timeout=600)
+                    return
+                subprocess.run(c + ["-ac", "1", "-ar", str(OUT_SR),
+                                    "-c:a", "pcm_f32le", _norm_wav],
+                               check=True, timeout=600)
+                _nx, _nsr = sf.read(_norm_wav, dtype="float32")
+                if getattr(_nx, "ndim", 1) > 1:
+                    _nx = _nx.mean(axis=1)
+                sf.write(_norm_wav, roomtone.apply(_nx, _nsr, _rt_db), _nsr,
+                         subtype="FLOAT")
+                subprocess.run(["ffmpeg", "-y", "-loglevel", "error",
+                                "-i", _norm_wav] + _tail,
+                               check=True, timeout=600)
+
+            _encode_mp3(_gain_db)
 
             # ---- 响度闭环复检：编完实测成品，偏了就用残差重编一次 --------
             # LOUD_CHAIN_DB 只是初值，链路一改（换 EQ、换空气感参数、换音色）
             # 它就不准。与其每次手工重标常数，不如编完再量一次成品 mp3：
             # 偏差超过 0.5 dB 就把残差补进增益重编。多一次编码（几秒），
             # 换来「改链路不用重标常数」。最多重编一次，不兜圈子。
+            # （底噪只有 -56/-50 dBFS，对 LUFS 的贡献 < 0.003 dB，不会扰动闭环）
             if _tgt_lufs is not None:
                 try:
                     _il2, _tp2 = measure_lufs(mp3_abs)
                     if _il2 is not None and abs(_il2 - _tgt_lufs) > 0.5:
                         _fix = _tgt_lufs - _il2
                         _gain_db += _fix
-                        _af2 = [a for a in _af if not a.startswith("volume=")]
-                        _af2.append(f"volume={_gain_db:.2f}dB")
-                        _cmd2 = (["ffmpeg", "-y", "-loglevel", "error",
-                                  "-i", _src, "-filter:a", ",".join(_af2)]
-                                 + _tail)
-                        subprocess.run(_cmd2, check=True, timeout=600)
+                        _encode_mp3(_gain_db)
                         log.info("任务 %s 第 %d 块 响度闭环复检: 成品 %.2f "
                                  "LUFS（目标 %.2f）→ 补 %+.2f dB 重编",
                                  jid, ci + 1, _il2, _tgt_lufs, _fix)
@@ -1469,6 +1573,10 @@ async def run_job(job):
             try:
                 os.remove(pre_wav)
             except OSError:
+                pass
+            try:
+                os.remove(_norm_wav)
+            except (OSError, NameError, UnboundLocalError):
                 pass
         # 变速后实际时长 = 原时长 / speed，展示给员工和统计都要按这个值
         _dur = (st.get("audio_seconds") or 0.0) / (_speed or 1.0)
@@ -2720,6 +2828,42 @@ def pause_targets(gender):
         except (TypeError, ValueError):
             pass
     return out or None
+
+
+def pause_density(gender):
+    """案例的「停顿条数 / 字数」密度（r22b）。
+
+    为什么按字数而不是按时长：生成时文本是已知的，时长正是我们要求解的量。
+    用时长做分母会变成循环论证（想要多长 → 决定几个停顿 → 决定多长）。
+
+    口径与 `prosody_report.measure` 同源（案例入库时算的 `prosody.pauses`），
+    和验收脚本的 `pauses` 是同一个数。
+    """
+    tot_p = tot_c = 0
+    for c in _bench_cases(gender):
+        p = (c.get("prosody") or {}).get("pauses")
+        n = c.get("total_chars") or 0
+        if p and n:
+            tot_p += int(p)
+            tot_c += int(n)
+    return (tot_p / float(tot_c)) if tot_c else None
+
+
+def cps_target(gender):
+    """案例语速（字/秒）= Σ字数 / Σ时长（r22b）。
+
+    用加权平均而不是各案例 cps 的中位数：长篇案例的语速更稳定，
+    按字数加权后抗抖动更好（实测中位数比加权平均差 0.4 个点的 dur 失分）。
+    """
+    tot_c = 0.0
+    tot_d = 0.0
+    for c in _bench_cases(gender):
+        n = c.get("total_chars") or 0
+        d = c.get("total_dur") or 0
+        if n and d:
+            tot_c += float(n)
+            tot_d += float(d)
+    return (tot_c / tot_d) if tot_d else None
 
 
 def _analyze_case(cid):

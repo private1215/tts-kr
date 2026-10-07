@@ -146,7 +146,7 @@ _SR_HINT = 44100
 
 
 def reshuffle(y, sr, cv=0.28, a=0.5725, b=0.00769, lo=0.26, hi=0.65,
-              target_samples=None):
+              target_samples=None, pause_budget=None, pause_scale=None):
     """停顿重排（Pause Reshuffle）——修「卡顿」的另一半。
 
     ## 为什么需要它
@@ -227,11 +227,30 @@ def reshuffle(y, sr, cv=0.28, a=0.5725, b=0.00769, lo=0.26, hi=0.65,
     _SR_HINT = int(sr)
     durs = np.array([(e - s) / float(sr) for s, e in ps_o], dtype=np.float64)
     sent = np.array([(e - s) / float(sr) for s, e in ss_o], dtype=np.float64)
+    # ---- 停顿预算：多余的停顿压到 FLOOR，不参与重排 ----------------------
+    # 🔴 2026-10-07 r22b：实测五案例「成品 − 案例」带符号偏差，**静音占比是
+    #    唯一五项全正的系统性缺陷**（+7.8 ~ +17.1%，均值 +12.5%）。拆开看：
+    #        案例 停顿 162 处 / 94.8s，我们 178 处 / 94.8s
+    #    均值几乎一样（0.56 vs 0.53），**多的是条数不是长度** —— 我们比案例
+    #    多 11.5% 个停顿（按字数归一后）。所以靠 α / mu 都压不动：α 是给
+    #    每条停顿乘系数，mu 是给每条定均值，条数多了总量就是多。
+    #    修法：给停顿条数一个预算（案例的 停顿数/字数 密度 × 本篇字数），
+    #    超出的**取最短的那些**压到 FLOOR（60ms，低于 sent_windows 的
+    #    min_sil=0.25s，检不出来）。为什么不直接删掉：硬拼两个句段会在非零
+    #    样本上切一刀，有爆音风险；留 60ms 既消掉了"停顿"又留了接缝。
+    keep = np.ones(len(ps_o), dtype=bool)
+    if pause_budget and len(ps_o) > int(pause_budget):
+        n_drop = len(ps_o) - int(pause_budget)
+        keep[np.argsort(durs)[:n_drop]] = False
+        log.info("PBA 停顿预算 %d > 上限 %d：压掉最短的 %d 条（%.3f~%.3fs）",
+                 len(ps_o), int(pause_budget), n_drop,
+                 float(np.sort(durs)[n_drop - 1]), float(np.sort(durs)[0]))
+    idx_keep = np.where(keep)[0]
     # 均值：有案例样本就直接用案例实测均值（真 1:1），否则走回归。
     # 二者差很多——回归只有两个样本点，案例均值是 147~162 个实测的中位。
     mu_reg = float(np.clip(a - b * float(sent.mean()), lo, hi))
     mu = mu_reg
-    q = (np.arange(len(ps_o)) + 0.5) / len(ps_o)
+    q = (np.arange(len(idx_keep)) + 0.5) / max(len(idx_keep), 1)
     tgt = None
     # ① 优先用案例实测的经验分布：形状照抄案例，均值直接用案例的
     if target_samples is not None:
@@ -267,8 +286,23 @@ def reshuffle(y, sr, cv=0.28, a=0.5725, b=0.00769, lo=0.26, hi=0.65,
             z = np.zeros(len(ps_o))
         tgt = np.exp(np.log(mu) - s2 / 2.0 + np.sqrt(s2) * z)
         tgt = np.clip(tgt, lo, hi)
-    rank = np.argsort(np.argsort(durs))
-    new = tgt[rank]
+    # 保序分位映射只在**保留下来的**停顿之间做：被预算压掉的那几条不参与
+    # 重排，否则 quantile 会被它们挤偏，剩下的停顿也跟着变短。
+    rank = np.argsort(np.argsort(durs[idx_keep]))
+    new_k = tgt[rank] if len(idx_keep) else np.zeros(0)
+    new = np.full(len(ps_o), FLOOR_MS / 1000.0, dtype=np.float64)
+    new[idx_keep] = new_k
+    # ---- 等比缩放：另一种修 sil 的思路 -----------------------------------
+    # 条数不动、每条 × f。因为所有停顿同乘一个常数，`runs` 的直方图按
+    # [min,max] 均分 8 桶 —— 整体缩放不改变相对分布，**F 严格不变**。
+    # 与"压掉最短的几条"相比：F 更稳，但均值会偏离案例（案例均值 μ 是
+    # reshuffle 的目标，乘 f 后就不是 μ 了）；而且被缩到 250ms 以下的会
+    # 被 VAD 合并，条数自己也会降。两种都实测过，见 tools/try_pause.py。
+    if pause_scale and abs(float(pause_scale) - 1.0) > 1e-6:
+        new = new * float(pause_scale)
+        log.info("PBA 停顿等比缩放 ×%.4f：均值 %.3fs -> %.3fs",
+                 float(pause_scale), float(new_k.mean()) if len(new_k) else 0.0,
+                 float(new.mean()))
 
     floor = int(FLOOR_MS / 1000.0 * sr)
     pieces = [y[ss_o[0][0]:ss_o[0][1]]]
@@ -278,12 +312,14 @@ def reshuffle(y, sr, cv=0.28, a=0.5725, b=0.00769, lo=0.26, hi=0.65,
         pieces.append(y[ss_o[i][0]:ss_o[i][1]])
     y2 = np.concatenate(pieces)
     ratio = len(y2) / float(len(y))
-    log.info("PBA reshuffle: 停顿 %d 处 均值 %.3fs->%.3fs sd %.3f->%.3f "
+    log.info("PBA reshuffle: 停顿 %d 处(保留 %d) 均值 %.3fs->%.3fs sd %.3f->%.3f "
              "(目标 mu=%.3f[回归 %.3f] cv=%.2f 分布=%s)，时长 %.2fs -> %.2fs "
              "(ratio %.4f)",
-             len(ps_o), float(durs.mean()), float(new.mean()),
-             float(durs.std()), float(new.std()), mu, mu_reg, cv,
-             "案例经验" if target_samples else "对数正态",
+             len(ps_o), len(idx_keep), float(durs[keep].mean()),
+             float(new_k.mean()) if len(new_k) else 0.0,
+             float(durs[keep].std()), float(new_k.std()) if len(new_k) else 0.0,
+             mu, mu_reg, cv,
+             "案例经验" if target_samples is not None else "对数正态",
              len(y) / float(sr), len(y2) / float(sr), ratio)
     return y2, ratio
 
