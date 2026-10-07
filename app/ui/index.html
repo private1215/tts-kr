@@ -164,13 +164,31 @@ audio{width:100%;margin-top:9px;height:36px;border-radius:8px}
 .role.admin{color:var(--accent);border-color:rgba(91,159,255,.5);background:rgba(91,159,255,.10)}
 
 .mask{position:fixed;inset:0;background:rgba(7,9,13,.80);backdrop-filter:blur(3px);
-  z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+  z-index:100;display:flex;align-items:center;justify-content:center;padding:24px 16px}
 .modal{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line2);
-  border-radius:18px;width:100%;max-width:440px;padding:24px 26px;box-shadow:var(--shadow-lg)}
+  border-radius:18px;width:100%;max-width:440px;padding:24px 26px;box-shadow:var(--shadow-lg);
+  /* 自适应视口高度：老版本弹窗没有高度上限，内容一长就直接溢出到屏外 ——
+     案例上传页最典型，底部「上传并自动拆解」必须把窗口最大化才点得到。
+     现在弹窗最高 = 视口，超出的部分在 .mbody 里滚。 */
+  box-sizing:border-box;max-height:100vh;max-height:calc(100dvh - 48px);
+  display:flex;flex-direction:column}
 .modal.wide{max-width:700px}
+.modal>*{flex:0 0 auto}
+.modal>.mbody{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  margin-right:-8px;padding-right:8px}
+.modal>.mbody::-webkit-scrollbar{width:7px}
+.modal>.mbody::-webkit-scrollbar-track{background:transparent}
+.modal>.mbody::-webkit-scrollbar-thumb{background:#2A3341;border-radius:7px}
 .modal h3{margin:0 0 4px;font-size:16px;font-weight:600;letter-spacing:-.01em}
 .modal .msub{color:var(--dim);font-size:12.5px;margin-bottom:18px}
 .modal .acts{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+/* 操作栏吸在滚动区底部：表单再长，「上传并自动拆解」也一直看得见、点得到 */
+.mbody .acts{position:sticky;bottom:0;z-index:3;margin-top:16px;padding:12px 0 2px;
+  background:var(--panel);box-shadow:0 -14px 18px -12px var(--panel)}
+@media(max-height:600px){
+  .mask{padding:12px 10px}
+  .modal{max-height:calc(100dvh - 24px);padding:18px 20px}
+}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{text-align:left;padding:9px 9px;border-bottom:1px solid var(--line);color:var(--txt2)}
 th{font-weight:600;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.07em}
@@ -225,11 +243,13 @@ details.adv summary:hover{color:var(--txt2)}
   <div class="modal loginbox">
     <div class="brand" data-i18n="loginTitle">登录</div>
     <div class="bsub" data-i18n="loginSub">Qwen3-TTS 语音生成平台</div>
-    <label data-i18n="username">账号</label>
-    <input id="luser" autocomplete="username" value="admin">
-    <label data-i18n="password">密码</label>
-    <input id="lpwd" type="password" autocomplete="current-password">
-    <div class="err" id="lerr"></div>
+    <div class="mbody">
+      <label data-i18n="username">账号</label>
+      <input id="luser" autocomplete="username" value="admin">
+      <label data-i18n="password">密码</label>
+      <input id="lpwd" type="password" autocomplete="current-password">
+      <div class="err" id="lerr"></div>
+    </div>
     <div class="acts">
       <button class="primary" id="lbtn" data-i18n="loginBtn">登录</button>
     </div>
@@ -241,13 +261,15 @@ details.adv summary:hover{color:var(--txt2)}
   <div class="modal">
     <h3 data-i18n="changePw">修改密码</h3>
     <div class="msub" id="pwWho"></div>
-    <label data-i18n="oldPwd">当前密码</label>
-    <input id="pwOld" type="password" autocomplete="current-password">
-    <label data-i18n="newPwd">新密码</label>
-    <input id="pwNew" type="password" autocomplete="new-password">
-    <label data-i18n="confirmPwd">确认新密码</label>
-    <input id="pwNew2" type="password" autocomplete="new-password">
-    <div class="err" id="pwErr"></div>
+    <div class="mbody">
+      <label data-i18n="oldPwd">当前密码</label>
+      <input id="pwOld" type="password" autocomplete="current-password">
+      <label data-i18n="newPwd">新密码</label>
+      <input id="pwNew" type="password" autocomplete="new-password">
+      <label data-i18n="confirmPwd">确认新密码</label>
+      <input id="pwNew2" type="password" autocomplete="new-password">
+      <div class="err" id="pwErr"></div>
+    </div>
     <div class="acts">
       <button id="pwCancel" data-i18n="cancel">取消</button>
       <button class="primary" id="pwSave" data-i18n="save">保存</button>
@@ -259,27 +281,29 @@ details.adv summary:hover{color:var(--txt2)}
   <div class="modal wide">
     <h3 data-i18n="userMgmt">员工账号管理</h3>
     <div class="msub" data-i18n="userMgmtSub">创建员工账号，员工只能看到自己生成的任务。</div>
-    <table>
-      <thead><tr>
-        <th data-i18n="thUser">账号</th><th data-i18n="thRole">角色</th>
-        <th data-i18n="thToday">今日</th><th data-i18n="thJobs">累计</th>
-        <th data-i18n="thLogin">最近登录</th><th></th>
-      </tr></thead>
-      <tbody id="userRows"></tbody>
-    </table>
-    <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
-      <h3 style="font-size:14px;margin:0 0 10px" data-i18n="addUser">新增账号</h3>
-      <div class="split">
-        <div><label data-i18n="username">账号</label><input id="nuName" autocomplete="off"></div>
-        <div><label data-i18n="password">密码</label><input id="nuPwd" type="password" autocomplete="new-password"></div>
+    <div class="mbody">
+      <table>
+        <thead><tr>
+          <th data-i18n="thUser">账号</th><th data-i18n="thRole">角色</th>
+          <th data-i18n="thToday">今日</th><th data-i18n="thJobs">累计</th>
+          <th data-i18n="thLogin">最近登录</th><th></th>
+        </tr></thead>
+        <tbody id="userRows"></tbody>
+      </table>
+      <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
+        <h3 style="font-size:14px;margin:0 0 10px" data-i18n="addUser">新增账号</h3>
+        <div class="split">
+          <div><label data-i18n="username">账号</label><input id="nuName" autocomplete="off"></div>
+          <div><label data-i18n="password">密码</label><input id="nuPwd" type="password" autocomplete="new-password"></div>
+        </div>
+        <label data-i18n="roleLabel">角色</label>
+        <select id="nuRole"><option value="user" data-i18n="roleUser">员工</option><option value="admin" data-i18n="roleAdmin">管理员</option></select>
+        <div class="err" id="nuErr"></div>
       </div>
-      <label data-i18n="roleLabel">角色</label>
-      <select id="nuRole"><option value="user" data-i18n="roleUser">员工</option><option value="admin" data-i18n="roleAdmin">管理员</option></select>
-      <div class="err" id="nuErr"></div>
-      <div class="acts">
-        <button id="umClose" data-i18n="close">关闭</button>
-        <button class="primary" id="nuCreate" data-i18n="create">创建</button>
-      </div>
+    </div>
+    <div class="acts">
+      <button id="umClose" data-i18n="close">关闭</button>
+      <button class="primary" id="nuCreate" data-i18n="create">创建</button>
     </div>
   </div>
 </div>
@@ -288,19 +312,21 @@ details.adv summary:hover{color:var(--txt2)}
   <div class="modal wide">
     <h3 data-i18n="report">产出明细</h3>
     <div class="msub" data-i18n="reportSub">按人 / 按日统计已完成的语音产出，可导出 CSV 用 Excel 打开。</div>
-    <div class="row" style="margin-bottom:14px">
-      <div>
-        <label data-i18n="reportDays">统计范围</label>
-        <select id="rpDays" style="width:auto">
-          <option value="7">7 天</option>
-          <option value="30" selected>30 天</option>
-          <option value="90">90 天</option>
-          <option value="0">全部</option>
-        </select>
+    <div class="mbody">
+      <div class="row" style="margin-bottom:14px">
+        <div>
+          <label data-i18n="reportDays">统计范围</label>
+          <select id="rpDays" style="width:auto">
+            <option value="7">7 天</option>
+            <option value="30" selected>30 天</option>
+            <option value="90">90 天</option>
+            <option value="0">全部</option>
+          </select>
+        </div>
+        <button class="mini" id="rpExport" data-i18n="exportCsv" style="margin-top:18px">导出 CSV</button>
       </div>
-      <button class="mini" id="rpExport" data-i18n="exportCsv" style="margin-top:18px">导出 CSV</button>
+      <div id="rpTable"><span class="hint" data-i18n="loading">加载中...</span></div>
     </div>
-    <div id="rpTable"><span class="hint" data-i18n="loading">加载中...</span></div>
     <div class="acts">
       <button id="rpClose" data-i18n="close">关闭</button>
     </div>
@@ -313,6 +339,8 @@ details.adv summary:hover{color:var(--txt2)}
     <h3 data-i18n="caseTitle">标杆案例</h3>
     <div class="msub" data-i18n="caseSub">听一遍对标目标，勾选你觉得好听的地方。攒够反馈后按标签排序，就知道下一步该修哪一项。</div>
 
+    <!-- 列表 / 上传 / 详情三个视图都在这一层里滚，标题常驻、操作栏吸底 -->
+    <div class="mbody" id="caseBody">
     <!-- 上传入口：案例越多，拆出来的规律越稳（后端上传后会自动跑韵律六维拆解） -->
     <div id="caseTop" style="display:flex;align-items:center;gap:10px;margin:10px 0">
       <button class="mini primary" id="csAdd" data-i18n="upBtn">+ 上传案例</button>
@@ -357,9 +385,12 @@ details.adv summary:hover{color:var(--txt2)}
 
       <label style="margin-top:10px" data-i18n="upAudio">音频文件（可多选）</label>
       <input id="upAudio" type="file" accept="audio/*,.mp3,.wav,.m4a,.flac" multiple style="width:100%" />
+      <div class="hint" id="upAudioList" style="margin-top:4px"></div>
 
       <label style="margin-top:10px" data-i18n="upText">文案文件（可多选，选填）</label>
       <input id="upText" type="file" accept=".txt,.text" multiple style="width:100%" />
+      <div class="hint" id="upTextList" style="margin-top:4px"></div>
+      <div class="hint" id="upTextMode" style="margin-top:2px"></div>
       <div class="hint" data-i18n="upTextTip" style="margin-top:4px"></div>
 
       <label style="margin-top:10px" data-i18n="upNote2">备注（选填）</label>
@@ -401,6 +432,7 @@ details.adv summary:hover{color:var(--txt2)}
         <button class="primary" id="csSubmit" data-i18n="fbSubmit">提交反馈</button>
       </div>
     </div>
+    </div><!-- /.mbody -->
   </div>
 </div>
 
@@ -670,8 +702,12 @@ const I18N = {
     upTagsPh:'财经,播报,中速',
     upAudio:'音频文件（可多选）', upText:'文案文件（可多选，选填）',
     upTextTip:'传 1 个整篇＝按各段时长占比自动切分（推荐）；传 N 个＝按文件名一一对应；不传＝自动 ASR 转写。多段请命名 01、02…，裸数字 10 会排到 2 前面',
+    upSelAud:(n,s)=>`已选 ${n} 段音频，拼接顺序：${s}`, upSelTxt:(n,s)=>`已选 ${n} 个文案，对应顺序：${s}`,
+    upNoneAud:'未选择音频', upNoneTxt:'未传文案',
+    upModeWhole:'将按各段时长占比自动切分（推荐）', upModeOne:'将按文件名与音频一一对应', upModeAsr:'将自动 ASR 转写补全文案',
     upNote2:'备注（选填）', upSubmit:'上传并自动拆解',
     upDoing:'上传中…韵律六维拆解会在后台跑几十秒',
+    upPct:(p,a,b)=>`上传中 ${p}%（${a} / ${b} MB）`,
     upDone:'上传完成，韵律六维正在后台拆解',
     upFail:'上传失败', upNeed:'请填案例名称，并至少选一个音频文件',
     upGMale:'男声', upGFemale:'女声', upUnknown:'未知', upOther:'其它',
@@ -785,8 +821,12 @@ const I18N = {
     upTags:'Tags (comma separated, optional)', upTagsPh:'finance,newscast,medium',
     upAudio:'Audio files (multiple)', upText:'Script files (multiple, optional)',
     upTextTip:'One full script = auto-split by segment duration (recommended); N files = matched by filename; none = ASR. Name segments 01, 02... (bare 10 sorts before 2)',
+    upSelAud:(n,s)=>`${n} audio file(s) selected, order: ${s}`, upSelTxt:(n,s)=>`${n} script file(s) selected, order: ${s}`,
+    upNoneAud:'No audio selected', upNoneTxt:'No script file',
+    upModeWhole:'will be split by segment duration (recommended)', upModeOne:'will be matched to audio by filename', upModeAsr:'will be transcribed by ASR',
     upNote2:'Note (optional)', upSubmit:'Upload & analyze',
     upDoing:'Uploading\u2026 prosody analysis runs in background for a while',
+    upPct:(p,a,b)=>`Uploading ${p}% (${a} / ${b} MB)`,
     upDone:'Uploaded \u2014 prosody analysis is running in background',
     upFail:'Upload failed',
     upNeed:'Please enter a name and pick at least one audio file',
@@ -901,8 +941,12 @@ const I18N = {
     upTagsPh:'경제,보도,중간속도',
     upAudio:'오디오 파일(복수 선택)', upText:'스크립트 파일(복수 선택, 선택사항)',
     upTextTip:'전문 1개=구간 길이 비율로 자동 분할(권장) / N개=파일명 순서 매칭 / 없음=ASR 자동 전사. 구간 이름은 01, 02…로 (10이 2보다 앞에 옴)',
+    upSelAud:(n,s)=>`오디오 ${n}개 선택, 이어붙이는 순서: ${s}`, upSelTxt:(n,s)=>`대본 ${n}개 선택, 대응 순서: ${s}`,
+    upNoneAud:'오디오 미선택', upNoneTxt:'대본 파일 없음',
+    upModeWhole:'구간 길이 비율로 자동 분할됩니다(권장)', upModeOne:'파일명 순서로 오디오와 1:1 대응됩니다', upModeAsr:'ASR로 자동 전사되어 대본이 채워집니다',
     upNote2:'메모(선택)', upSubmit:'업로드하고 분석',
     upDoing:'업로드 중\u2026 운율 분석은 백그라운드에서 진행됩니다',
+    upPct:(p,a,b)=>`업로드 중 ${p}% (${a} / ${b} MB)`,
     upDone:'업로드 완료 \u2014 운율 분석이 백그라운드에서 실행 중입니다',
     upFail:'업로드 실패',
     upNeed:'이름을 입력하고 오디오 파일을 하나 이상 선택하세요',
@@ -1017,8 +1061,12 @@ const I18N = {
     upTags:'タグ（カンマ区切り、任意）', upTagsPh:'経済,報道,中速',
     upAudio:'音声ファイル（複数可）', upText:'原稿ファイル（複数可、任意）',
     upTextTip:'全文1個=各区間の長さ比で自動分割(推奨) / N個=ファイル名順で対応 / 無し=ASR自動文字起こし。区間名は01,02…（10は2より前に並ぶ）',
+    upSelAud:(n,s)=>`音声 ${n}件選択、連結順: ${s}`, upSelTxt:(n,s)=>`原稿 ${n}件選択、対応順: ${s}`,
+    upNoneAud:'音声が未選択', upNoneTxt:'原稿ファイルなし',
+    upModeWhole:'区間の長さ比で自動分割されます（推奨）', upModeOne:'ファイル名順で音声と1対1対応します', upModeAsr:'ASRで自動文字起こしして原稿を補完します',
     upNote2:'メモ（任意）', upSubmit:'アップロードして分析',
     upDoing:'アップロード中\u2026韻律分析はバックグラウンドで数十秒かかります',
+    upPct:(p,a,b)=>`アップロード中 ${p}% (${a} / ${b} MB)`,
     upDone:'アップロード完了 \u2014 韻律分析をバックグラウンドで実行中',
     upFail:'アップロード失敗',
     upNeed:'名前を入力し、音声ファイルを1つ以上選んでください',
@@ -1587,13 +1635,19 @@ $('#upBack').onclick   = ()=>{ backCaseList(); };
 $('#upCancel').onclick = ()=>{ backCaseList(); };
 $('#upSubmit').onclick = submitCaseUpload;
 $('#csClose').onclick  = ()=>{ $('#caseMask').style.display='none'; stopCaseAudio(); };
-$('#csBack').onclick   = ()=>{ stopCaseAudio(); $('#caseDetail').style.display='none'; $('#caseTop').style.display='flex'; $('#caseList').style.display=''; };
+$('#csBack').onclick   = ()=>{ stopCaseAudio(); $('#caseDetail').style.display='none'; $('#caseTop').style.display='flex'; $('#caseList').style.display=''; caseScrollTop(); };
 $('#caseMask').onclick = e =>{ if(e.target.id === 'caseMask'){ $('#caseMask').style.display='none'; stopCaseAudio(); } };
 function stopCaseAudio(){ const a = $('#csAudio'); if(a){ a.pause(); a.removeAttribute('src'); a.load(); } }
 
 /* ---------- 案例上传 ----------
    上传后后端会自动起后台线程跑韵律六维拆解（server.CASE_PROSODY），
    所以这里不用再调 /analyze，回到列表等几秒刷新就能看到六维数据。 */
+/* 三个视图共用一个滚动容器，切换时必须回到顶部：
+   否则从列表底部点进详情，会直接落在「提交反馈」上，看不到音频和勾选区。 */
+function caseScrollTop(){
+  const b = $('#caseBody'); if(b) b.scrollTop = 0;
+}
+
 function showCaseUpload(){
   stopCaseAudio();
   $('#caseList').style.display='none';
@@ -1601,6 +1655,8 @@ function showCaseUpload(){
   $('#caseTop').style.display='none';
   $('#caseUpload').style.display='';
   $('#upErr').textContent=''; $('#upMsg').textContent='';
+  renderUpFiles();
+  caseScrollTop();
 }
 
 function backCaseList(){
@@ -1608,9 +1664,27 @@ function backCaseList(){
   $('#caseDetail').style.display='none';
   $('#caseTop').style.display='flex';
   $('#caseList').style.display='';
+  caseScrollTop();
   loadCases();
 }
 
+/* 选完文件立刻回显「实际会按什么顺序拼」——多段音频的自然序（01/02 vs 1/2/10）
+   是最容易踩的坑，只靠一行说明文字挡不住。 */
+const natKey = s => String(s).replace(/(\d+)/g, m => String(m).padStart(12, '0'));
+function renderUpFiles(){
+  const sortNat = arr => [...arr].map(f=>f.name).sort((a,b)=>natKey(a)<natKey(b)?-1:natKey(a)>natKey(b)?1:0);
+  const a = sortNat($('#upAudio').files || []), x = sortNat($('#upText').files || []);
+  $('#upAudioList').textContent = a.length ? t('upSelAud')(a.length, a.join(' → ')) : t('upNoneAud');
+  $('#upTextList').textContent  = x.length ? t('upSelTxt')(x.length, x.join(' → ')) : t('upNoneTxt');
+  $('#upTextMode').textContent  = x.length === 1 ? t('upModeWhole')
+                                : x.length  > 1  ? t('upModeOne') : t('upModeAsr');
+  $('#upTextMode').className = 'hint' + (x.length > 1 && a.length && x.length !== a.length ? ' warn' : '');
+}
+$('#upAudio').onchange = renderUpFiles;
+$('#upText').onchange  = renderUpFiles;
+
+/* 用 XHR 而不是 fetch：多段音频动辄几十 MB，fetch 拿不到上传进度，
+   用户只能盯着一行「上传中…」干等，会以为卡死。这里给真实百分比。 */
 async function submitCaseUpload(){
   const name = ($('#upName').value || '').trim();
   const aud  = $('#upAudio').files;
@@ -1627,11 +1701,23 @@ async function submitCaseUpload(){
   for(const f of aud) fd.append('files', f);
   for(const f of $('#upText').files) fd.append('text_files', f);
   try{
-    const r = await fetch('/api/cases', {method:'POST', body:fd});
-    if(!r.ok) throw new Error((await r.text()).slice(0, 200));
+    await new Promise((res, rej)=>{
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/cases');
+      xhr.upload.onprogress = e =>{
+        if(!e.lengthComputable) return;
+        const mb = e.loaded/1048576, tot = e.total/1048576;
+        $('#upMsg').textContent = t('upPct')(Math.round(e.loaded/e.total*100), mb.toFixed(1), tot.toFixed(1));
+      };
+      xhr.onload = ()=> xhr.status>=200 && xhr.status<300
+        ? res(xhr.responseText) : rej(new Error(xhr.responseText.slice(0,200)));
+      xhr.onerror = ()=> rej(new Error('network'));
+      xhr.send(fd);
+    });
     toast(t('upDone'));
     $('#upName').value=''; $('#upTags').value=''; $('#upNote').value='';
     $('#upAudio').value=''; $('#upText').value='';
+    renderUpFiles();
     backCaseList();
   }catch(e){
     $('#upErr').textContent = t('upFail') + '：' + (e.message || e);
@@ -1681,6 +1767,7 @@ async function openCase(cid){
   if(!c) return;
   CUR_CASE = c;
   $('#caseList').style.display='none'; $('#caseDetail').style.display='';
+  caseScrollTop();
   $('#csName').textContent = c.name || cid;
   $('#csMeta').textContent = t('caseMeta')(c.gender||'-', c.source, c.total_dur);
   $('#csErr').textContent = ''; $('#csNote').value = ''; $('#csSummary').textContent = '';
