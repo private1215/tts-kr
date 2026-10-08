@@ -64,7 +64,9 @@ def main():
     rows = {}
     for cid, short, gender, label in CASES:
         case_w = os.path.join(CASES_DIR, cid, "merged.wav")
-        prod_w = os.path.join(RT, f"{short}.wav")
+        # 🔴 中间 wav 必须带 prefix：不带的话第二次跑不同 prefix 会直接
+        #    复用上次的缓存文件，表现为"换了产物分数一模一样"，极难排查。
+        prod_w = os.path.join(RT, f"{a.prefix}_{short}.wav")
         if not os.path.exists(prod_w):
             prod = sorted(glob.glob(f"/mnt/tts/output/{a.prefix}-{short}/*.mp3"))
             if not prod:

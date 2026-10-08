@@ -277,6 +277,12 @@ PROSO_MED_FALLBACK_FEMALE = float(
 PROSO_MED_FALLBACK_DEFAULT = float(
     os.environ.get("TTS_PROSO_MED_DEFAULT", "196.2"))
 
+# 响度闭环死区（dB）：编完成品 mp3 实测 LUFS，偏差超过它才补增益重编。
+# 🔴 r25b 实测 0.5 太松：slowdyn / f0 基线平移会给成品引入 0.3~0.5 dB 的
+#    LUFS 偏差，正好落在死区里被放过 → lufs 项失分 3.3~8.3（权重 .06）。
+#    收紧到 0.15，代价只是多一次编码（几秒），且不兜圈子（最多重编一次）。
+LOUD_TOL = float(os.environ.get("TTS_LOUD_TOL", "0.15"))
+
 # ---- 瞬态整形：修「峰值因数 CF 比案例低」（r21 新增）----------------------
 # 唯一能抬峰值而不被响度归一 1:1 吃掉的办法（compand 向上扩展已证伪）。
 # 分性别是必须的：女声 CF 差 1.80 dB、男声只差 0.60 dB，差 3 倍，
@@ -1637,7 +1643,7 @@ async def run_job(job):
             if _tgt_lufs is not None:
                 try:
                     _il2, _tp2 = measure_lufs(mp3_abs)
-                    if _il2 is not None and abs(_il2 - _tgt_lufs) > 0.5:
+                    if _il2 is not None and abs(_il2 - _tgt_lufs) > LOUD_TOL:
                         _fix = _tgt_lufs - _il2
                         _gain_db += _fix
                         _encode_mp3(_gain_db)

@@ -54,11 +54,60 @@ ENABLED = os.environ.get("TTS_PEAK_FIT", "0").strip().lower() not in (
 # 🔴 安全阀：阈值低于此值就不再削。t=0.45 意味着 −7 dBFS 以上开始被压，
 #    再低就是整体压扁，听感会毁（r21 的教训：压包络 → 音色恶化）。
 KNEE_MIN = float(os.environ.get("TTS_PEAK_KNEE_MIN", "0.35"))
+# ---- r25b 新方案：拐点按分位数定 + 反解渐近上限 ------------------------
+# 拐点取 |x| 的这个分位数（默认 99.9% → 只有最响的 0.1% 样本被碰）
+PEAK_Q = float(os.environ.get("TTS_PEAK_Q", "0.999"))
+# 拐点上限 = PEAK_T_MAX × 目标（必须 < 1，否则无解：拐点必须低于目标峰值）
+PEAK_T_MAX = float(os.environ.get("TTS_PEAK_T_MAX", "0.97"))
+# mp3 编码过冲补偿：peakfit 作用在 wav 域，成品是 mp3，两者峰值不等。
+# ⚠️ 2026-10-07 实测推翻旧结论：lame **不是** +1.5 dB 过冲，而是 **−0.2~−0.3 dB**
+#    （wav -2.7 -> mp3 -2.9；wav -2.3 -> mp3 -2.6）。所以这里取负值：
+#    wav 域目标 = 成品目标 − OVERSHOOT_DB = 成品目标 + 0.25 dB。
+OVERSHOOT_DB = float(os.environ.get("TTS_PEAK_OVERSHOOT_DB", "-0.25"))
 
 
 def _out_peak(p, t):
-    """输入峰值 p、阈值 t 时，软削后的输出峰值。"""
+    """输入峰值 p、阈值 t 时，软削后的输出峰值（旧公式，渐近上限 1.0）。"""
     return t + (1.0 - t) * np.tanh((p - t) / (1.0 - t))
+
+
+def _out_peak_a(p, t, a):
+    """新公式：拐点 t，渐近上限 a（t < a < 1）。"""
+    u = a - t
+    return t + u * np.tanh((p - t) / u)
+
+
+def solve_asym(p, t, q, iters=60):
+    """已知拐点 t 和目标峰值 q，反解渐近上限 a，使 _out_peak_a(p, t, a) == q。
+
+    🔑 与旧 `solve_knee` 的区别：旧做法固定渐近上限 = 1.0 去反解**拐点**，
+    结果拐点必然被推到很低（实测掉到 KNEE_MIN=0.35，即 −9 dBFS 以上全压）
+    → 大面积改动能量分布上端 → 相对阈值 VAD 判句漂移（r24 就是这么崩的）。
+    这里反过来：**拐点由样本分位数直接指定**（只碰最响的一小撮），
+    拿渐近上限当自由度去凑目标峰值。
+    """
+    if not (t < q < p):
+        return None
+    # a→t+ 时输出→t；a→∞ 时输出→p。单调，可二分。
+    lo, hi = t + 1e-6, t + 4.0
+    if _out_peak_a(p, t, lo) > q:
+        return None
+    if _out_peak_a(p, t, hi) < q:
+        return None
+    for _ in range(iters):
+        m = 0.5 * (lo + hi)
+        if _out_peak_a(p, t, m) > q:
+            hi = m
+        else:
+            lo = m
+    return 0.5 * (lo + hi)
+
+
+def knee_by_quantile(x, q_target, hi_q=PEAK_Q, t_max=PEAK_T_MAX):
+    """按样本分位数定拐点：默认取 |x| 的 99.9 分位，且不超过 0.97×目标。"""
+    a = np.abs(np.asarray(x, dtype=np.float32))
+    t = float(np.quantile(a, hi_q))
+    return min(t, t_max * q_target), t
 
 
 def solve_knee(p, q, lo=None, hi=None, iters=40):
@@ -81,11 +130,16 @@ def solve_knee(p, q, lo=None, hi=None, iters=40):
     return 0.5 * (lo + hi)
 
 
+# 上一次 fit() 的诊断信息（给日志/离线试算看拐点到底落在哪）
+DIAG = {}
+
+
 def fit(x, target_db, knee_min=None):
     """把 x 的样本峰值软削到 target_db。**只压不抬**，返回新数组。
 
     取不到合适的阈值（目标太高 / 需要压得比安全阀还狠）就原样返回。
     """
+    DIAG.clear()
     if x is None or len(x) == 0 or target_db is None:
         return x
     y = np.asarray(x, dtype=np.float32)
@@ -95,15 +149,36 @@ def fit(x, target_db, knee_min=None):
     q = 10.0 ** (float(target_db) / 20.0)
     if p <= q:                       # 已经比目标还低，不动
         return x
-    kmin = KNEE_MIN if knee_min is None else knee_min
-    t = solve_knee(p, q, lo=kmin)
-    if t is None:
+    # ---- r25b：分位数拐点 + 反解渐近上限 --------------------------------
+    # wav 域目标要扣掉 mp3 过冲（成品口径才是验收口径，陷阱 #18）
+    q_wav = 10.0 ** ((float(target_db) - OVERSHOOT_DB) / 20.0)
+    if q_wav <= 0 or p <= q_wav:
         return x
-    a = np.abs(y)
-    over = a > t
+    t, t_raw = knee_by_quantile(y, q_wav)
+    a_cap = solve_asym(p, t, q_wav)
+    if a_cap is not None:
+        u = a_cap - t
+        over = np.abs(y) > t
+        if over.any():
+            z = np.where(over, t + u * np.tanh((np.abs(y) - t) / u), np.abs(y))
+            out = (np.sign(y) * z).astype(np.float32)
+            DIAG["knee"] = t
+            DIAG["asym"] = a_cap
+            DIAG["mode"] = "quant"
+            DIAG["t_raw"] = t_raw
+            return out
+    # ---- 旧方案兜底（渐近上限 1.0，反解拐点）----------------------------
+    kmin = KNEE_MIN if knee_min is None else knee_min
+    t2 = solve_knee(p, q, lo=kmin)
+    if t2 is None:
+        return x
+    over = np.abs(y) > t2
     if not over.any():
         return x
-    z = np.where(over, t + (1.0 - t) * np.tanh((a - t) / (1.0 - t)), a)
+    z = np.where(over, t2 + (1.0 - t2) * np.tanh((np.abs(y) - t2) / (1.0 - t2)),
+                 np.abs(y))
+    DIAG["knee"] = t2
+    DIAG["mode"] = "tanh1"
     return (np.sign(y) * z).astype(np.float32)
 
 
