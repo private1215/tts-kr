@@ -23,8 +23,9 @@ import argparse
 
 import torch
 
-# 训练检查点里只比原 llm.pt 多 epoch / step 两个键，直接顶替即可
-DROP_KEYS = ()
+# 训练检查点里比原 llm.pt 多 epoch / step 两个键。
+# 🔴 必须剔除后再保存：CosyVoice3 加载 llm.pt 用的是 strict=True，多键直接崩。
+DROP_KEYS = ("epoch", "step")
 
 
 def main():
@@ -62,8 +63,18 @@ def main():
     if isinstance(sd, dict) and "state_dict" in sd:
         sd = sd["state_dict"]
     keys = sorted(sd.keys())
-    extra = [k for k in keys if k in ("epoch", "step")]
+    extra = [k for k in keys if k in DROP_KEYS]
     print(f"  {len(keys)} 个键，其中 {extra} 是训练元信息")
+    # 🔴 必须真的删掉，不能只是打印出来。
+    #    CosyVoice3 的 model.py 用 `load_state_dict(..., strict=True)` 加载
+    #    llm.pt，多一个键就直接崩：
+    #      RuntimeError: Unexpected key(s) in state_dict: "epoch", "step"
+    #    2026-10-08 首次拿这个模型做 A/B 时才暴露——它表现为「服务 500 +
+    #    整任务静默降级成 Qwen 重出」，很容易被误读成 SFT 没效果。
+    for k in extra:
+        sd.pop(k, None)
+    if extra:
+        print(f"  ✅ 已剔除训练元信息 {extra}，剩 {len(sd)} 个键")
     dst = os.path.join(a.out, "llm.pt")
     if os.path.exists(dst) and not a.force:
         print("🔴 llm.pt 已存在，加 --force 覆盖")
