@@ -56,6 +56,30 @@ Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,garbage_collection_
 # 回滚（A/B 用，重启后恢复本文件的 1）：
 #    systemctl set-environment TTS_PROSO=0 && systemctl restart qwen-tts
 Environment=TTS_PROSO=1
+# ---- 慢尺度能量轮廓（slowdyn，r25 方案 B）--------------------------------
+# 治「AI 味」头号病因：我们句间能量没有段落结构（ac1 负、慢变占比只有案例的
+# 0.38~0.73 倍）。见 docs/AI味与语气漂移-根因诊断-2026-10-07.md。
+# 验收：与基线持平（-0.20，噪声内），但标杆女 +1.88，保留。
+# 回滚：systemctl set-environment TTS_SLOWDYN=0 && systemctl restart qwen-tts
+Environment=TTS_SLOWDYN=1
+# ---- PROSO 全局 f0 基线平移（r25 方案 C）❌ 已证伪，默认关 --------------
+# 我们句级 f0 中位比案例低 4.5~9.9%，但抬上去要付 tone（音色）的代价：
+# r25b 实测 tone 由 14.9~26.8 恶化到 24.7~34.6，均值 94.38 -> 93.65。
+# 🔑 根因：f0 基线**不进评分项**（B 量的是音高跨度不是基线），
+#    而 PSOLA 位移会让 LTAS 偏离案例 —— 花了 tone 的钱买不进分的东西。
+# 见 docs/r25-还原度验收与峰值修复-2026-10-08.md §1。
+Environment=TTS_PROSO_MED=0
+# ---- 峰值定点（r25 新算法）-----------------------------------------------
+# 把成品真峰值软削到案例库中位数（L1 最优）。r25d 实测均值 94.18 -> 95.30。
+# 🔴 r24 的旧算法已证伪（反解拐点必然掉到 -9 dBFS -> VAD 判句漂移 -> E/F 崩）；
+#    现在改为**拐点按样本分位数定（p99.9，只碰最响 0.1%）+ 反解渐近上限**，
+#    实测 E/F/C/tone/LUFS 全部纹丝不动。细节见 app/peakfit.py。
+# 回滚：systemctl set-environment TTS_PEAK_FIT=0 && systemctl restart qwen-tts
+Environment=TTS_PEAK_FIT=1
+# ---- 响度闭环死区（dB）---------------------------------------------------
+# 编完成品 mp3 实测 LUFS，偏差超过它才补增益重编。0.5 太松，slowdyn/f0 平移
+# 引入的 0.3~0.5 dB 偏差会落在死区里被放过。
+Environment=TTS_LOUD_TOL=0.15
 ExecStart=/mnt/tts/projects/qwen3-tts/venv/bin/python -u server.py
 Restart=always
 RestartSec=10
