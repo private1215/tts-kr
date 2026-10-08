@@ -88,21 +88,28 @@ def case_text(cid):
     return "\n".join(open(p, encoding="utf-8").read().strip() for p in segs)
 
 
-def submit_job(text, voice, title):
+def submit_job(text, voice, title, case_id=""):
     """提交生成任务。⚠️ 不能用 multipart（-F text=@file），那是文件上传，
     服务端 Form(str) 会报 "Input should be a valid string"。
 
     `title` 同时就是产物目录名（/mnt/tts/output/<title>/），所以带短名
     方便后面按目录取。mode 必须显式给 clone，否则走 custom 不会用参考音频。
+
+    `case_id`：对标案例。带上它，服务端全部目标值（峰值/响度/停顿/语速/PROSO）
+    就按**这条案例自身**取，而不是同性别案例库的中位数。验收时本来就是跟
+    这条案例比，所以带上是「生产口径=验收口径」；`--case 0` 可关掉做对照。
     """
-    return _post("/api/jobs", {
+    form = {
         "title": title,
         "text": text,
         "mode": "clone",
         "voice": voice,
         "language": "Korean",
         "speed": "1.0",
-    })
+    }
+    if case_id:
+        form["case_id"] = case_id
+    return _post("/api/jobs", form)
 
 
 def wait_job(jid, timeout=7200, poll=15):
@@ -195,6 +202,9 @@ def main():
                     "引擎由音色的 engine 字段决定，所以要跑 CosyVoice3 必须传一个 "
                     "engine=cosyvoice3 的临时音色，不能直接改 EL_male）")
     ap.add_argument("--cer", action="store_true", help="额外跑 ASR 回检（慢）")
+    ap.add_argument("--case", type=int, default=1,
+                    help="1=提交时带对标案例（生产目标=该案例自身值，默认）；"
+                         "0=不带（目标=同性别库中位数，做对照用）")
     ap.add_argument("--json", default="")
     a = ap.parse_args()
 
@@ -215,7 +225,8 @@ def main():
             title = (a.prefix or "eval5") + "-" + short
             txt = case_text(cid)
             print(f"  提交 {len(txt)} 字 -> {title}", flush=True)
-            job = submit_job(txt, voice, title)
+            job = submit_job(txt, voice, title,
+                             case_id=(cid if a.case else ""))
             jid = job.get("id") or job.get("job_id")
             st = wait_job(jid)
             print("  status", st.get("status"), flush=True)

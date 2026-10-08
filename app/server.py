@@ -1795,6 +1795,8 @@ async def worker():
     while True:
         job = await job_queue.get()
         try:
+            # 对标案例只在本任务内生效（worker 串行，不会有串台）
+            CUR_CASE["id"] = job.get("case_id") or None
             await run_job(job)
         except Exception as e:
             log.exception("任务失败")
@@ -1803,6 +1805,7 @@ async def worker():
             job["finished_at"] = time.time()
             persist_jobs()
         finally:
+            CUR_CASE["id"] = None
             # 双引擎显存串行收尾：本任务用过 CosyVoice3 就把 Qwen 恢复常驻，
             # 否则下个 Qwen 任务要等懒加载，Cosy 也会白占 3.2 GiB 直到空闲超时。
             if job.get("_used_cosy"):
@@ -2109,7 +2112,8 @@ async def create_job(request: Request,
                      emotion: str = Form(DEFAULT_EMOTION),
                      temperature: Optional[float] = Form(None),
                      subtalker_temperature: Optional[float] = Form(None),
-                     enhance: Optional[bool] = Form(None)):
+                     enhance: Optional[bool] = Form(None),
+                     case_id: str = Form("")):
     u = require(request)
     if temperature is not None and not (0.3 <= temperature <= 1.5):
         raise HTTPException(400, "temperature 需在 0.3~1.5 之间")
@@ -2141,6 +2145,12 @@ async def create_job(request: Request,
                      f"（超过 {REF_AUDIO_MAX_SEC:.0f}s，显存会暴涨、生成明显变慢）。"
                      f"请用原音频重新录入一次，系统会自动截取最佳片段")
 
+    # 对标案例（可选）：带上它，全部目标值就按**这条案例自身**取，
+    # 而不是同性别案例库的中位数。不传=沿用中位数，行为与以前完全一致。
+    case_id = (case_id or "").strip()
+    if case_id and case_id not in cases:
+        raise HTTPException(400, f"对标案例不存在：{case_id}")
+
     title = (title or "").strip() or text.strip().replace("\n", " ")[:24]
     jid = uuid.uuid4().hex[:12]
     job = {
@@ -2159,6 +2169,7 @@ async def create_job(request: Request,
         "speed": speed,
         "emotion": emotion,     # 员工只选情感，引擎由 EMOTION_PRESETS 自动分流
         "engine": EMOTION_PRESETS[emotion]["engine"],
+        "case_id": case_id or None,
         "temperature": temperature,
         # 韵律细节采样温度（模型第二路采样）。默认不传=沿用官方 0.9；
         # 只在实测确认不放大跑飞后才放开，见 tts_engine.GEN_SUBTALKER_TEMPERATURE。
@@ -2904,7 +2915,7 @@ def proso_targets(gender):
     if not PROSO_FROM_CASES:
         return fallback()
     vals = []
-    for c in _bench_cases(gender):     # 共用标杆筛选，见 CASE_BENCHMARK_TAG
+    for c in _pool_cases(gender):      # 分布类：用全集，不跟对标案例缩样本
         p = c.get("proso") or {}
         if p.get("A") is None or p.get("E") is None:
             continue
@@ -2924,11 +2935,23 @@ def proso_targets(gender):
     return a * ca, e * ce
 
 
-def _bench_cases(gender):
-    """标杆案例：优先只认打了「标杆」tag 的，否则回落同性别全部。
+# 当前任务指定的「对标案例」。worker 是**串行**循环（一次只跑一个 job），
+# 所以这里用普通全局变量就够，不需要 contextvars / 线程局部。
+# 🔴 用途：任务带了 case_id 时，所有目标值（峰值 / 响度 / 停顿分布 / 语速 /
+#    PROSO）都取**那一条案例自己的值**，而不是同性别案例库的**中位数**。
+#    因为评分是「跟那条案例比」，而生产一直按中位数调 —— 这个错位本身
+#    就是失分源（案例峰值彼此差 2.2 dB，L1 最优的中位数≠单案例最优）。
+# ⚠️ 不指定时保持原行为（库中位数），老任务零影响。
+CUR_CASE = {"id": None}
 
-    ⚠️ 三个目标值函数（pause / proso / loudness）必须共用这一套筛选，
-       否则「多上传案例 → 规律更稳」会变成「多上传案例 → 标杆被稀释」。
+
+def _pool_cases(gender):
+    """同性别白名单案例**全集**（不看 CUR_CASE）。
+
+    🔴 分布类目标（停顿样本 / PROSO）必须走这里，不能跟着对标案例缩到单条：
+    它们吃的是**样本量**而不是「更像哪一条」。实测（r26b）把停顿样本缩到
+    单案例 ~150 个后，分 8 桶做分位映射的边界抖动，D（3 秒窗 onset 密度
+    变异系数）从 7.6 / 17.7 涨到 12.8 / 26.1，把 peak+lufs 赚回来的全赔进去。
     """
     base = [c for c in cases.values()
             if c.get("gender") == gender
@@ -2939,6 +2962,23 @@ def _bench_cases(gender):
     tagged = [c for c in base
               if CASE_BENCHMARK_TAG in (c.get("tags") or "")]
     return tagged or base
+
+
+def _bench_cases(gender):
+    """标杆案例：任务指定了对标案例就只用它，否则回落同性别白名单全集。
+
+    🔴 只给**标量类**目标用（peak / lufs / cps）：这类目标「越像那条案例越好」，
+    且单案例值是确定的数。分布类目标（停顿 / PROSO）请用 `_pool_cases`。
+    """
+    _cid = CUR_CASE.get("id")
+    if _cid:
+        _c = cases.get(_cid)
+        if _c and _c.get("gender") == gender:
+            return [_c]
+        # 案例不存在 / 性别不匹配 → 不硬套，回落全集并留日志
+        log.warning("对标案例 %s 不可用（不存在或性别≠%s）-> 回落库中位数",
+                    _cid, gender)
+    return _pool_cases(gender)
 
 
 def pause_targets(gender):
@@ -2953,7 +2993,7 @@ def pause_targets(gender):
     if not PAUSE_FROM_CASES:
         return None
     out = []
-    for c in _bench_cases(gender):     # 共用标杆筛选，见 CASE_BENCHMARK_TAG
+    for c in _pool_cases(gender):      # 分布类：用全集，单案例样本量不够
         ps = c.get("pause_samples")
         if not ps:
             continue
@@ -2980,7 +3020,7 @@ def pause_density(gender):
     和验收脚本的 `pauses` 是同一个数。
     """
     tot_p = tot_c = 0
-    for c in _bench_cases(gender):
+    for c in _pool_cases(gender):
         p = (c.get("prosody") or {}).get("pauses")
         n = c.get("total_chars") or 0
         if p and n:
