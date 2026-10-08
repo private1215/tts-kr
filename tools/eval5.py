@@ -191,6 +191,9 @@ def main():
     ap.add_argument("--prefix", default="", help="已有产物前缀，如 r20")
     ap.add_argument("--submit", action="store_true", help="重新走线上生成")
     ap.add_argument("--only", default="", help="只跑部分短名，逗号分隔")
+    ap.add_argument("--voice", default="", help="覆盖 FIVE 里的音色（A/B 另一个引擎时用："
+                    "引擎由音色的 engine 字段决定，所以要跑 CosyVoice3 必须传一个 "
+                    "engine=cosyvoice3 的临时音色，不能直接改 EL_male）")
     ap.add_argument("--cer", action="store_true", help="额外跑 ASR 回检（慢）")
     ap.add_argument("--json", default="")
     a = ap.parse_args()
@@ -203,6 +206,8 @@ def main():
     for cid, short, gender, voice, label in FIVE:
         if a.only and short not in a.only.split(","):
             continue
+        if a.voice:
+            voice = a.voice
         print(f"\n=== {label} ({short}) ===", flush=True)
         prod_dir = os.path.join(OUT_DIR, (a.prefix + "-" + short) if a.prefix
                                 else ("eval5-" + short))

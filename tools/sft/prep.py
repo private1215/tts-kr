@@ -41,6 +41,9 @@ import soundfile as sf
 CASES_DIR = os.environ.get("TTS_CASES_DIR", "/mnt/tts/data/cases")
 # CosyVoice3 官方脚本把音频重采样到 16k
 SR = 16000
+# 🔴 Qwen3-TTS 的 codec pipeline **断言 24 kHz**，别的采样率会在训练深处崩，
+#    且没有任何提前报错。所以导出 Qwen 数据集时必须另写一份 24k。
+QWEN_SR = 24000
 # 切分目标/上限（秒）。15 秒是「参考音频甜点」，也是显存与上下文的折中
 TARGET_S = 10.0
 MAX_S = 15.0
@@ -180,7 +183,10 @@ def pack(spans, total_dur):
     return [(t, max(0.0, a - PAD), min(total_dur, b + PAD)) for t, a, b in chunks]
 
 
-def build(cases, out_dir, gender, holdout):
+def build(cases, out_dir, gender, holdout, qwen=None):
+    """qwen=None/False：只出 CosyVoice3 kaldi 四件套。
+    qwen={"ref": "self"|"voice"|"<路径>"}：额外出 Qwen3-TTS 的 train_raw.jsonl。
+    """
     os.makedirs(out_dir, exist_ok=True)
     recs = []
     for cid in cases:
@@ -234,6 +240,9 @@ def build(cases, out_dir, gender, holdout):
         os.makedirs(d, exist_ok=True)
         wd = os.path.join(d, "wav")
         os.makedirs(wd, exist_ok=True)
+        wd24 = os.path.join(d, "wav24k")
+        if qwen:
+            os.makedirs(wd24, exist_ok=True)
         wav_scp, text_f, utt2spk = [], [], []
         for i, r in enumerate(rs):
             uid = f"{name}_{r['cid'][:6]}_{i:05d}"
@@ -241,14 +250,28 @@ def build(cases, out_dir, gender, holdout):
             if getattr(x, "ndim", 1) > 1:
                 x = x.mean(axis=1)
             a, b = int(r["a"] * sr), int(r["b"] * sr)
-            y = x[max(0, a - int(PAD * sr)):min(len(x), b + int(PAD * sr))]
+            yraw = x[max(0, a - int(PAD * sr)):min(len(x), b + int(PAD * sr))]
             if sr != SR:
                 from math import gcd
                 from scipy.signal import resample_poly
                 g = gcd(int(sr), SR)
-                y = resample_poly(y, SR // g, int(sr) // g).astype(np.float32)
+                y = resample_poly(yraw, SR // g, int(sr) // g).astype(np.float32)
+            else:
+                y = yraw
             p = os.path.join(wd, uid + ".wav")
             sf.write(p, y, SR)
+            if qwen:
+                # 从**原始采样率**直接重采样到 24k，别从 16k 再升上去
+                # （等于先丢一次高频再插值回来）。
+                if sr != QWEN_SR:
+                    from math import gcd
+                    from scipy.signal import resample_poly
+                    g2 = gcd(int(sr), QWEN_SR)
+                    y24 = resample_poly(yraw, QWEN_SR // g2,
+                                        int(sr) // g2).astype(np.float32)
+                else:
+                    y24 = yraw
+                sf.write(os.path.join(wd24, uid + ".wav"), y24, QWEN_SR)
             wav_scp.append(f"{uid}\t{p}")
             text_f.append(f"{uid}\t{r['text']}")
             utt2spk.append(f"{uid}\t{spk}")
@@ -273,7 +296,116 @@ def build(cases, out_dir, gender, holdout):
               open(os.path.join(out_dir, "meta.json"), "w"),
               ensure_ascii=False, indent=1)
     print(f"\n✅ 数据集就绪：{out_dir}（dev 留一 = {dev_cid}）")
+    if qwen:
+        export_qwen(out_dir, qwen.get("ref", "self"), qwen.get("arg", ""))
     return out_dir
+
+
+def _case_dir_by_prefix(pref):
+    """uid 里只带 cid 前 6 位，靠前缀找回案例完整目录。"""
+    hits = [d for d in os.listdir(CASES_DIR)
+            if d.startswith(pref) and os.path.isdir(os.path.join(CASES_DIR, d))]
+    return os.path.join(CASES_DIR, hits[0]) if hits else None
+
+
+def _ref_wav_for(cid_pref, ref_dir):
+    """给一个案例截 13 秒参考音频（24k），音色与该案例自洽。"""
+    d = _case_dir_by_prefix(cid_pref)
+    if not d:
+        return None
+    src = None
+    for cand in ("merged.wav", "seg0.wav"):
+        p = os.path.join(d, cand)
+        if os.path.exists(p):
+            src = p
+            break
+    if src is None:
+        w = sorted(glob.glob(os.path.join(d, "*.wav")))
+        src = w[0] if w else None
+    if src is None:
+        return None
+    dst = os.path.join(ref_dir, cid_pref + ".wav")
+    if os.path.exists(dst):
+        return dst
+    x, sr = sf.read(src, dtype="float32")
+    if getattr(x, "ndim", 1) > 1:
+        x = x.mean(axis=1)
+    x = x[: int(13.0 * sr)]
+    if len(x) < sr:                      # 太短就不用它
+        return None
+    if sr != QWEN_SR:
+        from math import gcd
+        from scipy.signal import resample_poly
+        g = gcd(int(sr), QWEN_SR)
+        x = resample_poly(x, QWEN_SR // g, int(sr) // g).astype(np.float32)
+    sf.write(dst, x, QWEN_SR)
+    return dst
+
+
+def export_qwen(out_dir, ref_mode="self", ref_arg=""):
+    """把已生成的 24k wav 写成 Qwen3-TTS 的 train_raw.jsonl。
+
+    每行必须有 `audio` / `text` / `ref_audio` 三个字段（官方 README）。
+
+    ref_mode
+    --------
+    self   每条用它**所属案例**自己截的 13 秒参考段 → 音色自洽，
+           模型学到的是"这段话的韵律风格"，而不是被迫 fitting 一个外来音色。
+    voice  全部共用同一个 ref（ref_arg 给路径）→ 官方推荐，说话人一致性最好，
+           但 ref 与 audio 音色不一致时模型会被拉扯。
+    <路径> 同上，直接给路径。
+
+    🔴 官方 README 强烈建议所有样本共用同一个 ref_audio。**但那是为了训出
+       一个固定音色**；我们要的是把案例的**韵律风格**迁移到自己的克隆源上，
+       所以 self 与 voice 都得试，别默认盲信官方。
+    """
+    made = {}
+    ref_dir = os.path.join(out_dir, "ref24k")
+    os.makedirs(ref_dir, exist_ok=True)
+    for name in ("train", "dev"):
+        d = os.path.join(out_dir, name)
+        scp = os.path.join(d, "wav.scp")
+        txtf = os.path.join(d, "text")
+        if not os.path.exists(scp):
+            continue
+        texts = {}
+        for line in open(txtf, encoding="utf-8"):
+            if "\t" in line:
+                u, t = line.rstrip("\n").split("\t", 1)
+                texts[u] = t
+        lines, skipped = [], 0
+        for line in open(scp, encoding="utf-8"):
+            if "\t" not in line:
+                continue
+            uid, p16 = line.rstrip("\n").split("\t", 1)
+            # wav.scp 存的是 16k 路径，24k 版在同级 wav24k/ 下同名
+            p24 = os.path.join(os.path.dirname(p16), "..", "wav24k",
+                               os.path.basename(p16))
+            p24 = os.path.normpath(p24)
+            if not os.path.exists(p24):
+                skipped += 1
+                continue
+            cid6 = uid.split("_")[1] if uid.count("_") >= 2 else ""
+            if ref_mode == "self":
+                ref = made.get(cid6)
+                if ref is None:
+                    ref = _ref_wav_for(cid6, ref_dir)
+                    made[cid6] = ref
+            else:
+                ref = ref_arg or (ref_mode if os.path.exists(ref_mode) else "")
+            if not ref:
+                skipped += 1
+                continue
+            lines.append(json.dumps(
+                {"audio": p24, "text": texts.get(uid, ""), "ref_audio": ref},
+                ensure_ascii=False))
+        out = os.path.join(d, "train_raw.jsonl")
+        open(out, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+        print(f"  Qwen jsonl: {len(lines)} 条 -> {out}"
+              + (f"（跳过 {skipped} 条）" if skipped else ""))
+    json.dump({"ref_mode": ref_mode, "ref_arg": ref_arg},
+              open(os.path.join(out_dir, "qwen_meta.json"), "w"),
+              ensure_ascii=False, indent=1)
 
 
 def verify(out_dir, n=12):
@@ -307,7 +439,19 @@ def main():
     ap.add_argument("--cases", default="", help="案例 id 逗号分隔；默认取全部")
     ap.add_argument("--holdout", default="", help="留一验证用的案例 id")
     ap.add_argument("--verify", action="store_true")
+    ap.add_argument("--qwen", default="",
+                    help="额外导出 Qwen3-TTS 的 train_raw.jsonl（24k）。"
+                         "接 self=每条用本案例自截参考段（默认）/ voice:<wav路径>"
+                         "=全部共用该参考音频")
     a = ap.parse_args()
+    qwen = None
+    if a.qwen:
+        if a.qwen.startswith("voice:"):
+            qwen = {"ref": "voice", "arg": a.qwen.split(":", 1)[1]}
+        elif a.qwen.startswith("/"):
+            qwen = {"ref": "voice", "arg": a.qwen}
+        else:
+            qwen = {"ref": "self", "arg": ""}
     if a.verify:
         verify(a.out)
         return
@@ -315,7 +459,7 @@ def main():
         d for d in os.listdir(CASES_DIR)
         if os.path.isdir(os.path.join(CASES_DIR, d)))
     print(f"{len(cases)} 个案例 -> {a.out}")
-    build(cases, a.out, a.gender, a.holdout or None)
+    build(cases, a.out, a.gender, a.holdout or None, qwen)
 
 
 if __name__ == "__main__":
