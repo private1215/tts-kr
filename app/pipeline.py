@@ -29,8 +29,23 @@ KO_NUMBER_UNIT = [
 
 
 def normalize_korean(text: str) -> str:
-    """文本规整：把数字+单位、缩写展开成自然口语读法，减少机械感。"""
+    """文本规整：把数字+单位、缩写展开成自然口语读法，减少机械感。
+
+    🔴 2026-10-09：人工盲听点名"数字读法"是 P0。原来这里只把 % 换成
+    "퍼센트"，数字仍是阿拉伯数字（`35,000원` 原样进模型），读法全靠模型
+    临场判断 → 长数字上容易加速/重复/读错。
+    新增 `app/konum.py` 做真正的韩语数字读法转换，由 `TTS_KO_NUM=1` 控制。
+    **默认关闭**：先做同文案 A/B（开/关）验证数字准确率确实提升，再决定默认开启。
+    """
     t = text.strip()
+    try:
+        from app.konum import normalize_numbers, enabled
+        if enabled():
+            t = normalize_numbers(t)
+    except Exception as e:  # 文本前端绝不能因为规整失败而让整单失败
+        import logging
+        logging.getLogger("tts.pipeline").warning(
+            "ko number normalize 失败，按原文继续: %s", e)
     for pat, rep in KO_NUMBER_UNIT:
         t = pat.sub(rep, t)
     # 多余空白

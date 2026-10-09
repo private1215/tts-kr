@@ -67,6 +67,9 @@ def main():
     ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--out", default=os.environ.get(
         "TTS_LORA_AB_OUT", "/mnt/tts/diag/lora_ab"))
+    ap.add_argument("--skip-base", action="store_true",
+                    help="跳过 base 生成（base 结果已在同 seed 下测过，"
+                         "只需补 adapter 时用它省时间）")
     ap.add_argument("--max-new-tokens", type=int, default=800,
                     help="生成上限（12Hz ≈ ×1/12 秒）。🔴 LoRA 早期检查点"
                          "可能退化 EOS 行为不停嘴，必须设上限防跑飞。")
@@ -100,14 +103,17 @@ def main():
 
     # ---------- 先跑完所有 base ----------
     paths = {}
-    print("== 生成 base ==", flush=True)
-    for i, it in items:
-        w, sr = gen(it["text"])
-        p = os.path.join(args.out, f"{args.speaker}_{i}_base.wav")
-        sf.write(p, w, sr)
-        paths[(i, "base")] = (p, round(len(w) / sr, 1))
-        print(f"  base[{i}] {len(w)/sr:.1f}s -> {p}", flush=True)
-    print("base 全部落盘（后续失败也保留）", flush=True)
+    if args.skip_base:
+        print("== 跳过 base（沿用同 seed 下已测过的 base 结果）==", flush=True)
+    else:
+        print("== 生成 base ==", flush=True)
+        for i, it in items:
+            w, sr = gen(it["text"])
+            p = os.path.join(args.out, f"{args.speaker}_{i}_base.wav")
+            sf.write(p, w, sr)
+            paths[(i, "base")] = (p, round(len(w) / sr, 1))
+            print(f"  base[{i}] {len(w)/sr:.1f}s -> {p}", flush=True)
+        print("base 全部落盘（后续失败也保留）", flush=True)
 
     # ---------- 再注入 adapter 跑 lora ----------
     if args.ckpt:

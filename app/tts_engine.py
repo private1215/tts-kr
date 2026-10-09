@@ -339,6 +339,20 @@ class TTSEngine:
                 pass
 
         self.model = Qwen3TTSModel.from_pretrained(self.model_dirs[variant], **kwargs)
+        # ---- LoRA adapter（可选，默认不启用）----
+        # 员工拿到的音频一直由 base 生成；要把训练成果真正落到线上，
+        # 必须在**生产加载路径**注入 adapter，光在离线脚本里验证没用。
+        # 开关：TTS_LORA_ADAPTER=<ckpt 目录>；不设置则行为与之前完全一致。
+        _ad = os.environ.get("TTS_LORA_ADAPTER", "").strip()
+        if _ad:
+            try:
+                from peft import PeftModel
+                PeftModel.from_pretrained(self.model.model.talker.model, _ad,
+                                          is_trainable=False)
+                log.info("已注入 LoRA adapter: %s", _ad)
+            except Exception as e:
+                # 🔴 注入失败绝不能让服务起不来：回退到 base 继续提供服务
+                log.error("LoRA adapter 注入失败，回退 base: %s", e)
         self.variant = variant
         self.load_time = time.time() - t0
         self._languages = None
