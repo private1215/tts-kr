@@ -99,7 +99,19 @@ def _resynth(x, sr, t, f, is_male=None, step=STEP):
     return np.asarray(y.values[0], dtype=x.dtype)
 
 
-def shape(t, f, segs_sec, k_a=1.0, k_tail=1.0, tail_sec=TAIL_SEC, drop_st=0.0):
+def _jitter(i: int) -> float:
+    """按句序号给出 **确定性** 的 −1~+1 抖动（不用 random，保证同输入同输出）。
+
+    🔴 为什么必须抖：第一版对所有句子施加**相同**的 drop_st，实测把
+    句尾多样性 E 从偏差 1.15% 打到 9.50% —— 每句都压一样多，句尾就
+    千篇一律了。真人不会这样：句尾降幅本来就随句式、语气、信息量变化。
+    """
+    v = (np.sin(i * 12.9898) * 43758.5453) % 1.0
+    return float(v) * 2.0 - 1.0
+
+
+def shape(t, f, segs_sec, k_a=1.0, k_tail=1.0, tail_sec=TAIL_SEC, drop_st=0.0,
+          drop_jitter=0.35):
     """按句缩放 F0。返回新的 f 数组。
 
     segs_sec: [(start_sec, end_sec), ...]，来自 prosody_report.sent_windows
@@ -134,7 +146,9 @@ def shape(t, f, segs_sec, k_a=1.0, k_tail=1.0, tail_sec=TAIL_SEC, drop_st=0.0):
             w_a = np.clip((t[m] - (e0 - tw)) / tw, 0.0, 1.0)
             w_a = w_a * w_a * (3.0 - 2.0 * w_a)      # smoothstep
         kk = k_a * (k_tail ** w_a)
-        out[m] = c + (semi[m] - c) * kk - drop * w_a
+        # 每句的下降量在 ±drop_jitter 内抖动，保住句尾多样性（见 _jitter 注释）
+        d_i = drop * (1.0 + drop_jitter * _jitter(si))
+        out[m] = c + (semi[m] - c) * kk - d_i * w_a
     _ = starts, ends, si                              # 占位：保留结构便于扩展
     return np.power(2.0, out / 12.0)
 

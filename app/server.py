@@ -52,6 +52,11 @@ try:
 except Exception as _e:   # 没装就优雅降级，不影响主链路
     proso = None
     log.warning("proso 未启用（parselmouth 不可用）: %r", _e)
+try:
+    import breath          # 呼吸合成（r27，见 app/breath.py）
+except Exception as _e:
+    breath = None
+    log.warning("breath 未启用: %r", _e)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("server")
@@ -1522,6 +1527,24 @@ async def run_job(job):
                                               1.16)))
             except Exception as _e:
                 log.warning("任务 %s 第 %d 块 韵律移植失败（跳过）: %r",
+                            jid, ci + 1, _e)
+
+        # ---- 呼吸注入（r27）------------------------------------------------
+        # 🔴 位置有两个硬约束，顺序错了就白做：
+        #   1. 必须在 **PBA 之后** —— PBA align/reshuffle 会重写停顿，
+        #      插早了会被整段覆盖（第一版插在 concat_segments 里，实测只有
+        #      0.3 次/分，就是这个原因）。
+        #   2. 必须在 **proso 之后** —— PSOLA 重合成会重建整段波形，
+        #      静音里的呼吸可能被抹掉。
+        # 实现上是"叠加"而非"替换"，不改长度，所以后面的响度归一、
+        # 首尾静音、ffmpeg 编码都不受影响。
+        if breath is not None and getattr(breath, "ENABLED", False) \
+                and len(chunk_text) >= PBA_MIN_CHARS:
+            try:
+                _brng = random.Random((int(job.get("seed") or 42)) * 1000 + ci)
+                audio = breath.inject(audio, sr, _brng)
+            except Exception as _e:
+                log.warning("任务 %s 第 %d 块 呼吸注入失败（跳过）: %r",
                             jid, ci + 1, _e)
 
         # ---- 增益：优先按实测响度反算，量不出来才用静态常数 ----------------
