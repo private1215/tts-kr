@@ -88,7 +88,7 @@ def case_text(cid):
     return "\n".join(open(p, encoding="utf-8").read().strip() for p in segs)
 
 
-def submit_job(text, voice, title, case_id=""):
+def submit_job(text, voice, title, case_id="", seed=None):
     """提交生成任务。⚠️ 不能用 multipart（-F text=@file），那是文件上传，
     服务端 Form(str) 会报 "Input should be a valid string"。
 
@@ -109,6 +109,9 @@ def submit_job(text, voice, title, case_id=""):
     }
     if case_id:
         form["case_id"] = case_id
+    # 拒绝采样实验用：不传就是服务端默认 42
+    if seed is not None:
+        form["seed"] = str(int(seed))
     return _post("/api/jobs", form)
 
 
