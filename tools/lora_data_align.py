@@ -206,6 +206,10 @@ def build(args):
     cases = cases if isinstance(cases, list) else list(
         cases.get("cases", cases.values()))
     mine = [c for c in cases if (c.get("name") or "").strip() == args.src_speaker]
+    # 🔴 同名不同性别必须分开：案例库里 SOLA 有 20 条女声 + 1 条男声，
+    #    混进同一说话人训练集等于互相污染（不同性别不可能是同一人）。
+    if args.gender:
+        mine = [c for c in mine if c.get("gender") == args.gender]
     if args.limit:
         mine = mine[:args.limit]
     print(f"候选案例 {len(mine)} 条", flush=True)
@@ -366,6 +370,8 @@ def main():
                     help="输出说话人名（= LORA_ROOT 下的目录名，训练时 --speaker 用它）")
     ap.add_argument("--src-speaker", default="yohan",
                     help="案例库里的说话人名，用于取 ref 与该说话人的案例")
+    ap.add_argument("--gender", default="",
+                    help="只取该性别的案例（同名不同性别必须分开训练）")
     ap.add_argument("--limit", type=int, default=0, help="只处理前 N 个案例（试跑用）")
     ap.add_argument("--holdout", default="", help="覆盖验证集案例 id")
     ap.add_argument("--sent-cover", type=float, default=SENT_COVER_MIN,
