@@ -687,6 +687,8 @@ const I18N = {
     voiceSrc:(d)=>`原音频 ${d}s`, voiceClip:(a,b)=>` · 自动截取 ${a}s–${b}s`,
     voiceReady:'可用', voiceNoText:'缺文字稿',
     vPlay:'试听', vViewText:'查看文字稿', vHideText:'收起',
+    cmpCase:'并排听案例', cmpCaseName:(n)=>`案例原声：${n}`,
+    cmpTip:'上面是本次成品，下面是案例原声。建议同一段来回切换着听，重点听音色、轻重起伏和句尾落音。',
     delVoice:'删除', confirmDelVoice:(n)=>`删除音色「${n}」？参考音频会一起删掉，删除后需要重新录入才能再用。`,
     upload:'上传录入', queue:'任务队列', noJobs:'暂无任务', scopeMine:'我的', scopeAll:'全部',
     searchPh:'搜索标题或内容…', allStatus:'全部状态', allOwner:'全部成员',
@@ -698,6 +700,11 @@ const I18N = {
     qwenSpkNote:(n)=>`当前：${n} —— 千问出厂音色，未针对案例调优，还原度通常比案例克隆低 2~3 分`,
     gpickBest:(n)=>`当前：${n} —— 该性别下实测最佳，自动对标它本人的案例取目标值`,
     gpickOther:(n,b)=>`当前：${n}${b?`（非最佳，最佳是「${b}」）`:''}`,
+    caseBrief:(n,d)=>`${n}（${d}）`,
+    hintBestLine:'该性别下实测最佳，自动对标这位主播本人的案例取目标值',
+    hintOtherLine:(b)=>`非最佳${b?`，最佳是「${b}」`:''}`,
+    hintBench:(c)=>`对标案例：${c}`,
+    hintRefDur:(d)=>`参考音频 ${d} 秒`,
     needText:'请先粘贴文案', needVoice:'请先在右侧录入一个音色',
     needName:'请填写音色名称并选择音频', uploading:'上传中...',
     enrolled:(n,d)=>`已录入：${n}（${d}s）`,
@@ -818,6 +825,8 @@ const I18N = {
     voiceSrc:(d)=>`source ${d}s`, voiceClip:(a,b)=>` · auto-cut ${a}s–${b}s`,
     voiceReady:'ready', voiceNoText:'no transcript',
     vPlay:'Preview', vViewText:'Transcript', vHideText:'Collapse',
+    cmpCase:'Play case side by side', cmpCaseName:(n)=>`Case audio: ${n}`,
+    cmpTip:'Top is your output, bottom is the reference case. Switch back and forth on the same passage — listen for timbre, dynamics, and sentence-final pitch.',
     delVoice:'Delete', confirmDelVoice:(n)=>`Delete voice "${n}"? The reference audio is removed too — you must enroll again to use it.`,
     upload:'Enroll', queue:'Job queue', noJobs:'No jobs yet', scopeMine:'Mine', scopeAll:'All',
     searchPh:'Search title or text…', allStatus:'All status', allOwner:'All members',
@@ -829,6 +838,11 @@ const I18N = {
     qwenSpkNote:(n)=>`Now: ${n} — a stock Qwen voice, not tuned to our cases; usually 2~3 points below case clones`,
     gpickBest:(n)=>`Now: ${n} — best tested for this gender; targets are taken from that speaker's own case`,
     gpickOther:(n,b)=>`Now: ${n}${b?` (not the best; best is "${b}")`:''}`,
+    caseBrief:(n,d)=>`${n} (${d})`,
+    hintBestLine:'Best tested for this gender; targets come from this speaker’s own case',
+    hintOtherLine:(b)=>`Not the best${b?`; best is "${b}"`:''}`,
+    hintBench:(c)=>`Benchmarked against: ${c}`,
+    hintRefDur:(d)=>`Reference audio ${d}s`,
     needText:'Please paste a script first', needVoice:'Please enroll a voice on the right first',
     needName:'Please enter a voice name and choose an audio file', uploading:'Uploading...',
     enrolled:(n,d)=>`Enrolled: ${n} (${d}s)`,
@@ -949,6 +963,8 @@ const I18N = {
     voiceSrc:(d)=>`원본 ${d}초`, voiceClip:(a,b)=>` · 자동 절단 ${a}초~${b}초`,
     voiceReady:'사용 가능', voiceNoText:'대사 없음',
     vPlay:'미리 듣기', vViewText:'대사 보기', vHideText:'접기',
+    cmpCase:'케이스 함께 듣기', cmpCaseName:(n)=>`케이스 원본: ${n}`,
+    cmpTip:'위는 생성 결과, 아래는 기준 케이스입니다. 같은 구간을 번갈아 들으며 음색·강약·문장 끝 억양을 비교해 보세요.',
     delVoice:'삭제', confirmDelVoice:(n)=>`음성 "${n}"을(를) 삭제할까요? 참고 음성도 함께 삭제되며, 다시 사용하려면 재등록해야 합니다.`,
     upload:'등록하기', queue:'작업 대기열', noJobs:'작업이 없습니다', scopeMine:'내 작업', scopeAll:'전체',
     searchPh:'제목이나 내용 검색…', allStatus:'전체 상태', allOwner:'전체 멤버',
@@ -960,6 +976,11 @@ const I18N = {
     qwenSpkNote:(n)=>`현재: ${n} — 케이스에 맞춰 조정되지 않은 Qwen 기본 음성입니다. 재현도는 보통 케이스 클론보다 2~3점 낮습니다`,
     gpickBest:(n)=>`현재: ${n} — 이 성별에서 실측 최고. 목표값은 화자 본인의 케이스에서 가져옵니다`,
     gpickOther:(n,b)=>`현재: ${n}${b?` (최고 아님, 최고는 "${b}")`:''}`,
+    caseBrief:(n,d)=>`${n}(${d})`,
+    hintBestLine:'이 성별에서 실측 최고이며, 목표값은 이 화자 본인의 케이스에서 가져옵니다',
+    hintOtherLine:(b)=>`최고 아님${b?`, 최고는 "${b}"`:''}`,
+    hintBench:(c)=>`비교 기준 케이스: ${c}`,
+    hintRefDur:(d)=>`참고 오디오 ${d}초`,
     needText:'원고를 먼저 붙여넣어 주세요', needVoice:'오른쪽에서 음성을 먼저 등록해 주세요',
     needName:'음성 이름과 오디오 파일을 선택해 주세요', uploading:'업로드 중...',
     enrolled:(n,d)=>`등록 완료: ${n} (${d}초)`,
@@ -1079,6 +1100,8 @@ const I18N = {
     voiceSrc:(d)=>`元 audio ${d}秒`, voiceClip:(a,b)=>` · 自動切り出し ${a}秒〜${b}秒`,
     voiceReady:'使用可', voiceNoText:'書き起こしなし',
     vPlay:'試聴', vViewText:'書き起こし', vHideText:'閉じる',
+    cmpCase:'ケースと聴き比べ', cmpCaseName:(n)=>`ケース原音: ${n}`,
+    cmpTip:'上が今回の生成結果、下が基準ケースです。同じ区間を聞き比べ、音色・強弱・文末のイントネーションを確認してください。',
     delVoice:'削除', confirmDelVoice:(n)=>`音色「${n}」を削除しますか？参照音声も一緒に削除され、再利用には再登録が必要です。`,
     upload:'登録', queue:'ジョブキュー', noJobs:'ジョブはありません', scopeMine:'自分の', scopeAll:'すべて',
     searchPh:'タイトル・本文を検索…', allStatus:'すべての状態', allOwner:'全メンバー',
@@ -1090,6 +1113,11 @@ const I18N = {
     qwenSpkNote:(n)=>`現在: ${n} — ケースに合わせて調整していない Qwen 標準音色です。再現度は通常ケースクローンより 2~3 点低くなります`,
     gpickBest:(n)=>`現在: ${n} — この性別で実測最高。目標値は話者本人のケースから取得します`,
     gpickOther:(n,b)=>`現在: ${n}${b?`（最高ではありません。最高は「${b}」）`:''}`,
+    caseBrief:(n,d)=>`${n}（${d}）`,
+    hintBestLine:'この性別で実測最高。目標値はこの話者本人のケースから取得します',
+    hintOtherLine:(b)=>`最高ではない${b?`、最高は「${b}」`:''}`,
+    hintBench:(c)=>`比較基準ケース: ${c}`,
+    hintRefDur:(d)=>`参照音声 ${d} 秒`,
     needText:'先に原稿を貼り付けてください', needVoice:'先に右側で音色を登録してください',
     needName:'音色名と音声ファイルを指定してください', uploading:'アップロード中...',
     enrolled:(n,d)=>`登録完了: ${n}（${d}秒）`,
@@ -1441,16 +1469,54 @@ function applyVsel(v){
   syncGender();
   updateVselHint();
 }
+/* 这条任务对标的是哪条案例：任务自己存了就用存的（历史任务），
+   否则按音色元数据里登记的 bench_case 推——和生成时用的是同一个值。 */
+function benchCaseOf(j){
+  if(j && j.bench_case) return j.bench_case;
+  const info = (META.info || {})[(j && j.voice) || ''] || {};
+  return info.bench_case || '';
+}
+
+/* 案例库索引（按 id 查）。注意别和上面案例弹窗的 CASES 数组重名。
+   音色要对标哪条案例，得把案例名/时长显示给员工看，否则「自动对标」
+   是个黑盒，员工不知道自己会拿到什么。 */
+let CASEINDEX = {};
+async function loadCaseIndex(){
+  try{
+    const r = await api('/api/cases');
+    if(!r.ok) return;
+    const j = await r.json();
+    const arr = Array.isArray(j) ? j : (j.cases || j.items || []);
+    const m = {};
+    arr.forEach(c => { if(c && c.id) m[c.id] = c; });
+    CASEINDEX = m;
+  }catch(e){}
+}
+function caseBrief(cid){
+  const c = CASEINDEX[cid];
+  if(!c) return '';
+  const nm = c.name || cid;
+  const d = Number(c.total_dur || 0);
+  return d > 0 ? t('caseBrief')(nm, fmtDur(d)) : nm;
+}
 function updateVselHint(){
   const el = $('#vselHint'); if(!el) return;
   const v = $('#vsel') ? $('#vsel').value : '';
-  if(!v){ el.textContent = ''; return; }
+  if(!v){ el.innerHTML = ''; return; }
+  const nm = voiceName(v);
   if((META.voices || []).indexOf(v) >= 0){
     const g = genderOf(v), best = (META.best_clone || {})[g] || '';
-    el.textContent = v === best ? t('gpickBest')(voiceName(v))
-                                : t('gpickOther')(voiceName(v), best ? voiceName(best) : '');
+    const info = (META.info || {})[v] || {};
+    const bc = info.bench_case || '';
+    const ref = Number(info.dur || 0);
+    let html = `<div style="font-weight:500">${esc(nm)}</div>`;
+    html += `<div>${esc(v === best ? t('hintBestLine') : t('hintOtherLine')(best ? voiceName(best) : ''))}</div>`;
+    if(bc) html += `<div>${esc(t('hintBench')(caseBrief(bc)))}</div>`;
+    if(ref > 0) html += `<div>${esc(t('hintRefDur')(ref.toFixed(1)))}</div>`;
+    el.innerHTML = html;
   }else{
-    el.textContent = t('qwenSpkNote')(spkName(v));
+    el.innerHTML = `<div style="font-weight:500">${esc(spkName(v))}</div>`
+                 + `<div>${esc(t('qwenSpkNote')(spkName(v)))}</div>`;
   }
 }
 function markGender(g){
@@ -1461,15 +1527,21 @@ function syncGender(){
   const g = genderOf($('#voice').value);
   markGender(g); updateGpick();
 }
+/* 主界面的效果预览：员工点完男/女，提交前就要知道「会拿到什么」——
+   是哪个音色、是不是实测最佳、对标哪条案例、参考音频多长。 */
 function updateGpick(){
   const x = $('#voice').value, g = genderOf(x);
   const el = $('#gpick'); if(!el) return;
-  if(!x){ el.textContent = ''; return; }
+  if(!x){ el.innerHTML = ''; return; }
   const best = (META.best_clone || {})[g] || '';
-  // 说清楚「选了这个会出什么」：是不是最佳、对标哪条案例
-  const isBest = x === best;
-  el.textContent = isBest ? t('gpickBest')(voiceName(x))
-                          : t('gpickOther')(voiceName(x), best ? voiceName(best) : '');
+  const info = (META.info || {})[x] || {};
+  const bc = info.bench_case || '';
+  const ref = Number(info.dur || 0);
+  let html = `<div style="font-weight:500">${esc(voiceName(x))}</div>`;
+  html += `<div>${esc(x === best ? t('hintBestLine') : t('hintOtherLine')(best ? voiceName(best) : ''))}</div>`;
+  if(bc) html += `<div>${esc(t('hintBench')(caseBrief(bc)))}</div>`;
+  if(ref > 0) html += `<div>${esc(t('hintRefDur')(ref.toFixed(1)))}</div>`;
+  el.innerHTML = html;
 }
 
 function renderVoices(){
@@ -1518,6 +1590,7 @@ async function loadMeta(){
   // 音色详情（时长/文字稿/截取来源）单独一份，用于右侧音色列表
   try{ META.info = await (await api('/api/voices')).json(); }catch(e){ META.info = META.info || {}; }
   renderSpeakers(); renderLanguages(); renderVoices(); renderVoiceList(); renderVsel();
+  await loadCaseIndex(); updateGpick(); updateVselHint();   /* 案例名要等这一份才显示得出来 */
   renderSpeeds(); renderEmotions();
 }
 /* 情感档位：员工只选语气，引擎/指令/参数由后端 EMOTION_PRESETS 自动分流 */
@@ -2296,7 +2369,15 @@ function updateJob(el, j){
     if(files.length > 1){
       mediaHtml += `<div class="stat">${t('chunkHint')(files.length)}</div>`;
     }
-    m.innerHTML = mediaHtml + `
+    /* 「并排听案例」：指标只说「差多少」，耳朵才知道「差在哪」。
+       取这个音色对标的那条案例（音色元数据的 bench_case），
+       和成品并排放两个播放器，员工不用去别处翻案例库。 */
+    const _cid = benchCaseOf(j);
+    m.innerHTML = mediaHtml
+      + (_cid ? `<div class="row" style="margin-top:6px">
+           <button class="mini" data-cmp="${j.id}" data-cid="${esc(_cid)}">${t('cmpCase')}</button>
+         </div><div class="cmpbox" id="cmp_${j.id}" style="display:none;margin-top:8px"></div>` : '')
+      + `
       <div class="row" style="margin-top:6px">
         ${j.wav?`<a href="/api/download/${j.wav}" download><button>${t('dlWav')}</button></a>`:''}
         ${(j.mp3 && !files.length)?`<a href="/api/download/${j.mp3}" download><button>${t('dlMp3')}</button></a>`:''}
@@ -2319,6 +2400,21 @@ function updateJob(el, j){
         const n = jobNodes.get(j.id); if(n){ n.el.remove(); jobNodes.delete(j.id); }
         loadStats();
       }catch(e){}
+    };
+    const cb = m.querySelector('[data-cmp]');
+    if(cb) cb.onclick = ()=>{
+      const box = m.querySelector('#cmp_' + j.id);
+      if(!box) return;
+      const cid = cb.dataset.cid;
+      if(box.style.display === 'none'){
+        box.innerHTML = `
+          <div class="stat" style="margin-bottom:4px">${esc(t('cmpCaseName')((CASEINDEX[cid]||{}).name || cid))}</div>
+          <audio controls preload="metadata" src="/api/cases/${encodeURIComponent(cid)}/audio"></audio>
+          <div class="hint">${esc(t('cmpTip'))}</div>`;
+        box.style.display = '';
+      }else{
+        box.style.display = 'none'; box.innerHTML = '';
+      }
     };
     const rb = m.querySelector('[data-retry]');
     if(rb) rb.onclick = async ()=>{

@@ -5,6 +5,7 @@
 账号：管理员 admin 可创建员工账号、查看全部任务；员工只能看自己的。
 """
 import os
+import sys
 import io
 import csv
 import re
@@ -2752,6 +2753,89 @@ async def set_voice_meta(request: Request,
         log.info("音色 %s 元数据更新: %s", name, changed)
     return {"ok": True, "name": name, "changed": changed,
             "gender": v.get("gender"), "bench_case": v.get("bench_case")}
+
+
+def _script_env():
+    """给子进程用的环境：继承当前环境，但屏蔽 GPU。
+
+    mkcase_voices 的 window 模式是纯 CPU（不加载 campplus 说话人模型），
+    这里再显式屏蔽 CUDA 是双保险 —— 万一以后切回质心模式，也不会和正在
+    生成的任务抢显存（3060 只有 12G，抢了就是 OOM）。
+    """
+    e = os.environ.copy()
+    e["CUDA_VISIBLE_DEVICES"] = ""
+    return e
+
+
+@app.post("/api/voices/reload")
+async def reload_voices(request: Request):
+    """把 voices.json 重新读进内存。**立即生效，不用重启服务**。
+
+    什么时候需要：外部脚本（tools/mkcase_voices.py 批量灌案例音色）直接改了
+    voices.json，而服务内存里还是旧的一份 —— 不 reload 的话新音色要等下次
+    重启才出现，而且服务下一次 save_voices 会用旧内存**覆盖掉**脚本的写入。
+    所以「外部改了文件」之后必须调这个，顺序不能反。
+    """
+    require(request)
+    before = set(voices.keys())
+    fresh = load_voices()
+    # 🔴 必须原地更新：voices 是模块级 dict，别处拿的是同一个引用。
+    #    写成 `voices = load_voices()` 只会换掉这个局部名字，别人看到的还是旧的。
+    voices.clear()
+    voices.update(fresh)
+    after = set(voices.keys())
+    log.info("音色表已重载: %d -> %d 个，新增 %s", len(before), len(after),
+             sorted(after - before) or "无")
+    return {"ok": True, "count": len(voices),
+            "added": sorted(after - before),
+            "removed": sorted(before - after)}
+
+
+@app.post("/api/cases/extract-voices")
+async def extract_case_voices(request: Request,
+                              min_cases: int = Form(3)):
+    """从案例库批量生成克隆音色，员工不必自己录音。**跑完自动进内存**。
+
+    流程：调 tools/mkcase_voices.py（按说话人聚类 → 挑最佳 15 秒 → 对齐文字稿
+    → 写 voices.json），然后立刻 reload。
+
+    ⚠️ 用 `--pick window`（不走 campplus 质心）是刻意的：
+      质心模式要加载说话人模型上显卡，会和正在生成的任务抢显存；window 模式
+      纯 CPU，能和推理并行。代价是挑到的片段略短，实测可接受（15s 内）。
+    ⚠️ 全程同步（最长 7 分钟）。前端上传完案例调一次即可，别放在生成关键路径上。
+    """
+    require(request)
+    # 脚本在**项目目录**下（server.py 同级），不在 BASE（数据盘）下：
+    #   BASE=/mnt/tts 是数据盘，代码在 /mnt/tts/projects/qwen3-tts。
+    #   写错路径的接口会静默 500，员工只看到「提取失败」四个字，查不出原因。
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          "..", "tools", "mkcase_voices.py")
+    script = os.path.normpath(script)
+    if not os.path.isfile(script):
+        raise HTTPException(500, f"提取脚本不存在: {script}")
+    before = set(voices.keys())
+    proj = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cmd = [sys.executable, script, "--apply", "--pick", "window",
+           "--min-cases", str(int(min_cases or 3))]
+    try:
+        p = subprocess.run(cmd, cwd=proj, timeout=420,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                           text=True, env=_script_env())
+    except subprocess.TimeoutExpired:
+        log.warning("案例音色提取超时（420s）")
+        return {"ok": False, "error": "提取超时（7 分钟），请稍后重试或联系管理员"}
+    except Exception as e:
+        log.warning("案例音色提取失败: %r", e)
+        raise HTTPException(500, f"提取失败: {repr(e)[:200]}")
+    # 脚本改的是文件，内存要跟着更新（顺序不能反，见 /api/voices/reload）
+    fresh = load_voices()
+    voices.clear()
+    voices.update(fresh)
+    after = set(voices.keys())
+    added = sorted(after - before)
+    log.info("案例音色提取完成: 退出码 %s，新增 %s", p.returncode, added or "无")
+    return {"ok": p.returncode == 0, "added": added, "count": len(voices),
+            "log": (p.stdout or "")[-1500:]}
 
 
 @app.post("/api/voices/{name}/auto-select")
