@@ -345,6 +345,25 @@ class TTSEngine:
         # 开关：TTS_LORA_ADAPTER=<ckpt 目录>；不设置则行为与之前完全一致。
         self._peft_model = None
         self._adapters = {}          # 音色名前缀 -> peft adapter 名
+        # ---- 音色别名：名字不同但**同一说话人** → 共用一个 adapter ----
+        # 🔴 没有这层映射会出大事：员工默认音色是 BEST_CLONE = EL_male / EL_female
+        #    （app/server.py），而 adapter 前缀是 yohan_male / SOLA_female，
+        #    名字对不上 → 直接回落 base，等于 adapter 从没对员工生效过。
+        #    已用 campplus 说话人嵌入核验（同人阈值 0.75）：
+        #      EL_male / yo han / yohan_male  0.88~0.92  同一男声
+        #      EL_female / SOLA_female        0.911      同一女声
+        #      elara                          0.25~0.34  另一人，不映射
+        #    TTS_LORA_ALIAS="EL_male=yohan_male,yo han=yohan_male,EL_female=SOLA_female"
+        self._alias = {}
+        for _pair in os.environ.get("TTS_LORA_ALIAS", "").split(","):
+            if "=" not in _pair:
+                continue
+            _k, _v = _pair.split("=", 1)
+            _k, _v = _k.strip().lower(), _v.strip().lower()
+            if _k and _v:
+                self._alias[_k] = _v
+        if self._alias:
+            log.info("LoRA 音色别名: %s", self._alias)
         # 多 adapter（推荐）：TTS_LORA_ADAPTERS="yohan_male=/path1,SOLA_female=/path2"
         # 男女声必须用各自的 adapter：一个 adapter 是在单一说话人数据上训的，
         # 全局套用会把男声风格压到女声上（反之亦然）→ 音色退化。
@@ -876,6 +895,8 @@ class TTSEngine:
           - 多 adapter：TTS_LORA_ADAPTERS="yohan_male=/p1,SOLA_female=/p2"
             → 前缀命中就 set_adapter 对应权重，都不命中则 disable_adapter 回退 base。
           - 单 adapter（旧）：TTS_LORA_VOICES=yohan_male 前缀白名单。
+          - 别名：TTS_LORA_ALIAS 先把音色名换成"同人"的规范名再匹配，
+            详见 __init__ 里的说明。别名的依据必须是说话人嵌入核验，不能猜。
         ⚠️ set_adapter 改的是全局状态；本服务生成任务是串行队列，安全。
         若将来改成并发推理，必须改成按请求隔离，否则会串音色。
         """
@@ -890,6 +911,8 @@ class TTSEngine:
         rk = (ref_key or "").lower()
         # 多 adapter：按音色名前缀选中对应 adapter；都不匹配则回退 base
         if self._adapters:
+            # 先过别名表：同一说话人的其它音色名 → 规范名
+            rk = self._alias.get(rk, rk)
             for prefix, name in self._adapters.items():
                 if rk.startswith(prefix):
                     self._peft_model.set_adapter(name)
