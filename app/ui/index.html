@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Qwen3-TTS 语音生成</title>
+<title id="appTitle">Qwen3-TTS</title>
 <style>
 :root{
   --bg:#0D0F13; --bg2:#11141A;
@@ -86,6 +86,17 @@ button.danger{color:var(--err)}
   font-size:13px;font-weight:500;background:transparent;transition:all .16s var(--ease)}
 .tab:hover{color:var(--txt2)}
 .tab.on{background:var(--panel3);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.3)}
+/* 性别二选一：员工日常只碰这两个按钮，其余全部收进「高级设置」 */
+.gsel{display:flex;gap:8px;margin:2px 0 8px}
+.gbtn{flex:1;padding:11px 8px;border-radius:10px;border:1px solid var(--line);
+  background:var(--panel2);color:var(--dim);cursor:pointer;text-align:center;
+  font-size:14px;transition:.15s}
+.gbtn:hover{color:var(--txt2);border-color:var(--dim)}
+.gbtn.on{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:600}
+.gbtn .gsub{display:block;font-size:11px;opacity:.75;margin-top:2px}
+.adv{margin-top:10px;font-size:12px;color:var(--dim);cursor:pointer;user-select:none}
+.adv:hover{color:var(--txt2)}
+.advbody{margin-top:8px;padding-top:10px;border-top:1px dashed var(--line)}
 .chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}
 .chip{font-size:12px;padding:5px 11px;border:1px solid var(--line2);border-radius:20px;
   cursor:pointer;color:var(--txt2);background:var(--panel2);transition:all .16s var(--ease)}
@@ -317,10 +328,10 @@ details.adv summary:hover{color:var(--txt2)}
         <div>
           <label data-i18n="reportDays">统计范围</label>
           <select id="rpDays" style="width:auto">
-            <option value="7">7 天</option>
-            <option value="30" selected>30 天</option>
-            <option value="90">90 天</option>
-            <option value="0">全部</option>
+            <option value="7" data-i18n="d7">7 天</option>
+            <option value="30" selected data-i18n="d30">30 天</option>
+            <option value="90" data-i18n="d90">90 天</option>
+            <option value="0" data-i18n="dAll">全部</option>
           </select>
         </div>
         <button class="mini" id="rpExport" data-i18n="exportCsv" style="margin-top:18px">导出 CSV</button>
@@ -481,18 +492,49 @@ details.adv summary:hover{color:var(--txt2)}
 
       <div class="card">
         <h2 data-i18n="voice">声音</h2>
-        <div class="tabs">
-          <!-- 默认落在「录入音色克隆」：全量实测这条链路还原度最高
-               （Qwen + 15s 克隆源 95.5 vs 预设音色低约 2~3 分），
-               员工打开就是最佳组合，不用自己去切。 -->
-          <div class="tab" data-mode="custom" data-i18n="presetVoice">预设音色</div>
-          <div class="tab on" data-mode="clone" data-i18n="cloneVoice">录入音色克隆</div>
+        <!-- 员工只要点「男声 / 女声」：代码自动落到该性别下实测最佳的克隆音色
+             （BEST_CLONE），并对标那个人自己的案例取目标值。下面那一大堆
+             音色 / 情感 / 语速 全部收进「高级」，默认不用碰。 -->
+        <div class="gsel" id="gsel">
+          <button class="gbtn" type="button" data-g="male">
+            <span data-i18n="gMale">男声</span>
+            <span class="gsub" id="gsubM"></span>
+          </button>
+          <button class="gbtn" type="button" data-g="female">
+            <span data-i18n="gFemale">女声</span>
+            <span class="gsub" id="gsubF"></span>
+          </button>
+        </div>
+        <div class="hint" id="gpick"></div>
+
+        <details class="adv" id="advVoice">
+          <summary data-i18n="voiceAdv">换音色 / 情感 / 语速（高级）</summary>
+          <div class="advbody">
+        <!-- 🔴 统一成一个音色下拉。原先「预设音色 / 录入音色克隆」是两个 tab
+             + 两个下拉，员工必须知道「克隆」这个词才找得到最好的那条链路。
+             现在按实测还原度排：案例克隆在前，千问自带音色全部靠后。
+             底下的 tab 与 #speaker / #voice 保留但隐藏 —— 它们是提交逻辑
+             真正读取的控件，选中哪一类就自动切到对应模式。 -->
+        <label data-i18n="timbre">音色</label>
+        <select id="vsel"></select>
+        <div class="hint" id="vselHint"></div>
+
+        <div style="display:none">
+          <div class="tabs">
+            <div class="tab" data-mode="custom" data-i18n="presetVoice">预设音色</div>
+            <div class="tab on" data-mode="clone" data-i18n="cloneVoice">录入音色克隆</div>
+          </div>
+          <div id="pane-custom" style="display:none">
+            <select id="speaker"></select>
+          </div>
+          <div id="pane-clone">
+            <select id="voice"></select>
+          </div>
         </div>
 
-        <div id="pane-custom" style="display:none">
-          <label data-i18n="timbre">音色</label>
-          <select id="speaker"></select>
-          <div class="hint" data-i18n="spkAllHint">全部 9 个内置音色都支持所有输出语言，可自由搭配；推荐组只是该语言下最自然的选择。</div>
+        <!-- 语气指令只对千问预设音色有意义：克隆音色的语气由参考音频本身决定，
+             填了也不生效（模型没有 instruct 通道），所以选克隆时整块藏起来。 -->
+        <div id="instructBox" style="display:none">
           <label data-i18n="instructLabel">语气指令（点下方标签可添加，多行会自动轮换）</label>
           <textarea id="instruct"></textarea>
           <div class="chips" id="chips"></div>
@@ -500,12 +542,6 @@ details.adv summary:hover{color:var(--txt2)}
             <button class="mini" id="insClear" data-i18n="clearInstruct">清空指令</button>
           </div>
           <div class="hint" data-i18n="instructHint">长语音强烈建议填 2-4 行（换行分隔）：系统会按段轮换使用，避免通篇一个语气一个语速——这是长音频 AI 味最主要的来源。留空则自动用中性朗读指令。</div>
-        </div>
-
-        <div id="pane-clone">
-          <label data-i18n="savedVoices">已录入音色</label>
-          <select id="voice"></select>
-          <div class="hint" data-i18n="cloneNoInstruct">克隆模式不支持语气指令，语气由参考音频本身的情绪决定。</div>
         </div>
 
         <label data-i18n="language">语言</label>
@@ -519,6 +555,8 @@ details.adv summary:hover{color:var(--txt2)}
         <label data-i18n="speed">语速</label>
         <select id="speed"></select>
         <div class="hint" data-i18n="speedHint">1.0 为正常速度，调大更快（1.1 / 1.2 …）。变速不变调，生成后统一处理，不影响音色与清晰度。</div>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -539,34 +577,17 @@ details.adv summary:hover{color:var(--txt2)}
         </details>
       </div>
 
-      <div class="card">
-        <h2 data-i18n="enroll">录入声音（声音克隆用）</h2>
-        <div class="row">
-          <input id="vname" data-i18n-ph="vnamePh" style="flex:1">
-        </div>
-        <label style="margin-top:10px" data-i18n="engineLabel">这个音色用哪个引擎</label>
-        <select id="vengine" style="width:100%">
-          <option value="cosyvoice3" data-i18n="engineCosy" selected>CosyVoice3（推荐：有情感，可选激昂/亲切/严肃）</option>
-          <option value="qwen" data-i18n="engineQwen">千问 Qwen（第一代，发音稳但没有情感选项）</option>
-        </select>
-        <label style="margin-top:10px" data-i18n="refAudio">参考音频（整段录音直接上传，无需自己剪辑）</label>
-        <input id="vfile" type="file" accept="audio/*">
-        <label><span data-i18n="refText">音频对应的完整文字稿</span><span class="req">*</span></label>
-        <textarea id="vtext" rows="5" data-i18n-ph="refTextPh" style="width:100%;resize:vertical"></textarea>
-        <div class="hint" id="vdur" style="display:none"></div>
-        <div class="hint" data-i18n="enrollHint">怎么用：直接上传整段录音 + 粘贴这段录音的完整文字稿即可，不用自己剪音频、也不用自己对时间轴。系统会自动挑出音质最好的约 15 秒，并把文字稿按实际说话时间对齐截出对应片段。首次录入会多花几秒做分析，之后这个音色就是现成的。</div>
-        <div class="row" style="margin-top:12px">
-          <button id="vupload" data-i18n="upload">上传录入</button>
-        </div>
-        <div class="hint" id="vmsg"></div>
-      </div>
-
+      <!-- 🔴 2026-10-09 移除「录入声音（声音克隆用）」整张卡片。
+           它与顶部「标杆案例 → + 上传案例」是同一件事的两条路：案例上传后
+           由 tools/mkcase_voices.py 自动挑最佳 15 秒 + 对齐文字稿生成音色，
+           员工根本不需要自己录音、自己剪、自己抄文字稿。留着只会让人纠结
+           「我到底该用哪个」。要加全新说话人时走案例上传即可。 -->
       <div class="card">
         <div class="row" style="margin-bottom:8px">
           <h2 style="margin:0" data-i18n="savedVoices">已录入音色</h2>
           <span class="hint" style="margin-left:auto" id="vcount"></span>
         </div>
-        <div class="hint" data-i18n="voiceListHint">录入一次即可长期复用：生成时在上方「录入音色克隆」里直接选。可试听、可查看文字稿、可删除重录。</div>
+        <div class="hint" data-i18n="voiceListHint">音色由案例库自动生成（每条案例取最佳 15 秒并对齐文字稿），新增说话人请在顶部「标杆案例 → + 上传案例」上传。可试听、可查看文字稿。</div>
         <div id="vlist" style="margin-top:10px"></div>
       </div>
     </div>
@@ -617,6 +638,9 @@ const I18N = {
     logout:'退出登录', userMgmt:'员工账号管理', userMgmtSub:'创建员工账号，员工只能看到自己生成的任务。',
     report:'产出明细', reportSub:'按人 / 按日统计已完成的语音产出，可导出 CSV 用 Excel 打开。',
     reportDays:'统计范围', exportCsv:'导出 CSV',
+    daysUnit:(n)=>`${n} 天`, rangeAll:'全部',
+    caseExtra:(n,cps)=>`${n?` · ${n} 段`:''}${cps?` · ${cps} 字/秒`:''}`,
+    estFmt:(a,g)=>` · 约 ${a} 音频 · 约 ${g} 生成`,
     thToday2:'今日条数', thTotal:'累计条数', thAudio:'音频时长', thGpu:'GPU 耗时',
     thDate:'日期', thSum:'当日合计', reportEmpty:'暂无已完成任务', reportFail:'统计加载失败',
     pagerTotal:(n)=>`共 ${n} 条`, pagerPage:(p,t)=>`第 ${p}/${t} 页`,
@@ -649,6 +673,7 @@ const I18N = {
     vEngine:'引擎', engQwen:'千问 Qwen（无情感）', engCosy:'CosyVoice3（有情感）', engSaved:'引擎已保存', engFail:'引擎保存失败',
     engineHint:'这个音色的默认引擎。员工生成时若选了「激昂/亲切/严肃」，会强制改走 CosyVoice3 —— 千问克隆没有情感入参，给不了情绪。',
     refText:'音频对应的完整文字稿', refTextPh:'把这段录音里说的话完整粘进来（不用挑片段，系统会自动截取对应部分）',
+    enrollAdminOnly:'案例音色已由系统批量生成（男声/女声各两组），通常不需要再手动录入；仅当需要添加一个全新说话人时才用这里。',
     enrollHint:'怎么用：直接上传整段录音 + 粘贴这段录音的完整文字稿即可，不用自己剪音频、也不用自己对时间轴。系统会自动挑出音质最好的约 15 秒，并把文字稿按实际说话时间对齐截出对应片段。首次录入会多花几秒做分析，之后这个音色就是现成的。',
     needRefText:'请粘贴这段录音的完整文字稿（克隆必填，系统会自动截取对应片段）',
     refTooShort:(d)=>`音频仅 ${d} 秒，至少需要 3 秒`,
@@ -667,6 +692,12 @@ const I18N = {
     searchPh:'搜索标题或内容…', allStatus:'全部状态', allOwner:'全部成员',
     stRunning:'生成中', stQueued:'排队中', stDone:'已完成', stError:'失败',
     countFmt:(n,seg)=>`${n} 字 · 约 ${seg} 段`,
+    gMale:'男声', gFemale:'女声', voiceAdv:'换音色 / 情感 / 语速（高级）',
+    grpCase:'案例克隆（还原度最高）', grpOther:'其他克隆音色',
+    grpQwen:'千问自带音色（还原度低于案例克隆）',
+    qwenSpkNote:(n)=>`当前：${n} —— 千问出厂音色，未针对案例调优，还原度通常比案例克隆低 2~3 分`,
+    gpickBest:(n)=>`当前：${n} —— 该性别下实测最佳，自动对标它本人的案例取目标值`,
+    gpickOther:(n,b)=>`当前：${n}${b?`（非最佳，最佳是「${b}」）`:''}`,
     needText:'请先粘贴文案', needVoice:'请先在右侧录入一个音色',
     needName:'请填写音色名称并选择音频', uploading:'上传中...',
     enrolled:(n,d)=>`已录入：${n}（${d}s）`,
@@ -674,7 +705,7 @@ const I18N = {
     fail:'失败：', submitFail:'提交失败: ',
     st:{queued:'排队中',running:'生成中',done:'已完成',error:'失败'},
     modeLabel:(j)=> j.mode==='clone' ? '克隆: '+j.voice : '音色: '+j.speaker,
-    statFmt:s=>`分段 ${s.segments} · 音频 ${s.audio_seconds}s · 耗时 ${s.gen_seconds}s · RTF ${s.rtf}`,
+    statFmt:s=>`分段 ${s.segments} · 音频 ${fmtSec(s.audio_seconds)} · 耗时 ${fmtSec(s.gen_seconds)} · RTF ${Number(s.rtf||0).toFixed(2)}`,
     progFmt:(d,t)=>`${d}/${t} 段`, dlWav:'下载 WAV', dlMp3:'下载 MP3',
     expand:'展开全文', collapse:'收起', almostDone:'即将完成', preparing:'准备中',
     stagePreparing:'正在分段', stageGenerating:'正在生成', stageMerging:'正在拼接', stageEncoding:'正在转码', stageLoading:'正在加载模型',
@@ -739,6 +770,9 @@ const I18N = {
     logout:'Sign out', userMgmt:'User accounts', userMgmtSub:'Create staff accounts — they only see their own jobs.',
     report:'Production report', reportSub:'Output by person / by day; exportable to CSV for Excel.',
     reportDays:'Range', exportCsv:'Export CSV',
+    daysUnit:(n)=>`${n} days`, rangeAll:'All',
+    caseExtra:(n,cps)=>`${n?` · ${n} seg`:''}${cps?` · ${cps} cps`:''}`,
+    estFmt:(a,g)=>` · ~${a} audio · ~${g} to generate`,
     thToday2:'Today', thTotal:'Total', thAudio:'Audio', thGpu:'GPU time',
     thDate:'Date', thSum:'Day total', reportEmpty:'No completed jobs yet', reportFail:'Failed to load stats',
     pagerTotal:(n)=>`${n} total`, pagerPage:(p,t)=>`page ${p}/${t}`,
@@ -770,6 +804,7 @@ const I18N = {
     vEngine:'Engine', engQwen:'Qwen (most accurate)', engCosy:'CosyVoice3 (expressive)', engSaved:'Engine saved', engFail:'Failed to save engine',
     engineHint:'Default engine for this voice. If the employee picks Excited / Warm / Serious when generating, CosyVoice3 is forced — Qwen cloning has no emotion input.',
     refText:'Full transcript of the audio', refTextPh:'Paste everything said in this recording — no need to pick a clip, the matching part is cut automatically',
+    enrollAdminOnly:'Case voices are generated in bulk (two sets each for male/female), so manual enrollment is rarely needed — use this only when adding a brand-new speaker.',
     enrollHint:'How to use: upload the full recording and paste its full transcript. No manual trimming, no timeline work. The server picks the cleanest ~15s and cuts the transcript to match it by actual speaking time. The first enrollment takes a few extra seconds to analyze; after that the voice is ready to use.',
     needRefText:'Please paste the full transcript of this recording (required — the matching part is cut automatically)',
     refTooShort:(d)=>`Audio is only ${d}s — at least 3s required`,
@@ -788,6 +823,12 @@ const I18N = {
     searchPh:'Search title or text…', allStatus:'All status', allOwner:'All members',
     stRunning:'running', stQueued:'queued', stDone:'done', stError:'error',
     countFmt:(n,seg)=>`${n} chars · ~${seg} segments`,
+    gMale:'Male', gFemale:'Female', voiceAdv:'Change voice / emotion / speed (advanced)',
+    grpCase:'Case clones (best fidelity)', grpOther:'Other cloned voices',
+    grpQwen:'Qwen built-in voices (lower fidelity than case clones)',
+    qwenSpkNote:(n)=>`Now: ${n} — a stock Qwen voice, not tuned to our cases; usually 2~3 points below case clones`,
+    gpickBest:(n)=>`Now: ${n} — best tested for this gender; targets are taken from that speaker's own case`,
+    gpickOther:(n,b)=>`Now: ${n}${b?` (not the best; best is "${b}")`:''}`,
     needText:'Please paste a script first', needVoice:'Please enroll a voice on the right first',
     needName:'Please enter a voice name and choose an audio file', uploading:'Uploading...',
     enrolled:(n,d)=>`Enrolled: ${n} (${d}s)`,
@@ -795,7 +836,7 @@ const I18N = {
     fail:'Failed: ', submitFail:'Submit failed: ',
     st:{queued:'queued',running:'running',done:'done',error:'error'},
     modeLabel:(j)=> j.mode==='clone' ? 'clone: '+j.voice : 'voice: '+j.speaker,
-    statFmt:s=>`${s.segments} segments · audio ${s.audio_seconds}s · took ${s.gen_seconds}s · RTF ${s.rtf}`,
+    statFmt:s=>`${s.segments} segments · audio ${fmtSec(s.audio_seconds)} · took ${fmtSec(s.gen_seconds)} · RTF ${Number(s.rtf||0).toFixed(2)}`,
     progFmt:(d,t)=>`${d}/${t} segments`, dlWav:'Download WAV', dlMp3:'Download MP3',
     expand:'Expand', collapse:'Collapse', almostDone:'almost done', preparing:'preparing',
     stagePreparing:'Splitting', stageGenerating:'Generating', stageMerging:'Joining', stageEncoding:'Encoding', stageLoading:'Loading model',
@@ -860,6 +901,9 @@ const I18N = {
     logout:'로그아웃', userMgmt:'직원 계정 관리', userMgmtSub:'직원 계정을 만듭니다. 직원은 본인이 만든 작업만 볼 수 있습니다.',
     report:'생산 통계', reportSub:'사람별 / 날짜별 완료된 음성 산출량. CSV로 내보내 Excel에서 열 수 있습니다.',
     reportDays:'기간', exportCsv:'CSV 내보내기',
+    daysUnit:(n)=>`${n}일`, rangeAll:'전체',
+    caseExtra:(n,cps)=>`${n?` · ${n}개 구간`:''}${cps?` · ${cps}자/초`:''}`,
+    estFmt:(a,g)=>` · 약 ${a} 오디오 · 약 ${g} 생성`,
     thToday2:'오늘', thTotal:'누적', thAudio:'오디오', thGpu:'GPU 시간',
     thDate:'날짜', thSum:'일별 합계', reportEmpty:'완료된 작업이 없습니다', reportFail:'통계 불러오기 실패',
     pagerTotal:(n)=>`총 ${n}건`, pagerPage:(p,t)=>`${p}/${t} 페이지`,
@@ -891,6 +935,7 @@ const I18N = {
     vEngine:'엔진', engQwen:'Qwen (가장 정확)', engCosy:'CosyVoice3 (감정 표현)', engSaved:'엔진이 저장되었습니다', engFail:'엔진 저장 실패',
     engineHint:'이 음성의 기본 엔진입니다. 생성 시 "격앙/부드러움/진지함"을 선택하면 CosyVoice3로 강제 전환됩니다 — Qwen 클론에는 감정 입력이 없습니다.',
     refText:'녹음 전체의 대사', refTextPh:'이 녹음에서 한 말을 전체로 붙여 넣으세요. 구간을 고를 필요 없이 해당 부분은 자동으로 잘립니다',
+    enrollAdminOnly:'케이스 음성은 시스템이 일괄 생성했습니다(남성/여성 각 2세트). 보통 수동 등록은 필요 없으며, 완전히 새로운 화자를 추가할 때만 사용하세요.',
     enrollHint:'사용법: 녹음 전체와 그 대사 전체를 올리면 끝입니다. 오디오를 자르거나 타임라인을 맞출 필요가 없습니다. 서버가 가장 깨끗한 약 15초를 골라 실제 발화 시간에 맞춰 대사도 함께 잘라 줍니다. 첫 등록 때 분석에 몇 초 더 걸리고, 이후에는 바로 사용할 수 있습니다.',
     needRefText:'이 녹음의 대사 전체를 붙여 넣어 주세요 (클론 필수, 해당 구간은 자동으로 잘립니다)',
     refTooShort:(d)=>`음성이 ${d}초뿐입니다. 최소 3초가 필요합니다`,
@@ -909,6 +954,12 @@ const I18N = {
     searchPh:'제목이나 내용 검색…', allStatus:'전체 상태', allOwner:'전체 멤버',
     stRunning:'생성중', stQueued:'대기중', stDone:'완료', stError:'실패',
     countFmt:(n,seg)=>`${n}자 · 약 ${seg}개 구간`,
+    gMale:'남성', gFemale:'여성', voiceAdv:'음성 / 감정 / 속도 변경 (고급)',
+    grpCase:'케이스 클론 (재현도 최고)', grpOther:'기타 클론 음성',
+    grpQwen:'Qwen 기본 음성 (케이스 클론보다 재현도 낮음)',
+    qwenSpkNote:(n)=>`현재: ${n} — 케이스에 맞춰 조정되지 않은 Qwen 기본 음성입니다. 재현도는 보통 케이스 클론보다 2~3점 낮습니다`,
+    gpickBest:(n)=>`현재: ${n} — 이 성별에서 실측 최고. 목표값은 화자 본인의 케이스에서 가져옵니다`,
+    gpickOther:(n,b)=>`현재: ${n}${b?` (최고 아님, 최고는 "${b}")`:''}`,
     needText:'원고를 먼저 붙여넣어 주세요', needVoice:'오른쪽에서 음성을 먼저 등록해 주세요',
     needName:'음성 이름과 오디오 파일을 선택해 주세요', uploading:'업로드 중...',
     enrolled:(n,d)=>`등록 완료: ${n} (${d}초)`,
@@ -916,7 +967,7 @@ const I18N = {
     fail:'실패: ', submitFail:'요청 실패: ',
     st:{queued:'대기중',running:'생성중',done:'완료',error:'실패'},
     modeLabel:(j)=> j.mode==='clone' ? '클론: '+j.voice : '음색: '+j.speaker,
-    statFmt:s=>`구간 ${s.segments} · 오디오 ${s.audio_seconds}초 · 소요 ${s.gen_seconds}초 · RTF ${s.rtf}`,
+    statFmt:s=>`구간 ${s.segments} · 오디오 ${fmtSec(s.audio_seconds)} · 소요 ${fmtSec(s.gen_seconds)} · RTF ${Number(s.rtf||0).toFixed(2)}`,
     progFmt:(d,t)=>`${d}/${t} 구간`, dlWav:'WAV 다운로드', dlMp3:'MP3 다운로드',
     expand:'전체 보기', collapse:'접기', almostDone:'곧 완료', preparing:'준비 중',
     stagePreparing:'분할 중', stageGenerating:'생성 중', stageMerging:'연결 중', stageEncoding:'인코딩 중', stageLoading:'모델 로딩 중',
@@ -981,6 +1032,9 @@ const I18N = {
     logout:'ログアウト', userMgmt:'スタッフアカウント', userMgmtSub:'スタッフは自分が生成したジョブのみ閲覧できます。',
     report:'生産レポート', reportSub:'担当者別 / 日別の完了済み音声。CSV出力してExcelで開けます。',
     reportDays:'期間', exportCsv:'CSV エクスポート',
+    daysUnit:(n)=>`${n} 日`, rangeAll:'すべて',
+    caseExtra:(n,cps)=>`${n?` · ${n} セグメント`:''}${cps?` · ${cps}字/秒`:''}`,
+    estFmt:(a,g)=>` · 約 ${a} 音声 · 約 ${g} 生成`,
     thToday2:'今日', thTotal:'累計', thAudio:'音声時間', thGpu:'GPU 時間',
     thDate:'日付', thSum:'1日の合計', reportEmpty:'完了したジョブはありません', reportFail:'統計の読み込みに失敗',
     pagerTotal:(n)=>`全 ${n} 件`, pagerPage:(p,t)=>`${p}/${t} ページ`,
@@ -1030,6 +1084,12 @@ const I18N = {
     searchPh:'タイトル・本文を検索…', allStatus:'すべての状態', allOwner:'全メンバー',
     stRunning:'生成中', stQueued:'待機中', stDone:'完了', stError:'失敗',
     countFmt:(n,seg)=>`${n}文字 · 約${seg}セグメント`,
+    gMale:'男性', gFemale:'女性', voiceAdv:'音色 / 感情 / 速度を変更（詳細）',
+    grpCase:'ケースクローン（再現度最高）', grpOther:'その他のクローン音色',
+    grpQwen:'Qwen 標準音色（ケースクローンより再現度が低い）',
+    qwenSpkNote:(n)=>`現在: ${n} — ケースに合わせて調整していない Qwen 標準音色です。再現度は通常ケースクローンより 2~3 点低くなります`,
+    gpickBest:(n)=>`現在: ${n} — この性別で実測最高。目標値は話者本人のケースから取得します`,
+    gpickOther:(n,b)=>`現在: ${n}${b?`（最高ではありません。最高は「${b}」）`:''}`,
     needText:'先に原稿を貼り付けてください', needVoice:'先に右側で音色を登録してください',
     needName:'音色名と音声ファイルを指定してください', uploading:'アップロード中...',
     enrolled:(n,d)=>`登録完了: ${n}（${d}秒）`,
@@ -1037,7 +1097,7 @@ const I18N = {
     fail:'失敗: ', submitFail:'送信失敗: ',
     st:{queued:'待機中',running:'生成中',done:'完了',error:'失敗'},
     modeLabel:(j)=> j.mode==='clone' ? 'クローン: '+j.voice : '音色: '+j.speaker,
-    statFmt:s=>`セグメント ${s.segments} · 音声 ${s.audio_seconds}秒 · 処理 ${s.gen_seconds}秒 · RTF ${s.rtf}`,
+    statFmt:s=>`セグメント ${s.segments} · 音声 ${fmtSec(s.audio_seconds)} · 処理 ${fmtSec(s.gen_seconds)} · RTF ${Number(s.rtf||0).toFixed(2)}`,
     progFmt:(d,t)=>`${d}/${t} セグメント`, dlWav:'WAV をダウンロード', dlMp3:'MP3 をダウンロード',
     expand:'全文を表示', collapse:'折りたたむ', almostDone:'まもなく完了', preparing:'準備中',
     stagePreparing:'分割中', stageGenerating:'生成中', stageMerging:'結合中', stageEncoding:'エンコード中', stageLoading:'モデル読み込み中',
@@ -1171,9 +1231,18 @@ const outLang = () => $('#language').value || UI2OUT[UI] || 'korean';
 const presetLang = () => { const l = outLang(); return l === 'auto' ? (UI2OUT[UI]||'korean') : l; };
 const esc = s => String(s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function fmtDur(s){
+  /* 旧版两处问题：① 详情页直接打印 s.audio_seconds 原始浮点，会出现
+     "475.84000000000003s" 这种 IEEE754 二进制尾巴；② 超过 1 小时会显示成
+     "67:56" 而不是 "1:07:56"。这里统一处理。 */
   s = Math.max(0, Math.round(s || 0));
-  const m = Math.floor(s/60), ss = s%60;
-  return `${m}:${String(ss).padStart(2,'0')}`;
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  const head = h ? `${h}:${String(m).padStart(2, '0')}` : String(m);
+  return `${head}:${String(ss).padStart(2, '0')}`;
+}
+/* 「几分几秒」方便读，「多少秒」方便对数 —— 两个都要，给成一个串 */
+function fmtSec(s){
+  s = Math.max(0, Number(s || 0));
+  return `${fmtDur(s)}（${s.toFixed(1)} 秒）`;
 }
 function toast(msg){
   const d = document.createElement('div');
@@ -1206,7 +1275,7 @@ function applyStatic(){
 }
 function setLang(k){
   UI = k; localStorage.setItem('tts_ui_lang', k); userSwitched = true;
-  applyStatic(); renderLanguages(); renderSpeakers(); renderVoices(); renderCount();
+  applyStatic(); renderLanguages(); renderSpeakers(); renderVoices(); renderVsel(); renderCount();
   syncSpeakerToLang(); resetJobs(); poll(); loadStats();
 }
 
@@ -1293,24 +1362,138 @@ const voiceOk = x => { const m = META.voices_ok || {}; return m[x] !== false; };
 // 内置音色用稳定 ID 存库（builtin_male / builtin_female），这里按界面语言
 // 换成对应显示名；员工自己录的音色直接显示原名。
 function voiceName(x){
+  // 案例音色自带四语显示名（voices.json 的 label），优先用它；没有再回退内置表
+  const lb = (META.voice_labels || {})[x] || {};
+  const named = lb[UI] || lb.zh;
+  if(named) return named;
   const m = (I18N[UI] && I18N[UI].bv) || {};
   return m[x] || x;
 }
 function isBuiltin(x){ return x === 'builtin_male' || x === 'builtin_female' || x === 'EL_male' || x === 'EL_female'; }
 
+/* ---------- 性别二选一：员工的主入口 ---------- */
+/* 后端按 gender 给克隆音色分好组，并指定了每组的「最佳」(best_clone)。
+   员工点一下男声/女声 = 选中该组实测最好的那个克隆音色，并对标它自己那条
+   案例取生产目标值。全程不需要知道有「音色」这个东西。 */
+function genderOf(x){
+  const byG = META.voices_by_gender || {};
+  if((byG.male   || []).indexOf(x) >= 0) return 'male';
+  if((byG.female || []).indexOf(x) >= 0) return 'female';
+  return '';
+}
+function pickForGender(g){
+  const byG = META.voices_by_gender || {}, best = META.best_clone || {};
+  const pool = byG[g] || [];
+  // 后端指定的最佳优先；它不可用时退到该组第一个可用音色
+  if(best[g] && pool.indexOf(best[g]) >= 0 && voiceOk(best[g])) return best[g];
+  return pool.find(voiceOk) || pool[0] || '';
+}
+function applyGender(g){
+  const want = pickForGender(g);
+  if(!want){ markGender(''); updateGpick(); return; }
+  const sel = $('#vsel');
+  if(sel){ sel.value = want; applyVsel(want); }
+  else { setMode('clone'); $('#voice').value = want; syncGender(); }
+  markGender(g);
+  updateGpick();
+}
+
+/* ---------- 统一音色下拉：员工只看到一个列表 ---------- */
+/* 顺序按实测还原度排：案例克隆 → 其他克隆 → 千问自带（一律靠后）。
+   千问自带是模型出厂音色，从没针对案例调过，实测比克隆低 2~3 分；
+   排前面只会让员工误选。案例克隆音色去重后各只出现一次。 */
+function vselGroups(){
+  const voices = META.voices || [];
+  const byG = META.voices_by_gender || {};
+  const seen = {}, caseV = [];
+  [].concat(byG.male || [], byG.female || []).forEach(x => {
+    if(voices.indexOf(x) >= 0 && !seen[x]){ seen[x] = 1; caseV.push(x); }
+  });
+  return {caseV, otherV: voices.filter(x => caseV.indexOf(x) < 0),
+          spk: (META.speakers || []).map(String)};
+}
+function renderVsel(){
+  const sel = $('#vsel'); if(!sel) return;
+  const {caseV, otherV, spk} = vselGroups();
+  const cosy = META.cosy_speakers || [];
+  const grp = (label, arr, kind) => arr.length
+    ? `<optgroup label="${esc(label)}">` + arr.map(x =>
+        `<option value="${esc(x)}" data-kind="${kind}">${esc(kind === 'clone' ? voiceName(x) : spkName(x))}</option>`
+      ).join('') + '</optgroup>' : '';
+  sel.innerHTML = grp(t('grpCase'), caseV, 'clone')
+                + grp(t('grpOther'), otherV, 'clone')
+                + grp(t('grpQwen'),  spk,   'custom')
+                + (cosy.length ? `<optgroup label="${esc(t('spkGroupCosy'))}">${cosy.map(cosyOpt).join('')}</optgroup>` : '');
+  /* 默认落在案例克隆的最佳（男声）；整个库空了才退到千问音色 */
+  const dft = pickForGender('male') || caseV[0] || otherV[0] || spk[0] || '';
+  if(dft){ sel.value = dft; applyVsel(dft); } else { applyVsel(''); }
+}
+/* 选中哪一项 → 自动切到对应的模式，员工不需要知道「克隆」这个词 */
+function applyVsel(v){
+  if(!v) return;
+  if((META.voices || []).indexOf(v) >= 0){
+    setMode('clone');
+    const sv = $('#voice'); if(sv) sv.value = v;
+  }else{
+    setMode('custom');
+    const ss = $('#speaker'); if(ss) ss.value = v;
+  }
+  syncGender();
+  updateVselHint();
+}
+function updateVselHint(){
+  const el = $('#vselHint'); if(!el) return;
+  const v = $('#vsel') ? $('#vsel').value : '';
+  if(!v){ el.textContent = ''; return; }
+  if((META.voices || []).indexOf(v) >= 0){
+    const g = genderOf(v), best = (META.best_clone || {})[g] || '';
+    el.textContent = v === best ? t('gpickBest')(voiceName(v))
+                                : t('gpickOther')(voiceName(v), best ? voiceName(best) : '');
+  }else{
+    el.textContent = t('qwenSpkNote')(spkName(v));
+  }
+}
+function markGender(g){
+  $$('#gsel .gbtn').forEach(b => b.classList.toggle('on', b.dataset.g === g && !!g));
+}
+/* 员工手动在高级里换了音色 → 高亮跟着变，避免「按钮显示女声、实际是男声」 */
+function syncGender(){
+  const g = genderOf($('#voice').value);
+  markGender(g); updateGpick();
+}
+function updateGpick(){
+  const x = $('#voice').value, g = genderOf(x);
+  const el = $('#gpick'); if(!el) return;
+  if(!x){ el.textContent = ''; return; }
+  const best = (META.best_clone || {})[g] || '';
+  // 说清楚「选了这个会出什么」：是不是最佳、对标哪条案例
+  const isBest = x === best;
+  el.textContent = isBest ? t('gpickBest')(voiceName(x))
+                          : t('gpickOther')(voiceName(x), best ? voiceName(best) : '');
+}
+
 function renderVoices(){
   const v = $('#voice'), list = META.voices || [], prev = v.value;
-  // 缺文字稿 / 音频超长的音色在 ICL 模式下必崩，直接标出来，别让员工白等一轮排队
+  const byG = META.voices_by_gender || {};
+  // 案例克隆音色靠前（男声组 → 女声组），其余音色垫后。
+  // 依据：案例克隆是实测还原度最高的链路，员工不该在一堆选项里自己找。
+  const front = [].concat(byG.male || [], byG.female || []).filter(x=>list.includes(x));
+  const rest  = list.filter(x => front.indexOf(x) < 0);
+  const opt = x => `<option value="${x}">${esc(voiceName(x))}${voiceOk(x)?'':' '+t('voiceUnusable')}</option>`;
+  const grp = (label, arr) => arr.length
+    ? `<optgroup label="${esc(label)}">${arr.map(opt).join('')}</optgroup>` : '';
   v.innerHTML = list.length
-    ? list.map(x=>`<option value="${x}">${esc(voiceName(x))}${voiceOk(x)?'':' '+t('voiceUnusable')}</option>`).join('')
+    ? grp(t('grpCase'), front) + grp(t('grpOther'), rest)
     : `<option value="">${t('emptyOpt')}</option>`;
   if(prev && list.includes(prev)) v.value = prev;
   else {
     /* 默认落在第一个「可用」的音色上：缺文字稿的那些能列出但不能用，
-       让员工一进来就选中它们会白等一轮排队才报错。 */
-    const ok = list.find(voiceOk);
-    if(ok) v.value = ok;
+       让员工一进来就选中它们会白等一轮排队才报错。
+        gender 分好组时优先取男声组的最佳（实测链路最强）。 */
+    const dft = pickForGender('male') || list.find(voiceOk);
+    if(dft) v.value = dft;
   }
+  syncGender();
 }
 function renderOwners(){
   const sel = $('#fOwner'), cur = sel.value;
@@ -1326,8 +1509,7 @@ function renderCount(){
   let extra = '';
   if(n > 0){
     const spd = +($('#speed') && $('#speed').value) || 1.0;
-    extra = ' · 约 ' + fmtDur(n / 6.15 / spd) + ' 音频 · 约 '
-          + fmtDur(8.40 + 0.07374 * n) + ' 生成';
+    extra = t('estFmt')(fmtDur(n / 6.15 / spd), fmtDur(8.40 + 0.07374 * n));
   }
   $('#count').textContent = t('countFmt')(n, seg) + extra;
 }
@@ -1335,7 +1517,7 @@ async function loadMeta(){
   try{ META = await (await api('/api/meta')).json(); }catch(e){ return; }
   // 音色详情（时长/文字稿/截取来源）单独一份，用于右侧音色列表
   try{ META.info = await (await api('/api/voices')).json(); }catch(e){ META.info = META.info || {}; }
-  renderSpeakers(); renderLanguages(); renderVoices(); renderVoiceList();
+  renderSpeakers(); renderLanguages(); renderVoices(); renderVoiceList(); renderVsel();
   renderSpeeds(); renderEmotions();
 }
 /* 情感档位：员工只选语气，引擎/指令/参数由后端 EMOTION_PRESETS 自动分流 */
@@ -1779,7 +1961,7 @@ async function loadCases(){
       <div>
         <div class="nm">${esc(c.name || c.id)}</div>
         <div class="mt">${esc(t('caseMeta')(c.gender||'-', c.source, c.total_dur))}
-          ${c.seg_count?` · ${c.seg_count} 段`:''}${c.cps?` · ${c.cps} 字/秒`:''}</div>
+          ${t('caseExtra')(c.seg_count, c.cps)}</div>
         <div class="fbtags">${tg}</div>
       </div>
       <div class="rt">${n ? esc(t('fbSummary')(n, r)) : ''}</div>
@@ -1909,15 +2091,16 @@ function restorePref(){
 }
 
 /* ---------- 提交 ---------- */
-$$('.tab[data-mode]').forEach(tab=>{
-  tab.onclick = () => {
-    $$('.tab[data-mode]').forEach(x=>x.classList.remove('on'));
-    tab.classList.add('on');
-    mode = tab.dataset.mode;
-    $('#pane-custom').style.display = mode==='custom'?'':'none';
-    $('#pane-clone').style.display  = mode==='clone'?'':'none';
-  };
-});
+function setMode(m){
+  mode = m;
+  $$('.tab[data-mode]').forEach(x=>x.classList.toggle('on', x.dataset.mode === m));
+  const pc = $('#pane-custom'), pk = $('#pane-clone');
+  if(pc) pc.style.display = m==='custom' ? '' : 'none';
+  if(pk) pk.style.display = m==='clone'  ? '' : 'none';
+  // 语气指令只有千问预设音色用得上：克隆没有 instruct 通道，填了不生效
+  const ib = $('#instructBox'); if(ib) ib.style.display = m==='custom' ? '' : 'none';
+}
+$$('.tab[data-mode]').forEach(tab => { tab.onclick = () => setMode(tab.dataset.mode); });
 $$('#scopeBox .tab').forEach(tab=>{
   tab.onclick = () => {
     $$('#scopeBox .tab').forEach(x=>x.classList.remove('on'));
@@ -1936,6 +2119,11 @@ $('#speed').addEventListener('change', renderCount);
 $('#maxChars').oninput = renderCount;
 $('#language').onchange = () => { outLangTouched = true; renderChips(); syncSpeakerToLang(); };
 $('#speaker').onchange = () => { spkTouched = true; };   /* 手动挑过就不再被语言切换覆盖 */
+/* 性别二选一：点一下就落到该性别下实测最佳的克隆音色 */
+$$('#gsel .gbtn').forEach(b => { b.onclick = () => applyGender(b.dataset.g); });
+$('#voice').onchange = syncGender;   /* 高级里手改音色后，按钮高亮跟着走 */
+const _vs = $('#vsel');
+if(_vs) _vs.onchange = () => { applyVsel(_vs.value); markGender(genderOf(_vs.value)); updateGpick(); };
 $('#q').oninput = debounce(()=>{ page = 1; resetJobs(); poll(); }, 350);
 $('#fOwner').onchange = ()=>{ page = 1; resetJobs(); poll(); };
 $('#fStatus').onchange = ()=>{ page = 1; resetJobs(); poll(); };
@@ -1972,59 +2160,9 @@ $('#submit').onclick = async () => {
 };
 $('#clear').onclick = ()=>{ $('#text').value=''; $('#title').value=''; localStorage.removeItem(DRAFT); renderCount(); };
 
-/* 选完文件立刻在本机读出时长：超长不必等上传被服务端拒，员工当场就知道要裁剪 */
-function probeDuration(file){
-  const el = $('#vdur');
-  el.style.display = 'none'; el.className = 'hint'; el.textContent = '';
-  if(!file) return Promise.resolve(null);
-  return new Promise(res=>{
-    const url = URL.createObjectURL(file), a = new Audio();
-    const done = v => { URL.revokeObjectURL(url); res(v); };
-    a.preload = 'metadata';
-    a.onloadedmetadata = ()=> done(isFinite(a.duration) ? a.duration : null);
-    a.onerror = ()=> done(null);
-    setTimeout(()=>{ if(a.readyState === 0) done(null); }, 4000);
-    a.src = url;
-  }).then(d=>{
-    if(d == null) return null;
-    el.style.display = '';
-    // 长音频不再拦：由服务端自动截取，这里只做提示
-    if(d > 900){ el.className = 'hint bad'; el.textContent = t('refTooLong')(d.toFixed(1)); }
-    else if(d < 3){ el.className = 'hint bad'; el.textContent = t('refTooShort')(d.toFixed(1)); }
-    else if(d > 30){ el.className = 'hint warn'; el.textContent = t('refAutoTrim')(d.toFixed(1)); }
-    else { el.className = 'hint'; el.textContent = t('refDurOk')(d.toFixed(1)); }
-    return d;
-  });
-}
-$('#vfile').onchange = ()=>{ probeDuration($('#vfile').files[0]); };
-
-$('#vupload').onclick = async () => {
-  const f = $('#vfile').files[0], name = $('#vname').value.trim();
-  if(!f || !name){ $('#vmsg').textContent = t('needName'); return; }
-  // 克隆是 ICL 模式，文字稿是硬性必填项：模型对空串直接抛错，
-  // 拦在这里员工能当场看到原因，不用等一次上传往返。
-  if(!$('#vtext').value.trim()){ $('#vmsg').textContent = t('needRefText'); $('#vtext').focus(); return; }
-  const d = await probeDuration(f);
-  if(d != null && d > 900){ $('#vmsg').textContent = t('refTooLong')(d.toFixed(1)); return; }
-  if(d != null && d < 3){ $('#vmsg').textContent = t('refTooShort')(d.toFixed(1)); return; }
-  const fd = new FormData();
-  fd.append('name', name); fd.append('ref_text', $('#vtext').value.trim()); fd.append('file', f);
-  fd.append('engine', ($('#vengine') && $('#vengine').value) || 'qwen');
-  $('#vmsg').textContent = t('uploading');
-  try{
-    const r = await api('/api/voices', {method:'POST', body:fd});
-    if(!r.ok){ const j = await r.json().catch(()=>({detail:'error'})); throw new Error(j.detail||'error'); }
-    const j = await r.json();
-    if(j.trimmed){ $('#vmsg').textContent = t('analyzing'); }
-    $('#vmsg').textContent = j.trimmed
-      ? t('enrolledTrim')(j.name, j.dur, j.clip_start, j.clip_end)
-      : t('enrolled')(j.name, j.dur);
-    if(j.warn) $('#vmsg').textContent += ' | ' + j.warn;
-    $('#vtext').value = ''; $('#vfile').value = '';
-    $('#vdur').style.display = 'none';
-    loadMeta();
-  }catch(e){ if(e.message !== '401') $('#vmsg').textContent = t('fail')+e.message; }
-};
+/* 手动录入音色的整套逻辑（probeDuration / #vfile / #vupload）随卡片一起移除：
+   音色现在只有一条来源 —— 顶部「标杆案例 → + 上传案例」，
+   由服务端自动挑最佳 15 秒并对齐文字稿。 */
 
 /* ---------- 任务列表（增量更新，绝不重建 audio） ---------- */
 function jobSkeleton(){

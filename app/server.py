@@ -161,14 +161,23 @@ COSY_SPEAKERS = {
                   "ref_voice": "EL_female"},
 }
 
-# 🔴 带情感时**不能**走 spk_id 缓存通道：
-#   frontend_zero_shot 复用分支的 model_input = {**spk2info[id]}，
-#   prompt_text 是注册时缓存的，instruct 根本进不去 —— 员工点了「激昂」会
-#   听到和「平稳」一模一样的成品，是静默失效，最难查的那种。
-#   对策：情感非平稳时回退零样本通道（用 ref_voice 的参考音频 + instruct），
-#   音色还是同一个人（注册源就是这批素材），情感才真的生效。
+# 按性别的**默认**克隆音色。员工只点「男声 / 女声」，剩下的全靠这里兜住。
+# 依据：这两个是完整五案例验收过的（case 1 口径 标杆男 94.80 / 标杆女 95.60）。
+# 其余克隆音色（yohan_male / SOLA_female 等）进可选列表但**不做默认** ——
+# 没跑过同等验证就不该占默认位，等实测超过现有默认再说。
+BEST_CLONE = {"male": "EL_male", "female": "EL_female"}
+
+
 def cosy_spk_id_for(speaker: str, emotion: str) -> str:
-    """返回该走缓存通道的音色 id；为空表示要走零样本通道。"""
+    """返回该走缓存通道的音色 id；为空表示要走零样本通道。
+
+    🔴 带情感时**不能**走 spk_id 缓存通道：
+      frontend_zero_shot 复用分支的 model_input = {**spk2info[id]}，
+      prompt_text 是注册时缓存的，instruct 根本进不去 —— 员工点了「激昂」会
+      听到和「平稳」一模一样的成品，是静默失效，最难查的那种。
+      对策：情感非平稳时回退零样本通道（用 ref_voice 的参考音频 + instruct），
+      音色还是同一个人（注册源就是这批素材），情感才真的生效。
+    """
     if speaker in COSY_SPEAKERS and emotion == DEFAULT_EMOTION:
         return speaker
     return ""
@@ -2126,6 +2135,16 @@ async def meta(request: Request):
         # 各音色支持的语言：实测全部音色均支持全部语言
         "all_speakers_all_langs": True,
         "voices": list(voices.keys()),
+        # 员工只点「男声 / 女声」就能出最佳成品，靠这三个字段兜住：
+        "best_clone": {g: (v if v in voices else "")
+                       for g, v in BEST_CLONE.items()},
+        # 克隆音色按性别分组（前端据此把「案例克隆」排在「千问内置」之前）
+        "voices_by_gender": {
+            g: [k for k, vv in voices.items()
+                if (vv.get("gender") or "") == g]
+            for g in ("male", "female")},
+        # 音色的多语显示名（voices.json 里的 label）
+        "voice_labels": {k: (v.get("label") or {}) for k, v in voices.items()},
         # 音色是否可用于克隆：ICL 模式必须有文字稿，且参考音频不能超长
         "voices_ok": {
             k: bool((v.get("ref_text") or "").strip())
@@ -2523,6 +2542,9 @@ async def upload_voice(request: Request,
                        name: str = Form(...),
                        ref_text: str = Form(""),
                        engine: str = Form(DEFAULT_ENGINE),
+                       gender: str = Form(""),
+                       bench_case: str = Form(""),
+                       label: str = Form(""),
                        file: UploadFile = File(...)):
     require(request)
     # 引擎由录入者（管理员）手动指定，写进 voices.json，之后这个音色的生成都走它。
@@ -2625,6 +2647,23 @@ async def upload_voice(request: Request,
             "text_method": info.get("text_method"),
         },
     }
+    # 这三个字段是「员工只点男声/女声就出最佳成品」的前提，缺一个自动匹配就
+    # 退化成随机挑：
+    #   gender     男/女 → 决定默认落哪个克隆音色
+    #   bench_case 该音色对标哪条案例 → 生产目标值取那条案例自己的值
+    #              （实测 r26g/r26h 对标 vs 不对标：五例均值 96.07 vs 93.59）
+    #   label      四语显示名（JSON 串），没有就回退显示音色 id
+    # 都是可选的：员工手动录入时可以不填，脚本批量灌案例音色时才带。
+    gender = (gender or "").strip()
+    if gender in ("male", "female"):
+        voices[safe]["gender"] = gender
+    if (bench_case or "").strip():
+        voices[safe]["bench_case"] = bench_case.strip()
+    if (label or "").strip():
+        try:
+            voices[safe]["label"] = json.loads(label)
+        except Exception as e:
+            log.warning("音色 %s 的 label 不是合法 JSON，已忽略: %s", safe, e)
     save_voices(voices)
     log.info("录入音色 %s: 原 %.1fs -> 成品 %.2fs, ref_text %d 字, 引擎=%s, 分析 %.2fs, %s",
              safe, dur, out_dur, len(used_text), engine, info["analyze_seconds"], info)
@@ -2672,6 +2711,47 @@ async def set_voice_engine(request: Request, name: str, engine: str = Form(...))
     save_voices(voices)
     log.info("音色 %s 引擎: %s -> %s", name, old, engine)
     return {"ok": True, "name": name, "engine": engine, "old": old}
+
+
+@app.post("/api/voices/{name}/meta")
+async def set_voice_meta(request: Request,
+                         name: str,
+                         gender: str = Form(""),
+                         bench_case: str = Form(""),
+                         label: str = Form("")):
+    """补/改音色的三个元数据字段，**立即生效，不用重启服务**。
+
+    gender / bench_case / label 是「员工只点男声/女声就出最佳成品」的前提：
+      - gender      男/女，决定默认落哪个克隆音色（BEST_CLONE 的兜底分组）
+      - bench_case  该音色对标哪条案例的 id，让生产目标值取那条案例自己的值
+      - label       四语显示名的 JSON 串，如 {"zh":"…","en":"…","ko":"…","ja":"…"}
+
+    为什么要单独开一个口子（而不是只能录入时带）：案例音色是脚本批量灌进
+    voices.json 的，事后发现性别标错、或换了对标案例，不可能让员工重录一遍。
+    空串表示「不改」，只动传了的字段。
+    """
+    require(request)
+    v = voices.get(name)
+    if not v:
+        raise HTTPException(404, "音色不存在")
+    changed = {}
+    if (gender or "").strip() in ("male", "female"):
+        v["gender"] = gender.strip()
+        changed["gender"] = v["gender"]
+    if (bench_case or "").strip():
+        v["bench_case"] = bench_case.strip()
+        changed["bench_case"] = v["bench_case"]
+    if (label or "").strip():
+        try:
+            v["label"] = json.loads(label)
+            changed["label"] = v["label"]
+        except Exception as e:
+            raise HTTPException(400, f"label 不是合法 JSON: {e}")
+    if changed:
+        save_voices(voices)
+        log.info("音色 %s 元数据更新: %s", name, changed)
+    return {"ok": True, "name": name, "changed": changed,
+            "gender": v.get("gender"), "bench_case": v.get("bench_case")}
 
 
 @app.post("/api/voices/{name}/auto-select")
