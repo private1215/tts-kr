@@ -146,6 +146,32 @@ EMOTION_PRESETS = {
     "serious":  {"engine": "cosyvoice3", "instruct": "serious"},
 }
 DEFAULT_EMOTION = "standard"
+# CosyVoice3 侧的常驻音色（POST /voices 注册进 spk2info，可脱离参考音频直接合成）。
+# ⚠️ 该模型出厂**没有** spk2info.pt，一个内置音色都不带，必须自己注册
+#    （见 docs 与 app/cosy_server.py 的 /voices）。注册用的是 ElevenLabs 案例
+#    素材的 15 秒克隆源，所以这里的声音和「录入音色克隆」里的 EL_* 是同一批人。
+# 为什么还要单独挂一份：预设音色模式下不必传参考音频，员工点开即用，
+# 且它们是「模型自带的声音」，和克隆音色是两回事，界面上要分开标。
+COSY_SPEAKERS = {
+    "KO_male":   {"lang": "korean", "zh": "韩语男声", "en": "Korean male",
+                  "ko": "한국어 남성", "ja": "韓国語男性",
+                  "ref_voice": "EL_male"},
+    "KO_female": {"lang": "korean", "zh": "韩语女声", "en": "Korean female",
+                  "ko": "한국어 여성", "ja": "韓国語女性",
+                  "ref_voice": "EL_female"},
+}
+
+# 🔴 带情感时**不能**走 spk_id 缓存通道：
+#   frontend_zero_shot 复用分支的 model_input = {**spk2info[id]}，
+#   prompt_text 是注册时缓存的，instruct 根本进不去 —— 员工点了「激昂」会
+#   听到和「平稳」一模一样的成品，是静默失效，最难查的那种。
+#   对策：情感非平稳时回退零样本通道（用 ref_voice 的参考音频 + instruct），
+#   音色还是同一个人（注册源就是这批素材），情感才真的生效。
+def cosy_spk_id_for(speaker: str, emotion: str) -> str:
+    """返回该走缓存通道的音色 id；为空表示要走零样本通道。"""
+    if speaker in COSY_SPEAKERS and emotion == DEFAULT_EMOTION:
+        return speaker
+    return ""
 # CosyVoice3 出片后仍走 ASR 内容回检；CER 超过这个阈值就自动回退 Qwen 重出，
 # 保证「加了情绪也不能把字念错」。
 COSY_FALLBACK_CER = float(os.environ.get("TTS_COSY_FALLBACK_CER", "0.15"))
@@ -931,6 +957,26 @@ async def run_job(job):
     _preset = EMOTION_PRESETS.get(_emotion) or EMOTION_PRESETS[DEFAULT_EMOTION]
     _engine_name = (job.get("engine") or _preset["engine"]).strip()
     _cosy_instruct = _preset.get("instruct") or "neutral"
+    # 「预设音色」里选了 CosyVoice3 常驻音色 -> 引擎必须跟着切。
+    # 否则会拿 Cosy 的音色 id 去喂 Qwen，而 Qwen 只认自己那 9 个发音人，
+    # 会直接报未知音色（两个引擎的音色命名空间完全不相通）。
+    _speaker = (job.get("speaker") or "").strip()
+    _cosy_spk_id = ""
+    if job.get("mode") != "clone" and _speaker in COSY_SPEAKERS:
+        _engine_name = "cosyvoice3"
+        _cosy_spk_id = cosy_spk_id_for(_speaker, _emotion)
+        # 带情感就必须回退零样本，否则 instruct 被缓存的 prompt_text 吃掉
+        if not _cosy_spk_id:
+            _rv = COSY_SPEAKERS[_speaker].get("ref_voice") or ""
+            _rvv = voices.get(_rv)
+            if _rvv:
+                ref_wav_path = _rvv.get("path")
+                ref_text = (_rvv.get("ref_text") or "").strip() or None
+            else:
+                log.warning("Cosy 音色 %s 的回退音色 %s 不在 voices.json 里，"
+                            "情感将不生效", _speaker, _rv)
+        log.info("任务 %s 预设音色=%s 属于 CosyVoice3 -> 引擎=%s 缓存通道=%s",
+                 job["id"], _speaker, _engine_name, _cosy_spk_id or "否(零样本)")
     # ⚠️ 引擎不可用就**现在**退回 Qwen，不要等到 vram.switch_to 才发现：
     #    那时 Qwen 已经被卸出显存，失败后还得重新加载一次，白花一两分钟
     #    装卸时间，员工只看到「正在分段」卡住。2026-10-06 加。
@@ -1050,6 +1096,8 @@ async def run_job(job):
         """
         audio, sr, meta = cosy_client.synth(
             text=text_ci[1],
+            # 常驻音色走缓存复用，不必再传参考音频；克隆才需要
+            spk_id=_cosy_spk_id,
             ref_wav=ref_wav_path,
             ref_text=ref_text or "",
             instruct=_cosy_instruct,
@@ -1074,9 +1122,17 @@ async def run_job(job):
         }
         return audio, sr, st
 
+    # 🔴 走 Cosy 的条件是「有参考音频 **或** 有常驻音色 id」，不能只看 ref_wav：
+    #    预设音色选 KO_male/KO_female 时走的是 spk_id 缓存通道，根本不带参考音频，
+    #    只判 ref_wav_path 会让条件为假 -> 掉回 Qwen -> 报 Unsupported speakers
+    #    （实测：KO_male+平稳失败、KO_female+激昂成功，后者是因为带情感会自动
+    #     回退零样本从而设了 ref_wav_path，现象很有迷惑性）。2026-10-09。
+    _cosy_ready = (_engine_name == "cosyvoice3"
+                   and bool(ref_wav_path or _cosy_spk_id))
+
     def _synth(text_ci):
         """单次块生成，返回 (audio, sr, stats)。"""
-        if _engine_name == "cosyvoice3" and ref_wav_path:
+        if _cosy_ready:
             return _synth_cosy(text_ci)
         return engine.synth_long(
             text=text_ci[1],
@@ -1116,7 +1172,7 @@ async def run_job(job):
     # 换引擎/加载模型这段时间前端一直显示「正在分段」，容易让人以为卡住了。
     # 标成 loading，等第一段产出后 _mk_progress 会自动改成 generating。
     job["stage"] = "loading"
-    if _engine_name == "cosyvoice3" and ref_wav_path:
+    if _cosy_ready:
         vram.switch_to("cosyvoice3", f"任务 {jid} ")
         job["_used_cosy"] = True
 
@@ -2093,6 +2149,14 @@ async def meta(request: Request):
             for k, v in EMOTION_PRESETS.items()
         ],
         "emotion_default": DEFAULT_EMOTION,
+        # CosyVoice3 常驻音色：与上面的 Qwen 发音人是两套命名空间，
+        # 界面按「哪个引擎的音色」分组展示，员工一眼能分清。
+        # available=false 时整组置灰（引擎没起来，选了会静默回退 Qwen）。
+        "cosy_speakers": [
+            dict({"key": k, "lang": v["lang"], "name": v},
+                 available=engine_available("cosyvoice3"))
+            for k, v in COSY_SPEAKERS.items()
+        ],
     }
 
 
@@ -3056,10 +3120,15 @@ def cps_target(gender):
 
     用加权平均而不是各案例 cps 的中位数：长篇案例的语速更稳定，
     按字数加权后抗抖动更好（实测中位数比加权平均差 0.4 个点的 dur 失分）。
+
+    🔴 实测（r26d）：这里跟着对标案例走单案例后，**D 五例全恶化**
+    （7.6/9.8/17.7/2.9/10.6 → 23.0/14.2/29.3/4.1/16.3），把 lufs+peak 赚回来的
+    全赔了进去。语速是**结构性**目标——它决定整段音频的时长与分句节奏，
+    而 onset 密度变异系数 D 对节奏结构极敏感。所以固定取全库加权值。
     """
     tot_c = 0.0
     tot_d = 0.0
-    for c in _bench_cases(gender):
+    for c in _pool_cases(gender):
         n = c.get("total_chars") or 0
         d = c.get("total_dur") or 0
         if n and d:

@@ -178,6 +178,12 @@ class SynthReq(BaseModel):
     text_frontend: bool = Field(False,
                                 description="韩语必须 False，否则文本前端会切坏")
     rid: str = Field("", description="调用方生成的请求 id，用于轮询 /progress")
+    spk_id: str = Field("", description="已注册的常驻音色 id（POST /voices 注册过）。"
+                                        "给了就复用 spk2info 缓存，**不必再传参考音频**；"
+                                        "为空则走零样本克隆（需要 ref_wav）。"
+                                        "⚠️ 复用时 prompt_text 取自注册时的 ref_text，"
+                                        "故 instruct 在此分支不生效；要带情感请留空 "
+                                        "spk_id 并传 ref_wav 走零样本通道")
 
 
 def _resolve_instruct(name: str) -> str:
@@ -278,7 +284,12 @@ def _split_sentences(text: str, max_chars: int = 160):
 def synth(req: SynthReq):
     if not req.text.strip():
         raise HTTPException(400, "text 为空")
-    if not req.ref_wav or not os.path.exists(req.ref_wav):
+    # 二选一：常驻音色 id（已注册）或参考音频（零样本克隆）
+    if req.spk_id:
+        cosy = get_model()
+        if req.spk_id not in cosy.list_available_spks():
+            raise HTTPException(400, f"音色未注册: {req.spk_id}（先 POST /voices）")
+    elif not req.ref_wav or not os.path.exists(req.ref_wav):
         raise HTTPException(400, f"参考音频不存在: {req.ref_wav}")
     cosy = get_model()
     torch.manual_seed(req.seed)
@@ -304,10 +315,27 @@ def synth(req: SynthReq):
             # ⚠️ 传**字符串**、逐块独立调用：官方 generator 通道会触发 bistream，
             #    实测韩语长文本会跑飞（重复句子 + 后半段全胡话，2026-10-06）。
             #    逐块独立调用内容 100% 正确，跑飞不会跨块累积。
-            for o in cosy.inference_zero_shot(c, prompt_text, req.ref_wav,
-                                              stream=False, speed=req.speed,
-                                              text_frontend=False):
-                outs.append(o["tts_speech"])
+            if req.spk_id:
+                # 常驻音色：按 id 复用 spk2info，省掉每块重算 speaker 嵌入/声学特征
+                # 🔴 必须走 inference_zero_shot 的 zero_shot_spk_id 分支，不能走
+                #    inference_sft：注册用的是 add_zero_shot_spk（零样本格式，
+                #    键为 llm_prompt_speech_token / flow_embedding ...），
+                #    而 frontend_sft 要的是 spk2info[id]['embedding']（SFT 格式），
+                #    直接调会 KeyError('embedding')（2026-10-09 实测）。
+                #    frontend_zero_shot 在 zero_shot_spk_id != '' 时直接
+                #    model_input = {**spk2info[id]}，正是我们要的复用通道。
+                #    prompt_text / prompt_wav 留空即可，不会走到特征提取。
+                for o in cosy.inference_zero_shot(c, "", "",
+                                                  zero_shot_spk_id=req.spk_id,
+                                                  stream=False,
+                                                  speed=req.speed,
+                                                  text_frontend=False):
+                    outs.append(o["tts_speech"])
+            else:
+                for o in cosy.inference_zero_shot(c, prompt_text, req.ref_wav,
+                                                  stream=False, speed=req.speed,
+                                                  text_frontend=False):
+                    outs.append(o["tts_speech"])
         except Exception as e:
             log.warning("第 %d 块生成失败: %s", i, repr(e)[:200])
         finally:
@@ -358,6 +386,22 @@ class VoiceReq(BaseModel):
     ref_text: str = ""
 
 
+@app.get("/speakers")
+def list_speakers():
+    """已注册进 spk2info 的常驻音色（可直接按 id 合成，不用再传参考音频）。
+
+    ⚠️ 这个模型**出厂没有** spk2info.pt（见 README「CosyVoice3 没有自带音色」），
+    所以这里一开始是空列表；音色必须先经 POST /voices 注册才会出现。
+    """
+    try:
+        cosy = get_model()
+        spks = cosy.list_available_spks()
+    except Exception as e:
+        log.warning("列出音色失败: %s", repr(e)[:200])
+        return {"speakers": [], "error": repr(e)[:200]}
+    return {"speakers": list(spks)}
+
+
 @app.post("/voices")
 def register_voice(req: VoiceReq):
     """把音色注册进 spk2info，后续可直接按 id 复用，省掉每次重算 speaker 嵌入。
@@ -367,8 +411,21 @@ def register_voice(req: VoiceReq):
     """
     if not os.path.exists(req.ref_wav):
         raise HTTPException(400, f"参考音频不存在: {req.ref_wav}")
+    # 🔴 CosyVoice3 的 prompt_text **必须**含 <|endofprompt|>：
+    #    llm.py 里 `assert 151646 in text`（text = prompt_text + tts_text），
+    #    而 tokenizer.encode 不会自动补任何特殊 token —— 分隔符得字面写进文本。
+    #    官方 infer_cosyvoice3.py 就是手工拼
+    #    'You are a helpful assistant.<|endofprompt|>' + prompt_text + target_text。
+    #    注册时漏了它，音色照样写进 spk2info，但**复用时才炸**（2026-10-09 实测：
+    #    AssertionError: <|endofprompt|> not detected），因为命中的是
+    #    frontend_zero_shot 的 else 复用分支，不再重算 prompt_text。
+    ref_text = req.ref_text or ""
+    if "<|endofprompt|>" not in ref_text:
+        ref_text = "You are a helpful assistant.<|endofprompt|>" + ref_text
+        log.info("注册音色 %s: ref_text 缺分隔符，已自动补 <|endofprompt|> 前缀",
+                 req.name)
     cosy = get_model()
-    ok = cosy.add_zero_shot_spk(req.ref_text, req.ref_wav, req.name)
+    ok = cosy.add_zero_shot_spk(ref_text, req.ref_wav, req.name)
     cosy.save_spkinfo()
     return {"ok": bool(ok), "name": req.name}
 

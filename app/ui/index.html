@@ -482,11 +482,14 @@ details.adv summary:hover{color:var(--txt2)}
       <div class="card">
         <h2 data-i18n="voice">声音</h2>
         <div class="tabs">
-          <div class="tab on" data-mode="custom" data-i18n="presetVoice">预设音色</div>
-          <div class="tab" data-mode="clone" data-i18n="cloneVoice">录入音色克隆</div>
+          <!-- 默认落在「录入音色克隆」：全量实测这条链路还原度最高
+               （Qwen + 15s 克隆源 95.5 vs 预设音色低约 2~3 分），
+               员工打开就是最佳组合，不用自己去切。 -->
+          <div class="tab" data-mode="custom" data-i18n="presetVoice">预设音色</div>
+          <div class="tab on" data-mode="clone" data-i18n="cloneVoice">录入音色克隆</div>
         </div>
 
-        <div id="pane-custom">
+        <div id="pane-custom" style="display:none">
           <label data-i18n="timbre">音色</label>
           <select id="speaker"></select>
           <div class="hint" data-i18n="spkAllHint">全部 9 个内置音色都支持所有输出语言，可自由搭配；推荐组只是该语言下最自然的选择。</div>
@@ -499,7 +502,7 @@ details.adv summary:hover{color:var(--txt2)}
           <div class="hint" data-i18n="instructHint">长语音强烈建议填 2-4 行（换行分隔）：系统会按段轮换使用，避免通篇一个语气一个语速——这是长音频 AI 味最主要的来源。留空则自动用中性朗读指令。</div>
         </div>
 
-        <div id="pane-clone" style="display:none">
+        <div id="pane-clone">
           <label data-i18n="savedVoices">已录入音色</label>
           <select id="voice"></select>
           <div class="hint" data-i18n="cloneNoInstruct">克隆模式不支持语气指令，语气由参考音频本身的情绪决定。</div>
@@ -627,8 +630,9 @@ const I18N = {
     scriptText:'正文', scriptPh:'粘贴要合成的文案。长文本会自动按句读切段、逐段生成再做韵律拼接。',
     voice:'声音', presetVoice:'预设音色', cloneVoice:'录入音色克隆',
     timbre:'音色',
-    spkGroupRec:(l)=>`推荐 · ${l} 母语`, spkGroupOther:'其他音色（同样支持，带母语口音）',
-    spkAllHint:'全部 9 个内置音色都支持所有输出语言，可自由搭配；推荐组只是该语言下最自然的选择。',
+    spkGroupRec:(l)=>`千问 Qwen 内置 · 推荐（${l} 母语）`, spkGroupOther:'千问 Qwen 内置 · 其他音色',
+    spkGroupCosy:'CosyVoice3 音色（自带情感，可选激昂/亲切/严肃）', cosyOff:'（引擎未上线）',
+    spkAllHint:'千问 Qwen 的 9 个内置音色与 CosyVoice3 音色是两套各自独立的音色（互不相通，已按引擎分组）；前者发音最稳，后者支持情感。全部音色都支持所有输出语言，可自由搭配。',
     instructLabel:'语气指令（点下方标签可添加，多行会自动轮换）',
     instructPh:'例：平静温暖的语气，慢速讲述',
     instructHint:'长语音强烈建议填 2-4 行（换行分隔）：系统会按段轮换使用，避免通篇一个语气一个语速——这是长音频 AI 味最主要的来源。留空则自动用中性朗读指令。',
@@ -747,8 +751,9 @@ const I18N = {
     script:'Script', jobTitle:'Title', titlePh:'Name this clip so you can find it later',
     scriptText:'Body', scriptPh:'Paste your script. Long text is split by sentence, generated per segment, then joined with prosody.',
     voice:'Voice', presetVoice:'Preset voice', cloneVoice:'Cloned voice',
-    spkGroupRec:(l)=>`Recommended · native ${l}`, spkGroupOther:'Other voices (also supported, native accent)',
-    spkAllHint:'All 9 built-in voices support every output language and can be freely combined; the recommended group is simply the most natural choice for the current language.',
+    spkGroupRec:(l)=>`Qwen built-in · recommended (native ${l})`, spkGroupOther:'Qwen built-in · others',
+    spkGroupCosy:'CosyVoice3 voices (emotional excited / warm / serious)', cosyOff:' (engine offline)',
+    spkAllHint:"Qwen's 9 built-in voices and the CosyVoice3 voices are two separate sets (grouped by engine below); Qwen is most accurate, CosyVoice3 supports emotion. All voices support every output language.",
     timbre:'Speaker', instructLabel:'Style instructions (click chips to add; multiple lines rotate)',
     instructPh:'e.g. Calm and warm tone, speaking slowly',
     instructHint:'For long audio, enter 2-4 lines (one per line): they rotate across segments so the whole piece never sits on one tone and one speed — the biggest source of AI-sounding long-form narration.',
@@ -867,8 +872,9 @@ const I18N = {
     script:'원고', jobTitle:'음성 제목', titlePh:'나중에 찾기 쉽게 제목을 붙여 주세요',
     scriptText:'본문', scriptPh:'원고를 붙여넣으세요. 긴 텍스트는 문장 단위로 나누어 생성한 뒤 리듬을 보정해 이어붙입니다.',
     voice:'음성', presetVoice:'기본 음색', cloneVoice:'녹음 음성 클론',
-    spkGroupRec:(l)=>`추천 · ${l} 원어민`, spkGroupOther:'기타 음색 (지원됨, 원어 억양 있음)',
-    spkAllHint:'내장 음색 9종 모두 모든 출력 언어를 지원하며 자유롭게 조합할 수 있습니다. 추천 그룹은 해당 언어에서 가장 자연스러운 선택입니다.',
+    spkGroupRec:(l)=>`Qwen 내장 · 추천 (${l} 원어민)`, spkGroupOther:'Qwen 내장 · 기타 음색',
+    spkGroupCosy:'CosyVoice3 음색 (감정 지원 격앙/다정/엄숙)', cosyOff:' (엔진 미가동)',
+    spkAllHint:'Qwen 내장 음색 9종과 CosyVoice3 음색은 서로 다른 두 세트입니다(아래에서 엔진별로 묶어 표시). Qwen이 발음이 가장 안정적이고, CosyVoice3는 감정을 지원합니다. 모든 음색이 모든 출력 언어를 지원합니다.',
     timbre:'음색', instructLabel:'톤 지시문 (아래 태그를 누르면 추가, 여러 줄은 자동 순환)',
     instructPh:'예: 차분하고 따뜻한 톤으로 천천히',
     instructHint:'긴 음성은 2-4줄(줄바꿈 구분)을 권장합니다: 구간마다 번갈아 적용되어 전체가 한 가지 톤과 속도로 흘러가지 않습니다. 비워두면 중성 낭독 지시가 자동 적용됩니다.',
@@ -987,8 +993,9 @@ const I18N = {
     script:'原稿', jobTitle:'タイトル', titlePh:'後で探しやすいよう名前を付けてください',
     scriptText:'本文', scriptPh:'原稿を貼り付けてください。長文は文ごとに分割して生成し、韻律を整えて連結します。',
     voice:'音声', presetVoice:'プリセット音色', cloneVoice:'録音音色のクローン',
-    spkGroupRec:(l)=>`推奨 · ${l} 母語`, spkGroupOther:'その他の音色（対応、母語なまりあり）',
-    spkAllHint:'内蔵音色9種はすべての出力言語に対応し、自由に組み合わせられます。推奨グループはその言語で最も自然な選択です。',
+    spkGroupRec:(l)=>`Qwen 内蔵 · 推奨 (${l} 母語)`, spkGroupOther:'Qwen 内蔵 · その他の音色',
+    spkGroupCosy:'CosyVoice3 音色（感情対応 熱烈/親しみ/厳粛）', cosyOff:'（エンジン未起動）',
+    spkAllHint:'Qwen 内蔵音色9種と CosyVoice3 音色は別々のセットです（下記はエンジン別にグループ化）。Qwen は発音が最も安定し、CosyVoice3 は感情表現に対応します。全音色が全出力言語に対応します。',
     timbre:'音色', instructLabel:'スタイル指示（タップで追加、複数行は自動ローテーション）',
     instructPh:'例：落ち着いた温かいトーンでゆっくりと',
     instructHint:'長い音声には2〜4行（改行区切り）がおすすめです。区間ごとに交互に適用され、全体が同じトーン・同じ速度のままになりません。空欄なら中立的な朗読指示が自動適用されます。',
@@ -1130,7 +1137,8 @@ const INSTRUCT_PH = {
 };
 
 /* ---------- 全局状态 ---------- */
-let mode = 'custom';
+/* 默认「录入音色克隆」：全量实测这条链路还原度最高，员工打开就是最佳组合 */
+let mode = 'clone';
 /* 语言优先级：手动选择(localStorage) > 浏览器系统语言 > 中文 */
 function detectLang(){
   const langs = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ''])
@@ -1218,17 +1226,29 @@ function speakersForLang(){
     other: all.filter(s => map[s] !== lang),
   };
 }
+/* CosyVoice3 常驻音色：与 Qwen 的 9 个发音人是两套互不相通的命名空间，
+   分组标出来，员工才知道「选这个会换引擎」。引擎没上线时整组置灰 ——
+   否则选了会静默回退 Qwen，出的成品和千问音色一模一样，白等一轮排队。 */
+function cosyOpt(o){
+  const L = (window.UI && UI.lang) || 'zh';
+  const nm = (o.name && (o.name[L] || o.name.zh)) || o.key;
+  const okk = o.available !== false;
+  return `<option value="${esc(o.key)}"${okk ? '' : ' disabled'}>`
+       + `${esc(nm)}${okk ? '' : ' ' + esc(t('cosyOff'))}</option>`;
+}
 function renderSpeakers(){
   const sp = $('#speaker');
   const {rec, other} = speakersForLang();
+  const cosy = META.cosy_speakers || [];
   const prev = sp.value;
   const opt = s => `<option value="${s}">${esc(spkName(s))}</option>`;
   let html = '';
   if(rec.length)   html += `<optgroup label="${esc(t('spkGroupRec')(langShort(outLang())))}">${rec.map(opt).join('')}</optgroup>`;
   if(other.length) html += `<optgroup label="${esc(t('spkGroupOther'))}">${other.map(opt).join('')}</optgroup>`;
+  if(cosy.length)  html += `<optgroup label="${esc(t('spkGroupCosy'))}">${cosy.map(cosyOpt).join('')}</optgroup>`;
   if(!html) html = '<option value="sohee">sohee</option>';
   sp.innerHTML = html;
-  const all = rec.concat(other);
+  const all = rec.concat(other).concat(cosy.map(o => String(o.key)));
   if(prev && all.includes(prev)) sp.value = prev;      /* 尊重手动选择 */
   else {
     const def = (META.speaker_default||LANG_SPK)[outLang()];
@@ -1285,6 +1305,12 @@ function renderVoices(){
     ? list.map(x=>`<option value="${x}">${esc(voiceName(x))}${voiceOk(x)?'':' '+t('voiceUnusable')}</option>`).join('')
     : `<option value="">${t('emptyOpt')}</option>`;
   if(prev && list.includes(prev)) v.value = prev;
+  else {
+    /* 默认落在第一个「可用」的音色上：缺文字稿的那些能列出但不能用，
+       让员工一进来就选中它们会白等一轮排队才报错。 */
+    const ok = list.find(voiceOk);
+    if(ok) v.value = ok;
+  }
 }
 function renderOwners(){
   const sel = $('#fOwner'), cur = sel.value;
@@ -1859,7 +1885,7 @@ function savePref(){
   try{
     const g = id => { const e = $(id); return e ? e.value : ''; };
     localStorage.setItem(PREF, JSON.stringify({
-      mode: (typeof mode !== 'undefined' ? mode : 'custom'),
+      mode: (typeof mode !== 'undefined' ? mode : 'clone'),
       speaker: g('#speaker'), voice: g('#voice'), language: g('#language'),
       emotion: g('#emotion'), speed: g('#speed')
     }));
@@ -1869,7 +1895,7 @@ function restorePref(){
   try{
     const p = JSON.parse(localStorage.getItem(PREF) || 'null');
     if(!p) return;
-    if(p.mode && p.mode !== (typeof mode !== 'undefined' ? mode : 'custom')){
+    if(p.mode && p.mode !== (typeof mode !== 'undefined' ? mode : 'clone')){
       const tab = document.querySelector('.tab[data-mode="'+p.mode+'"]');
       if(tab) tab.click();          /* 切 tab 会同步显示对应面板 */
     }

@@ -73,8 +73,12 @@ def _poll_progress(rid: str, stop: threading.Event, on_progress, interval=0.6):
 def synth(text: str, ref_wav: str, ref_text: str,
           instruct: str = "neutral", speed: float = 1.0,
           seed: int = 42, max_chars: int = None, timeout: float = None,
-          on_progress=None):
+          on_progress=None, spk_id: str = ""):
     """合成一段文本。
+
+    spk_id: CosyVoice3 里**已注册**的常驻音色 id（POST /voices 注册过）。
+            给了它就走缓存复用通道，**不需要** ref_wav；
+            为空则走零样本克隆（必须给 ref_wav）。
 
     on_progress: 可选回调 (done:int, total:int)，合成期间由后台线程按分段进度调用。
 
@@ -85,14 +89,16 @@ def synth(text: str, ref_wav: str, ref_text: str,
     if not text or not text.strip():
         meta["error"] = "文本为空"
         return None, 0, meta
-    if not ref_wav or not os.path.exists(ref_wav):
+    # 常驻音色走缓存复用，不必再传参考音频；零样本才校验 ref_wav
+    if not spk_id and (not ref_wav or not os.path.exists(ref_wav)):
         meta["error"] = f"参考音频不存在: {ref_wav}"
         return None, 0, meta
 
     rid = uuid.uuid4().hex[:12]
     body = json.dumps({
         "text": text,
-        "ref_wav": ref_wav,
+        "spk_id": spk_id or "",
+        "ref_wav": ref_wav or "",
         "ref_text": ref_text or "",
         "instruct": instruct or "neutral",
         "speed": float(speed or 1.0),
