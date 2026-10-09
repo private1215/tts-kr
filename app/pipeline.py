@@ -608,19 +608,39 @@ def pause_for(seg: dict, base_ms: float, para_ms: float, jitter: float,
 
 def concat_segments(audios: list, segs: list, sr: int = 24000,
                     base_ms: float = 320.0, para_ms: float = 620.0,
-                    jitter: float = 0.18, seed: int = None) -> np.ndarray:
+                    jitter: float = 0.18, seed: int = None,
+                    breath: bool = True) -> np.ndarray:
     """把各段音频按真人停顿节奏拼接。
 
     audios: 与 segs 一一对应的 float32 numpy 数组
+
+    breath（r27）：在长停顿处插入**合成呼吸**。案例原声是 ElevenLabs 生成的
+    TTS，本身不含呼吸（已诊断：静音段 rel_db 单峰连续、无双峰），所以这项
+    需求无法从案例克隆，只能主动合成。见 app/breath.py。
+    位置仍**沿用案例的停顿结构**（哪些地方停、停多久完全不变），
+    只是在够长的停顿里加一点气流声，不改变原有节奏。
     """
     rng = random.Random(seed)
+    try:
+        from app.breath import Plan, make_breath_silence, ENABLED as _BREATH_ON
+    except ImportError:
+        from breath import Plan, make_breath_silence, ENABLED as _BREATH_ON
+    plan = Plan(enabled=bool(breath) and _BREATH_ON)
     parts = []
     for i, (a, seg) in enumerate(zip(audios, segs)):
         parts.append(a)
         if i < len(audios) - 1:
             nxt = segs[i + 1] if i + 1 < len(segs) else None
-            parts.append(make_silence(
-                pause_for(seg, base_ms, para_ms, jitter, rng, next_seg=nxt), sr))
+            gap = pause_for(seg, base_ms, para_ms, jitter, rng, next_seg=nxt)
+            if plan.want(gap):
+                # 用本段语音的 RMS 做参考电平，保证呼吸与语音的相对响度稳定
+                v = float(np.sqrt(np.mean(np.asarray(a, dtype=np.float32) ** 2))) \
+                    if len(a) else 0.0
+                parts.append(make_breath_silence(gap, sr, rng, v))
+                plan.done()
+            else:
+                parts.append(make_silence(gap, sr))
+            plan.advance(len(a) / float(sr) + gap / 1000.0)
     return np.concatenate(parts) if parts else np.zeros(0, dtype=np.float32)
 
 

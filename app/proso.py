@@ -45,6 +45,19 @@ K_MED_HI = float(os.environ.get("TTS_PROSO_KMED_HI", "1.16"))
 TAIL_SEC = 0.35                  # 与 prosody_report 的 E 窗口一致
 STEP = 0.01                      # PitchTier 时间步长（秒）
 
+# ---- r27：句尾**定向**下降（半音）------------------------------------------
+# 为什么需要它：2026-10-10 用 tools/prosody_target.py 同文案对比发现，
+#   案例句尾降调幅度 −7.62 st，我们的 base 只有 −5.02 st（差 2.6 个半音），
+#   句内音高动态也差 2.7 st —— 这就是人工盲听"语调不对 / 像念稿"的量化形态。
+# 而原有的 k_a / k_tail 是**绕句中位缩放偏离量**：句尾本来下降就放大下降，
+#   句尾本来上升就放大上升。实测我们不该上扬的句占比 10~15%（案例只有 5%），
+#   单纯加大 k_tail 会把这个毛病一起放大，所以必须加**定向**的量。
+# drop_st 的作用是：无论句尾朝哪走，都在句尾窗口内**额外压低** drop_st 半音
+#   → 降调句降得更彻底，升调句的上扬被抵消一部分，一举两得。
+# 默认 2.4 st（≈诊断出的 2.6 差距的九成，留一点余量）；上限 4.0 st 防止不自然。
+TAIL_DROP_ST = float(os.environ.get("TTS_PROSO_TAIL_DROP", "2.4"))
+TAIL_DROP_MAX_ST = float(os.environ.get("TTS_PROSO_TAIL_DROP_MAX", "4.0"))
+
 
 def _fminmax(is_male):
     """韩语男女的基频搜索范围。判不出性别时放宽。"""
@@ -86,35 +99,42 @@ def _resynth(x, sr, t, f, is_male=None, step=STEP):
     return np.asarray(y.values[0], dtype=x.dtype)
 
 
-def shape(t, f, segs_sec, k_a=1.0, k_tail=1.0, tail_sec=TAIL_SEC):
+def shape(t, f, segs_sec, k_a=1.0, k_tail=1.0, tail_sec=TAIL_SEC, drop_st=0.0):
     """按句缩放 F0。返回新的 f 数组。
 
     segs_sec: [(start_sec, end_sec), ...]，来自 prosody_report.sent_windows
 
     A：整句内绕该句 F0 中位缩放 k_a                ⇒ A 精确 × k_a
     E：句尾 tail_sec 窗口再叠一层，权重 0→1 渐变    ⇒ 句尾斜率再 × k_tail
+    drop_st（r27）：句尾窗口额外**定向压低** drop_st 个半音。
+        与 k_tail 的区别：k_tail 是乘性（放大已有走向），drop_st 是加性
+        （无论原本朝哪走都往下压）—— 用来同时解决"降调不够狠"和
+        "不该上扬的地方上扬了"这两个毛病。
     """
     g = f.copy()
-    if abs(k_a - 1.0) < 1e-4 and abs(k_tail - 1.0) < 1e-4:
+    if abs(k_a - 1.0) < 1e-4 and abs(k_tail - 1.0) < 1e-4 and abs(drop_st) < 1e-4:
         return g
     semi = 12.0 * np.log2(np.maximum(f, 1e-6))
     out = semi.copy()
     # 每个 F0 点归属哪一句（句外的点不动）
     starts = np.array([s for s, _ in segs_sec]) if segs_sec else np.zeros(0)
     ends = np.array([e for _, e in segs_sec]) if segs_sec else np.zeros(0)
+    drop = float(np.clip(drop_st, -TAIL_DROP_MAX_ST, TAIL_DROP_MAX_ST))
     for si, (s0, e0) in enumerate(segs_sec):
         m = (t >= s0) & (t < e0)
         if m.sum() < 4:
             continue
         c = np.median(semi[m])                       # 句中位（半音域）
         w_a = np.ones(m.sum())
-        if abs(k_tail - 1.0) > 1e-4 and e0 - s0 > 0.2:
+        # 🔴 原来的判断漏了 drop_st：k_tail==1 时权重根本不会被算出来，
+        #    加性下降就完全失效了。
+        if (abs(k_tail - 1.0) > 1e-4 or abs(drop) > 1e-4) and e0 - s0 > 0.2:
             tw = min(tail_sec, (e0 - s0) * 0.6)
             # 句尾窗口内权重 0→1 平滑上升，避免音高跳变
             w_a = np.clip((t[m] - (e0 - tw)) / tw, 0.0, 1.0)
             w_a = w_a * w_a * (3.0 - 2.0 * w_a)      # smoothstep
         kk = k_a * (k_tail ** w_a)
-        out[m] = c + (semi[m] - c) * kk
+        out[m] = c + (semi[m] - c) * kk - drop * w_a
     _ = starts, ends, si                              # 占位：保留结构便于扩展
     return np.power(2.0, out / 12.0)
 
@@ -179,8 +199,12 @@ def med_of(x, sr, is_male=None):
 
 def fit(x, sr, target_a=None, target_e=None, cur_a=None, cur_e=None,
         is_male=None, segs=None, tail_sec=TAIL_SEC, max_semi_shift=4.0,
-        target_med=None, cur_med=None, k_med_lo=K_MED_LO, k_med_hi=K_MED_HI):
+        target_med=None, cur_med=None, k_med_lo=K_MED_LO, k_med_hi=K_MED_HI,
+        drop_st=None):
     """把 A / E 拉到目标值，可选再把**全局 f0 基线**平移到 target_med。
+
+    drop_st（r27）：句尾定向下降的半音数；None 表示沿用 TAIL_DROP_ST 默认值。
+    传 0.0 可显式关闭（做 A/B 对照时用）。
 
     cur_a / cur_e：当前实测值（由 prosody_report 量出来，必须同口径）。
     只在给定的时候才动对应的维度。
@@ -217,7 +241,9 @@ def fit(x, sr, target_a=None, target_e=None, cur_a=None, cur_e=None,
     else:
         k_tail = 1.0
     if _want_ae:
-        g = shape(t, f, segs_sec, k_a=k_a, k_tail=k_tail, tail_sec=tail_sec)
+        _drop = TAIL_DROP_ST if drop_st is None else float(drop_st)
+        g = shape(t, f, segs_sec, k_a=k_a, k_tail=k_tail, tail_sec=tail_sec,
+                  drop_st=_drop)
         # 绝对音高整体位移限幅（缩放绕中位，理论上不该跑，兜个底）
         med_o, med_n = np.median(f), np.median(g)
         shift = 12.0 * np.log2(med_n / max(med_o, 1e-6))
