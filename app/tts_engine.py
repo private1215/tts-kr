@@ -344,19 +344,42 @@ class TTSEngine:
         # 必须在**生产加载路径**注入 adapter，光在离线脚本里验证没用。
         # 开关：TTS_LORA_ADAPTER=<ckpt 目录>；不设置则行为与之前完全一致。
         self._peft_model = None
-        _ad = os.environ.get("TTS_LORA_ADAPTER", "").strip()
-        if _ad:
-            try:
-                from peft import PeftModel
-                # 🔴 from_pretrained 会**原地**把 LoRA 注入 talker.model 的 Linear，
-                #    但返回的是 wrapper；只有持有它才能用 disable_adapter() 做按音色开关。
+        self._adapters = {}          # 音色名前缀 -> peft adapter 名
+        # 多 adapter（推荐）：TTS_LORA_ADAPTERS="yohan_male=/path1,SOLA_female=/path2"
+        # 男女声必须用各自的 adapter：一个 adapter 是在单一说话人数据上训的，
+        # 全局套用会把男声风格压到女声上（反之亦然）→ 音色退化。
+        _specs = os.environ.get("TTS_LORA_ADAPTERS", "").strip()
+        _single = os.environ.get("TTS_LORA_ADAPTER", "").strip()
+        try:
+            from peft import PeftModel
+            if _specs:
+                first = True
+                for item in _specs.split(","):
+                    if "=" not in item:
+                        continue
+                    prefix, path = item.split("=", 1)
+                    prefix, path = prefix.strip(), path.strip()
+                    if not (prefix and path):
+                        continue
+                    if first:
+                        # 🔴 from_pretrained 原地注入 LoRA，但只有返回的 wrapper
+                        #    才有 disable_adapter() / load_adapter() / set_adapter()
+                        self._peft_model = PeftModel.from_pretrained(
+                            self.model.model.talker.model, path,
+                            adapter_name=prefix, is_trainable=False)
+                        first = False
+                    else:
+                        self._peft_model.load_adapter(path, adapter_name=prefix)
+                    self._adapters[prefix.lower()] = prefix
+                    log.info("已载入 LoRA adapter %s -> %s", prefix, path)
+            elif _single:
                 self._peft_model = PeftModel.from_pretrained(
-                    self.model.model.talker.model, _ad, is_trainable=False)
+                    self.model.model.talker.model, _single, is_trainable=False)
                 log.info("已注入 LoRA adapter: %s（白名单 %s）",
-                         _ad, os.environ.get("TTS_LORA_VOICES", "*"))
-            except Exception as e:
-                # 🔴 注入失败绝不能让服务起不来：回退到 base 继续提供服务
-                log.error("LoRA adapter 注入失败，回退 base: %s", e)
+                         _single, os.environ.get("TTS_LORA_VOICES", "*"))
+        except Exception as e:
+            # 🔴 注入失败绝不能让服务起不来：回退到 base 继续提供服务
+            log.error("LoRA adapter 注入失败，回退 base: %s", e)
         self.variant = variant
         self.load_time = time.time() - t0
         self._languages = None
@@ -847,10 +870,14 @@ class TTSEngine:
     def _adapter_ctx(self, ref_key):
         """按音色白名单决定本次生成是否启用 adapter。
 
-        🔴 align_v2 是在**男声 yohan** 数据上训练的。adapter 一旦注入就是全局的，
-        直接开会让女声/其它说话人也带上男声风格 → 音色退化。
-        `TTS_LORA_VOICES=yohan_male` 时，只有匹配该前缀的音色启用，
-        其余走 disable_adapter() 用回 base。不设置该变量则全部启用（不推荐）。
+        🔴 adapter 是用**单一说话人**数据训的，注入后是全局的：
+        把男声 adapter 套到女声上会造成音色退化，反之亦然。
+        因此按音色名前缀选择：
+          - 多 adapter：TTS_LORA_ADAPTERS="yohan_male=/p1,SOLA_female=/p2"
+            → 前缀命中就 set_adapter 对应权重，都不命中则 disable_adapter 回退 base。
+          - 单 adapter（旧）：TTS_LORA_VOICES=yohan_male 前缀白名单。
+        ⚠️ set_adapter 改的是全局状态；本服务生成任务是串行队列，安全。
+        若将来改成并发推理，必须改成按请求隔离，否则会串音色。
         """
         import contextlib
 
@@ -860,6 +887,14 @@ class TTSEngine:
 
         if self._peft_model is None:
             return _noop()
+        rk = (ref_key or "").lower()
+        # 多 adapter：按音色名前缀选中对应 adapter；都不匹配则回退 base
+        if self._adapters:
+            for prefix, name in self._adapters.items():
+                if rk.startswith(prefix):
+                    self._peft_model.set_adapter(name)
+                    return _noop()
+            return self._peft_model.disable_adapter()
         allow = os.environ.get("TTS_LORA_VOICES", "").strip()
         if not allow:
             return _noop()

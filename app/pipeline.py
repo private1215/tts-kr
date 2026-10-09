@@ -39,7 +39,15 @@ def normalize_korean(text: str) -> str:
     """
     t = text.strip()
     try:
-        from app.konum import normalize_numbers, enabled
+        # 🔴 服务进程里模块是以顶层名 `pipeline` 加载的（app/ 在 sys.path，
+        #    项目根不在），此时 `app` 包不可导入 → 必须回落到 `konum`。
+        #    2026-10-09 踩坑：只写 `from app.konum import ...` 会抛
+        #    ModuleNotFoundError: No module named 'app'，又被下面的 except
+        #    静默吞掉，表现为「开关打开了但数字一个没转」。
+        try:
+            from app.konum import normalize_numbers, enabled
+        except ImportError:
+            from konum import normalize_numbers, enabled
         if enabled():
             t = normalize_numbers(t)
     except Exception as e:  # 文本前端绝不能因为规整失败而让整单失败
