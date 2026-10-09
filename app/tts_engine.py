@@ -343,13 +343,17 @@ class TTSEngine:
         # 员工拿到的音频一直由 base 生成；要把训练成果真正落到线上，
         # 必须在**生产加载路径**注入 adapter，光在离线脚本里验证没用。
         # 开关：TTS_LORA_ADAPTER=<ckpt 目录>；不设置则行为与之前完全一致。
+        self._peft_model = None
         _ad = os.environ.get("TTS_LORA_ADAPTER", "").strip()
         if _ad:
             try:
                 from peft import PeftModel
-                PeftModel.from_pretrained(self.model.model.talker.model, _ad,
-                                          is_trainable=False)
-                log.info("已注入 LoRA adapter: %s", _ad)
+                # 🔴 from_pretrained 会**原地**把 LoRA 注入 talker.model 的 Linear，
+                #    但返回的是 wrapper；只有持有它才能用 disable_adapter() 做按音色开关。
+                self._peft_model = PeftModel.from_pretrained(
+                    self.model.model.talker.model, _ad, is_trainable=False)
+                log.info("已注入 LoRA adapter: %s（白名单 %s）",
+                         _ad, os.environ.get("TTS_LORA_VOICES", "*"))
             except Exception as e:
                 # 🔴 注入失败绝不能让服务起不来：回退到 base 继续提供服务
                 log.error("LoRA adapter 注入失败，回退 base: %s", e)
@@ -840,17 +844,43 @@ class TTSEngine:
                         cps, SLOW_CPS, len(audios))
         return out, sr_out, stats
 
+    def _adapter_ctx(self, ref_key):
+        """按音色白名单决定本次生成是否启用 adapter。
+
+        🔴 align_v2 是在**男声 yohan** 数据上训练的。adapter 一旦注入就是全局的，
+        直接开会让女声/其它说话人也带上男声风格 → 音色退化。
+        `TTS_LORA_VOICES=yohan_male` 时，只有匹配该前缀的音色启用，
+        其余走 disable_adapter() 用回 base。不设置该变量则全部启用（不推荐）。
+        """
+        import contextlib
+
+        @contextlib.contextmanager
+        def _noop():
+            yield
+
+        if self._peft_model is None:
+            return _noop()
+        allow = os.environ.get("TTS_LORA_VOICES", "").strip()
+        if not allow:
+            return _noop()
+        keys = [k.strip().lower() for k in allow.split(",") if k.strip()]
+        rk = (ref_key or "").lower()
+        if any(rk.startswith(k) for k in keys):
+            return _noop()
+        return self._peft_model.disable_adapter()
+
     def _gen_one(self, texts, mode, language, speaker, instruct, ref_audio,
                  ref_text, ref_key, seed, temperature, top_p,
                  repetition_penalty, do_sample, subtalker_temperature=None):
         """生成一个 batch 并做边缘裁剪，返回 (音频数组列表, sr)。"""
-        wavs, sr2 = self.synth_batch(
-            texts, mode=mode, language=language, speaker=speaker,
-            instruct=instruct, ref_audio=ref_audio, ref_text=ref_text,
-            ref_key=ref_key, seed=seed, temperature=temperature, top_p=top_p,
-            repetition_penalty=repetition_penalty, do_sample=do_sample,
-            subtalker_temperature=subtalker_temperature,
-        )
+        with self._adapter_ctx(ref_key):
+            wavs, sr2 = self.synth_batch(
+                texts, mode=mode, language=language, speaker=speaker,
+                instruct=instruct, ref_audio=ref_audio, ref_text=ref_text,
+                ref_key=ref_key, seed=seed, temperature=temperature, top_p=top_p,
+                repetition_penalty=repetition_penalty, do_sample=do_sample,
+                subtalker_temperature=subtalker_temperature,
+            )
         return [trim_edges(np.asarray(w, dtype=np.float32).flatten(), sr=sr2)
                 for w in wavs], sr2
 
