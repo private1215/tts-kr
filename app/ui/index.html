@@ -473,6 +473,7 @@ details.adv summary:hover{color:var(--txt2)}
         <div class="menu" id="userMenu">
           <div class="mi" id="miPw" data-i18n="changePw">修改密码</div>
           <div class="mi hide" id="miUsers" data-i18n="userMgmt">员工账号管理</div>
+          <div class="mi" id="miFb" data-i18n="feedback">听感反馈</div>
           <div class="mi sep" id="miOut" data-i18n="logout">退出登录</div>
         </div>
       </div>
@@ -636,6 +637,7 @@ const I18N = {
     changePw:'修改密码', oldPwd:'当前密码', newPwd:'新密码', confirmPwd:'确认新密码',
     pwMismatch:'两次输入的新密码不一致', pwShort:'密码至少 6 位', pwOk:'密码已修改，请重新登录',
     logout:'退出登录', userMgmt:'员工账号管理', userMgmtSub:'创建员工账号，员工只能看到自己生成的任务。',
+    feedback:'听感反馈',
     report:'产出明细', reportSub:'按人 / 按日统计已完成的语音产出，可导出 CSV 用 Excel 打开。',
     reportDays:'统计范围', exportCsv:'导出 CSV',
     daysUnit:(n)=>`${n} 天`, rangeAll:'全部',
@@ -775,6 +777,7 @@ const I18N = {
     pwMismatch:'New passwords do not match', pwShort:'Password must be at least 6 characters',
     pwOk:'Password updated, please sign in again',
     logout:'Sign out', userMgmt:'User accounts', userMgmtSub:'Create staff accounts — they only see their own jobs.',
+    feedback:'Listening feedback',
     report:'Production report', reportSub:'Output by person / by day; exportable to CSV for Excel.',
     reportDays:'Range', exportCsv:'Export CSV',
     daysUnit:(n)=>`${n} days`, rangeAll:'All',
@@ -913,6 +916,7 @@ const I18N = {
     pwMismatch:'새 비밀번호가 일치하지 않습니다', pwShort:'비밀번호는 6자 이상이어야 합니다',
     pwOk:'비밀번호가 변경되었습니다. 다시 로그인해 주세요',
     logout:'로그아웃', userMgmt:'직원 계정 관리', userMgmtSub:'직원 계정을 만듭니다. 직원은 본인이 만든 작업만 볼 수 있습니다.',
+    feedback:'음성 듣기 피드백',
     report:'생산 통계', reportSub:'사람별 / 날짜별 완료된 음성 산출량. CSV로 내보내 Excel에서 열 수 있습니다.',
     reportDays:'기간', exportCsv:'CSV 내보내기',
     daysUnit:(n)=>`${n}일`, rangeAll:'전체',
@@ -1051,6 +1055,7 @@ const I18N = {
     pwMismatch:'新しいパスワードが一致しません', pwShort:'パスワードは6文字以上で入力してください',
     pwOk:'パスワードを変更しました。再ログインしてください',
     logout:'ログアウト', userMgmt:'スタッフアカウント', userMgmtSub:'スタッフは自分が生成したジョブのみ閲覧できます。',
+    feedback:'聴感フィードバック',
     report:'生産レポート', reportSub:'担当者別 / 日別の完了済み音声。CSV出力してExcelで開けます。',
     reportDays:'期間', exportCsv:'CSV エクスポート',
     daysUnit:(n)=>`${n} 日`, rangeAll:'すべて',
@@ -1780,6 +1785,8 @@ $('#langBtn').onclick = e => { e.stopPropagation(); $('#langMenu').classList.tog
 document.addEventListener('click', ()=>{ $('#userMenu').classList.remove('open'); $('#langMenu').classList.remove('open'); });
 $('#miPw').onclick = ()=> openPw(false);
 $('#miUsers').onclick = ()=> openUsers();
+// 听感反馈：独立页面，员工听完选字母，服务端存票（不需要管理员权限）
+$('#miFb').onclick = ()=> { location.href = '/feedback'; };
 $('#miOut').onclick = async () => { await fetch('/api/logout', {method:'POST'}); ME = null; location.reload(); };
 
 function openPw(force){

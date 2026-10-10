@@ -2079,6 +2079,122 @@ async def index():
         })
 
 
+# ============================ 听感反馈台 ============================
+# 为什么单开一个页面：语调 / 情绪 / 停顿位置 / 重音 / 呼吸这几项没有可靠客观
+# 指标，只能人耳判。但让员工"描述哪里不对"拿不到可执行的结论（历史上反复
+# 出现"说不出、说不清、说了也没法量化"），所以改成 **听选**：
+#   同一题的多个选项只差一个变量，员工选一个字母，我们直接拿到方向。
+#
+# 题目是 **数据驱动** 的：所有题目写在 FB_DIR/items.json，音频放同一目录。
+# 加新题 = 拷 mp3 + 改 json，不用改代码、不用重启服务。
+#
+# 答案落在 FB_DIR/votes.jsonl（一行一条，append-only，可重复提交覆盖同人同题）。
+FB_DIR = os.environ.get("TTS_FB_DIR", "/mnt/tts/data/tone-ab")
+FB_VOTES = os.path.join(FB_DIR, "votes.jsonl")
+
+
+@app.get("/feedback", response_class=HTMLResponse)
+async def feedback_page():
+    p = os.path.join(os.path.dirname(__file__), "ui", "feedback.html")
+    with open(p, "r", encoding="utf-8") as f:
+        return HTMLResponse(f.read(), headers={
+            "Cache-Control": "no-store, must-revalidate",
+            "Pragma": "no-cache",
+        })
+
+
+@app.get("/api/fb/items")
+async def fb_items():
+    """题目清单。匿名可读（员工登录后才能提交，但页面本身不拦）。"""
+    p = os.path.join(FB_DIR, "items.json")
+    if not os.path.exists(p):
+        return {"items": []}
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            j = json.load(f)
+    except Exception:
+        return {"items": []}
+    return {"items": j.get("items") or []}
+
+
+@app.get("/fb-audio/{name}")
+async def fb_audio(name: str):
+    """题干音频。只认文件名，防目录穿越。"""
+    safe = os.path.basename(name)
+    p = os.path.join(FB_DIR, safe)
+    if not os.path.isfile(p):
+        raise HTTPException(404, "音频不存在")
+    return FileResponse(p, media_type="audio/mpeg",
+                        headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/fb/vote")
+async def fb_vote(request: Request):
+    """提交一次反馈。同一个人可以反复提交，服务端按 (user, item) 去重统计。"""
+    u = current_user(request)
+    if not u:
+        raise HTTPException(401, "未登录")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "请求格式错误")
+    picks = body.get("picks") or {}
+    free = (body.get("free") or "").strip()
+    if not isinstance(picks, dict):
+        raise HTTPException(400, "picks 格式错误")
+    if not picks and not free:
+        raise HTTPException(400, "什么都没填")
+    try:
+        os.makedirs(FB_DIR, exist_ok=True)
+        rec = {
+            "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "user": u["username"],
+            "picks": {str(k): str(v) for k, v in picks.items()},
+            "free": free[:4000],
+        }
+        with open(FB_VOTES, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception as e:                                  # pragma: no cover
+        log.warning("写入反馈失败: %r", e)
+        raise HTTPException(500, "保存失败")
+    return {"ok": True}
+
+
+@app.get("/api/fb/votes")
+async def fb_votes(request: Request):
+    """汇总结果（管理员）。按题目统计每个选项的票数，并列出文字反馈。"""
+    require_admin(request)
+    if not os.path.exists(FB_VOTES):
+        return {"total": 0, "by_item": {}, "free": []}
+    # 同一个人对同一题只算最后一次
+    latest = {}
+    frees = []
+    with open(FB_VOTES, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            for k, v in (r.get("picks") or {}).items():
+                latest[(r.get("user") or "?", k)] = v
+            if r.get("free"):
+                frees.append({"ts": r.get("ts"), "user": r.get("user"),
+                              "text": r.get("free")})
+    by = {}
+    for (usr, item), v in latest.items():
+        by.setdefault(item, {}).setdefault(v, []).append(usr)
+    return {
+        "total": len(latest),
+        "by_item": {k: {o: len(u) for o, u in v.items()}
+                    for k, v in by.items()},
+        "who": {k: {o: u for o, u in v.items()} for k, v in by.items()},
+        "free": frees[-50:],
+    }
+
+
 # 内置音色 → 所属语言。用于界面按"输出语言"筛选音色，
 # 避免出现"韩语音色念中文"这类别扭组合。
 SPEAKER_LANG = {

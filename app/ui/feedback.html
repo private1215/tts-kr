@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>听感反馈</title>
+<style>
+:root{
+  --bg:#0D0F13; --bg2:#11141A;
+  --panel:#151920; --panel2:#1B2029; --panel3:#212734;
+  --line:#232935; --line2:#2D3543;
+  --txt:#EAEDF2; --txt2:#B7BFCB; --dim:#79828F;
+  --accent:#5B9FFF; --accent-h:#82B6FF; --accent-soft:rgba(91,159,255,.12);
+  --ok:#3FB98A; --warn:#E5A23C; --err:#EC6C6C;
+  --r:14px; --r-sm:9px; --r-xs:7px;
+  --shadow:0 1px 2px rgba(0,0,0,.28), 0 8px 28px rgba(0,0,0,.16);
+}
+*{box-sizing:border-box}
+body{margin:0;color:var(--txt);background:var(--bg);
+  background-image:
+    radial-gradient(1100px 520px at 12% -8%, #1A2130 0%, transparent 62%),
+    radial-gradient(900px 480px at 92% 4%, #171E2B 0%, transparent 58%);
+  background-attachment:fixed;
+  font:14px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",
+       "Malgun Gothic",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;}
+.wrap{max-width:1080px;margin:0 auto;padding:26px 22px 60px}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;
+  margin-bottom:20px;flex-wrap:wrap}
+h1{font-size:20px;margin:0 0 4px;font-weight:650}
+.sub{color:var(--dim);font-size:13px;margin:0}
+.back{background:var(--panel2);border:1px solid var(--line2);color:var(--txt2);
+  border-radius:var(--r-xs);padding:7px 14px;font:inherit;cursor:pointer;text-decoration:none;
+  display:inline-block;font-size:13px}
+.back:hover{border-color:var(--accent);color:var(--accent)}
+.tip{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+  border-radius:var(--r-sm);padding:13px 15px;margin-bottom:20px;color:var(--txt2);font-size:13.2px}
+.tip b{color:var(--txt)}
+.item{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  padding:16px 17px 18px;margin-bottom:16px}
+.item.done{border-color:rgba(63,185,138,.45)}
+.ihead{display:flex;align-items:baseline;gap:10px;margin-bottom:3px;flex-wrap:wrap}
+.iidx{color:var(--accent);font-weight:700;font-size:13px}
+.ititle{font-size:15.5px;font-weight:620}
+.badge{font-size:11px;color:var(--dim);border:1px solid var(--line2);
+  border-radius:20px;padding:1px 9px}
+.idone{margin-left:auto;font-size:12px;color:var(--ok)}
+.idesc{color:var(--dim);font-size:12.8px;margin:0 0 12px;white-space:pre-wrap}
+.ref{background:rgba(63,185,138,.07);border:1px solid rgba(63,185,138,.28);
+  border-radius:var(--r-sm);padding:11px 13px;margin-bottom:12px}
+.ref .rt{font-size:12px;color:var(--ok);font-weight:600;margin-bottom:7px}
+.ref .rd{font-size:12px;color:var(--dim);margin-top:6px}
+.opts{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(max-width:660px){.opts{grid-template-columns:1fr}}
+.opt{border:1px solid var(--line2);border-radius:var(--r-sm);padding:11px 12px;
+  background:var(--panel2);cursor:pointer;transition:.14s}
+.opt:hover{border-color:#3A4658}
+.opt.sel{border-color:var(--accent);background:var(--accent-soft)}
+.opt .h{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.opt .k{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--line2);
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:var(--txt2)}
+.opt.sel .k{border-color:var(--accent);background:var(--accent);color:#0D0F13}
+.opt .n{font-weight:600;font-size:13.5px}
+.opt .note{font-size:11.5px;color:var(--dim);margin-left:auto}
+audio{width:100%;height:36px;display:block;outline:none}
+.free{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  padding:16px 17px 18px;margin-top:6px}
+.free h3{margin:0 0 6px;font-size:15px;font-weight:620}
+textarea{width:100%;min-height:110px;background:var(--panel2);color:var(--txt);
+  border:1px solid var(--line2);border-radius:var(--r-sm);padding:10px 12px;
+  font:inherit;font-size:13.5px;resize:vertical;outline:none}
+textarea:focus{border-color:var(--accent)}
+.bar{display:flex;gap:10px;align-items:center;margin-top:18px;flex-wrap:wrap}
+button.pri{background:var(--accent);color:#0B1220;border:1px solid var(--accent);
+  border-radius:var(--r-xs);padding:9px 20px;font:inherit;font-weight:650;cursor:pointer}
+button.pri:hover{background:var(--accent-h)}
+button.gh{background:transparent;color:var(--txt2);border:1px solid var(--line2);
+  border-radius:var(--r-xs);padding:9px 16px;font:inherit;cursor:pointer}
+button.gh:hover{border-color:var(--accent);color:var(--accent)}
+.msg{color:var(--ok);font-size:13.5px}
+.msg.err{color:var(--err)}
+.prog{color:var(--dim);font-size:12.5px}
+.empty{color:var(--dim);text-align:center;padding:40px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div>
+      <h1>听感反馈</h1>
+      <p class="sub">听完选一个字母就行，不用描述感受。你的选择会直接决定下一步怎么调。</p>
+    </div>
+    <a class="back" href="/">← 返回生成页</a>
+  </div>
+
+  <div class="tip">
+    <b>怎么听：</b>先听绿色框里的 <b>参照</b>（真实案例录音，不用选），再听 <b>A / B / C / D</b>，
+    选<b>最像参照、最像韩国财经节目主持人</b>的那个。同一题的四个选项只有<b>一个变量</b>不同，
+    音色、语速、内容都一样。拿不准就选"听起来最像参照的"。
+  </div>
+
+  <div id="list"><div class="empty">正在加载…</div></div>
+
+  <div class="free">
+    <h3>还有什么不对？</h3>
+    <p class="sub" style="margin:0 0 9px">除了上面的选择题，如果听出别的问题（断句、语速、数字读法、某个字发音、情绪、气口…），写在这里。</p>
+    <textarea id="free" placeholder="例：第二段的数字 21만 3500원 读得快了；长句子中间没有换气；情绪太平…"></textarea>
+  </div>
+
+  <div class="bar">
+    <button class="pri" id="submit">提交</button>
+    <button class="gh" id="clear">清空重选</button>
+    <span class="prog" id="prog"></span>
+    <span class="msg" id="msg"></span>
+  </div>
+</div>
+
+<script>
+var ITEMS = [], PICK = {};
+var LS = 'tts_fb_pick_v1';
+try { PICK = JSON.parse(localStorage.getItem(LS) || '{}'); } catch (e) { PICK = {}; }
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+function render(){
+  var box = document.getElementById('list');
+  if (!ITEMS.length){ box.innerHTML = '<div class="empty">暂无测试题</div>'; return; }
+  var html = '';
+  ITEMS.forEach(function(it, i){
+    var cur = PICK[it.id];
+    html += '<div class="item' + (cur ? ' done' : '') + '" data-id="' + esc(it.id) + '">';
+    html += '<div class="ihead"><span class="iidx">' + (i+1) + '</span>'
+         +  '<span class="ititle">' + esc(it.title) + '</span>'
+         +  (it.dim ? '<span class="badge">' + esc(it.dim) + '</span>' : '')
+         +  (cur ? '<span class="idone">已选 ' + esc(cur) + '</span>' : '') + '</div>';
+    if (it.desc) html += '<p class="idesc">' + esc(it.desc) + '</p>';
+    if (it.ref){
+      html += '<div class="ref"><div class="rt">参照（' + esc(it.ref.label || '案例原声')
+           +  ' · 不用选）</div><audio controls preload="none" src="/fb-audio/'
+           +  esc(it.ref.file) + '"></audio>'
+           +  (it.ref.note ? '<div class="rd">' + esc(it.ref.note) + '</div>' : '') + '</div>';
+    }
+    html += '<div class="opts">';
+    (it.options || []).forEach(function(o){
+      html += '<div class="opt' + (cur === o.key ? ' sel' : '') + '" data-k="' + esc(o.key) + '">'
+           +  '<div class="h"><div class="k">' + esc(o.key) + '</div>'
+           +  '<div class="n">' + esc(o.label || ('选项 ' + o.key)) + '</div>'
+           +  (o.note ? '<span class="note">' + esc(o.note) + '</span>' : '') + '</div>'
+           +  '<audio controls preload="none" src="/fb-audio/' + esc(o.file) + '"></audio></div>';
+    });
+    html += '</div></div>';
+  });
+  box.innerHTML = html;
+  Array.prototype.forEach.call(box.querySelectorAll('.item'), function(el){
+    var id = el.dataset.id;
+    Array.prototype.forEach.call(el.querySelectorAll('.opt'), function(o){
+      o.addEventListener('click', function(e){
+        if (e.target.tagName === 'AUDIO') return;
+        Array.prototype.forEach.call(el.querySelectorAll('.opt'), function(x){ x.classList.remove('sel'); });
+        o.classList.add('sel');
+        PICK[id] = o.dataset.k;
+        try { localStorage.setItem(LS, JSON.stringify(PICK)); } catch (e2) {}
+        el.classList.add('done');
+        var d = el.querySelector('.idone');
+        if (!d){ d = document.createElement('span'); d.className = 'idone';
+                 el.querySelector('.ihead').appendChild(d); }
+        d.textContent = '已选 ' + o.dataset.k;
+        upd();
+      });
+    });
+  });
+  upd();
+}
+
+function upd(){
+  var n = ITEMS.filter(function(it){ return PICK[it.id]; }).length;
+  document.getElementById('prog').textContent = '已完成 ' + n + ' / ' + ITEMS.length;
+}
+
+async function load(){
+  try{
+    var r = await fetch('/api/fb/items', {cache:'no-store'});
+    var j = await r.json();
+    ITEMS = (j && j.items) || [];
+    render();
+  }catch(e){
+    document.getElementById('list').innerHTML = '<div class="empty">加载失败，请刷新页面</div>';
+  }
+}
+
+document.getElementById('submit').onclick = async function(){
+  var m = document.getElementById('msg');
+  var picks = {};
+  ITEMS.forEach(function(it){ if (PICK[it.id]) picks[it.id] = PICK[it.id]; });
+  if (!Object.keys(picks).length && !document.getElementById('free').value.trim()){
+    m.className = 'msg err'; m.textContent = '还没选，也没写反馈'; return;
+  }
+  m.className = 'msg'; m.textContent = '提交中…';
+  try{
+    var r = await fetch('/api/fb/vote', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({picks: picks, free: document.getElementById('free').value.trim()})});
+    var j = await r.json();
+    if (j && j.ok){ m.className = 'msg'; m.textContent = '已提交，谢谢！还可以继续改，改完再提交一次即可。'; }
+    else { m.className = 'msg err'; m.textContent = '提交失败：' + ((j && j.msg) || r.status); }
+  }catch(e){ m.className = 'msg err'; m.textContent = '网络错误'; }
+};
+
+document.getElementById('clear').onclick = function(){
+  PICK = {}; try{ localStorage.removeItem(LS); }catch(e){}
+  document.getElementById('msg').textContent = '';
+  render();
+};
+
+load();
+</script>
+</body>
+</html>

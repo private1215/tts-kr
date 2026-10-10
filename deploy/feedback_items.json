@@ -1,0 +1,50 @@
+{
+  "_comment": [
+    "听感反馈台的题目配置。放在服务器 /mnt/tts/data/tone-ab/items.json",
+    "新增题目：把 mp3 拷进同一目录，往 items 里追加一项即可，不用改代码、不用重启服务。",
+    "字段：",
+    "  id      唯一，提交后按 id 存，改了 id 就等于换了一道题（历史答案不会跟着改）",
+    "  dim     维度标签，显示在标题右边，例如 语调·句尾 / 数字读法 / 停顿 / 语速 / 情绪 / 呼吸",
+    "  title   题目名",
+    "  desc    给员工的说明（可省略）",
+    "  ref     参照音频（可省略）：{file, label, note}",
+    "  options 选项数组：{key, file, label, note}",
+    "同一题的所有选项必须只差一个变量，否则选出来的结论没法用。"
+  ],
+  "items": [
+    {
+      "id": "tone_male_20261010",
+      "dim": "语调·句尾",
+      "title": "男声 — 句尾音调往下压多少",
+      "desc": "四个选项只有「句尾音调往下压多少」不同。A 是当前线上效果。",
+      "ref": {
+        "file": "male_ref.mp3",
+        "label": "案例原声",
+        "note": "韩国财经节目主持人的真实录音（同文案），就是我们要还原的目标。只用来对比，不用选。"
+      },
+      "options": [
+        { "key": "A", "file": "male_1.mp3", "label": "选项 A" },
+        { "key": "B", "file": "male_2.mp3", "label": "选项 B" },
+        { "key": "C", "file": "male_3.mp3", "label": "选项 C" },
+        { "key": "D", "file": "male_4.mp3", "label": "选项 D" }
+      ]
+    },
+    {
+      "id": "tone_female_20261010",
+      "dim": "语调·句尾",
+      "title": "女声 — 句尾音调往下压多少",
+      "desc": "同上，四个选项只有「句尾音调往下压多少」不同。A 是当前线上效果。",
+      "ref": {
+        "file": "female_ref.mp3",
+        "label": "案例原声",
+        "note": "韩国财经节目女主持人的真实录音。只用来对比，不用选。"
+      },
+      "options": [
+        { "key": "A", "file": "female_1.mp3", "label": "选项 A" },
+        { "key": "B", "file": "female_2.mp3", "label": "选项 B" },
+        { "key": "C", "file": "female_3.mp3", "label": "选项 C" },
+        { "key": "D", "file": "female_4.mp3", "label": "选项 D" }
+      ]
+    }
+  ]
+}
