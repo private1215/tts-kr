@@ -62,6 +62,7 @@ h1{font-size:20px;margin:0 0 4px;font-weight:650}
 .opt.sel .k{border-color:var(--accent);background:var(--accent);color:#0D0F13}
 .opt .n{font-weight:600;font-size:13.5px}
 .opt .note{font-size:11.5px;color:var(--dim);margin-left:auto}
+.opt .noaudio{font-size:12.5px;color:var(--dim);padding:7px 0 1px}
 audio{width:100%;height:36px;display:block;outline:none}
 .free{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
   padding:16px 17px 18px;margin-top:6px}
@@ -147,7 +148,9 @@ function render(){
            +  '<div class="h"><div class="k">' + esc(o.key) + '</div>'
            +  '<div class="n">' + esc(o.label || ('选项 ' + o.key)) + '</div>'
            +  (o.note ? '<span class="note">' + esc(o.note) + '</span>' : '') + '</div>'
-           +  '<audio controls preload="none" src="/fb-audio/' + esc(o.file) + '"></audio></div>';
+           +  (o.file ? '<audio controls preload="none" src="/fb-audio/' + esc(o.file) + '"></audio>'
+                      : '<div class="noaudio">' + esc(o.text || '（无音频）') + '</div>')
+           +  '</div>';
     });
     html += '</div></div>';
   });
