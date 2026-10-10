@@ -41,7 +41,17 @@ Environment=CUDA_VISIBLE_DEVICES=GPU-94853612-464c-9177-c374-a9a82e321229
 # expandable_segments：创建可动态扩展的内存段，从根源减少碎片（PyTorch 官方首推）
 # garbage_collection_threshold=0.8：占用率达 80% 时主动回收空闲块
 # 注意：不要与 max_split_size_mb 同时设置，两者在官方文档中被标记为互斥。
-Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,garbage_collection_threshold:0.8
+# 🔴 2026-10-10 临时摘掉 expandable_segments:True（恢复条件见下方注释）
+# 事故：本机 NVML 版本不匹配 —— 内核模块 595.91.07，用户态 libnvidia-ml.so 却是 595.99.02
+#   （nvidia-driver-595-open 已升到 595.99.02，但服务器没重启，内核模块还是旧的）。
+#   只要分配走 expandable 段，PyTorch 就会调 nvmlInit_v2 做 P2P 探测，版本不匹配直接
+#   TORCH_CHECK 硬失败：RuntimeError: NVML_SUCCESS == DriverAPI::get()->nvmlInit_v2_()
+#   INTERNAL ASSERT FAILED at c10/cuda/PeerToPeerAccess.cpp:83
+#   触发点是 transformers 的 caching_allocator_warmup（模型加载时的热身大块分配），
+#   也就是说**每次加载模型必崩**，服务完全不可用。
+# 恢复：服务器重启（加载 595.99 内核模块）、nvidia-smi 不再报 mismatch 之后，
+#   把下一行改回 expandable_segments:True,garbage_collection_threshold:0.8
+Environment=PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.8
 # ---- 韵律移植（PROSO）：F0 重映射，把 A 句内动态 / E 句尾多样性拉到案例值 ----
 # r13（2026-10-06）上线。实现见 app/proso.py（Praat PSOLA，经 parselmouth 调用）。
 # 验收（vs ElevenLabs 标杆，整篇同文案）：
