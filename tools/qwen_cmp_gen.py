@@ -45,7 +45,12 @@ def main():
         with open(lst, "w") as fh:
             for f in sorted(fs):
                 fh.write("file '%s'\n" % f)
-        out = os.path.join(OUT_DIR, "qwen_cmp_%s.wav" % v)
+        # ⚠️ 文件名必须带 prefix：男女两条长文案会各跑一次，
+        #    只按音色命名会把女声结果覆盖掉（2026-10-12 长文案对照）。
+        out = os.path.join(OUT_DIR, "qwen_%s_%s.wav" % (prefix, v))
+        if os.path.exists(out):
+            print("  跳过(已存在)", out, flush=True)
+            continue
         subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y",
                         "-f", "concat", "-safe", "0", "-i", lst,
                         "-ac", "1", "-ar", "32000", out], check=True)

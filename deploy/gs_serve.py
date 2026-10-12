@@ -68,6 +68,7 @@ PORT = int(os.environ.get("GS_PORT", "8200"))
 GPT_W = "GPT_SoVITS/pretrained_models/s1v3.ckpt"
 PRETRAINED_SOVITS = "GPT_SoVITS/pretrained_models/v2Pro/s2Gv2ProPlus.pth"
 SEG_DEFAULT = int(os.environ.get("GS_SEG", "50"))
+EPOCH_DEFAULT = os.environ.get("GS_EPOCH", "40")
 SEG_GAP_SEC = 0.30
 _END = "。！？.!?\n"
 
@@ -187,8 +188,11 @@ def _get(key):
         if key == "__zero__":
             w = PRETRAINED_SOVITS
         else:
-            spk, epoch = key.rsplit("@", 1)
-            w = pick_weight(spk, epoch)
+            # ⚠️ spk 允许两种写法：「SOLA」或「SOLA@30」。
+            #    早期版本直接 rsplit("@",1) 解包成两个变量，传纯组名时会抛
+            #    ValueError: not enough values to unpack —— 前端点一下就 500。
+            spk, _, ep = key.partition("@")
+            w = pick_weight(spk, ep or EPOCH_DEFAULT)
         _TTS[key] = TTS(build(w))
         return _TTS[key]
 
