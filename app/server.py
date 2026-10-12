@@ -3086,6 +3086,34 @@ async def extract_case_voices(request: Request,
     after = set(voices.keys())
     added = sorted(after - before)
     log.info("案例音色提取完成: 退出码 %s，新增 %s", p.returncode, added or "无")
+    # 🔴 GS 自动微调触发点（GS_AUTO_TRAIN=1 才启用，默认关）：
+    #    提取只产出"克隆参考音频"（零样本天花板 0.80~0.88），新说话人拿不到
+    #    微调的 0.93+——这是「任意文案生成」链路最大的缺口。
+    #    为什么用脱离会话的后台进程（setsid）而不是线程池：
+    #    1. 训练 40~60 分钟，占着线程池线程/事件循环会拖垮员工请求；
+    #    2. 服务重启不该杀死训练；
+    #    3. gs_auto_train.py 自带显存守卫 + 文件锁 + "已有训练在跑就跳过"，
+    #       不会和手工训练或员工任务抢 3090（campplus 嵌入是 CPU ONNX）。
+    if os.environ.get("GS_AUTO_TRAIN", "0") == "1":
+        try:
+            auto = os.path.normpath(os.path.join(proj, "tools",
+                                                 "gs_auto_train.py"))
+            if os.path.isfile(auto):
+                gs_dir = os.environ.get("GS_DIR",
+                                        "/mnt/tts/projects/gpt-sovits")
+                lf = open(os.path.join(gs_dir, "auto_train.log"), "ab")
+                # 注意：不屏蔽 GPU（训练要 3090）；gs_run_group.sh 自己会
+                # 用 UUID 指定卡，embed_groups 是 CPU ONNX 不受影响。
+                subprocess.Popen([sys.executable, auto, "--all"],
+                                 cwd=proj, start_new_session=True,
+                                 stdout=lf, stderr=subprocess.STDOUT)
+                log.info("GS_AUTO_TRAIN=1：已触发自动微调（后台进程，"
+                         "日志 %s/auto_train.log）", gs_dir)
+            else:
+                log.warning("GS_AUTO_TRAIN=1 但找不到 %s", auto)
+        except Exception as e:
+            # 触发失败不影响音色提取结果，员工侧无感
+            log.warning("触发 GS 自动训练失败（不影响提取）: %r", e)
     return {"ok": p.returncode == 0, "added": added, "count": len(voices),
             "log": (p.stdout or "")[-1500:]}
 

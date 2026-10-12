@@ -11,29 +11,37 @@
 🔴 硬约束（每条都踩过坑）
 -------------------------
 1. **测试区必须留出来**：hold 案例整条不进训练集，否则评测变成开卷考试。
-   默认 hold = 该组按 id 排序的第一条，也可用 --hold 指定。
+   默认 hold = 该组按 id 排序的第一条；若 dataset_<spk>/hold.txt 已存在
+   （上次训练写的），**复用它**——换 hold = 换测试集，历史分数不可比。
 2. **显存是串行的**：3090 上 Cosy 常驻 ~2.2G，训练峰值约 10G。
    开训前必须检查空闲显存，不够就排队等，不要硬上（会连累员工的 Cosy 任务）。
-3. **同一时刻只允许一个训练**（文件锁），两个训练并行必 OOM。
-4. 训练完必须让 GS 服务 `/unload`，否则它内存里还挂着旧权重，
+3. **同一时刻只允许一个训练**（文件锁 + 进程检查）。手工训练
+   （gs_fulltrain_all.sh / gs_run_group.sh）没有这把锁，所以必须额外
+   pgrep s2_train.py / gs_run_group.sh——否则自动训练和手工训练并行必 OOM。
+4. **没变化就不重训**：组的最新权重比最新案例音频还新 → 跳过。
+   否则员工每上传一条案例，所有组都白训一遍（40~60 分钟/组）。
+5. 训练完必须让 GS 服务 `/unload`，否则它内存里还挂着旧权重，
    新权重文件躺在那儿不生效（这个坑完全静默，员工只会觉得"没变化"）。
 
 用法
 ----
     # 训某一组
     python tools/gs_auto_train.py --spk SOLA
-    # 训全部有足够素材的组
+    # 训全部有足够素材的组（没变化的会跳过）
     python tools/gs_auto_train.py --all
     # 只看会训什么，不真训
     python tools/gs_auto_train.py --all --dry-run
 
-接入上传链路：app/server.py 的 /api/cases/extract-voices 末尾调用
-`gs_auto_train.maybe_train(added_cids)`，由 GS_AUTO_TRAIN=1 开关控制（默认关，
-避免未经评估就占用 3090）。
+接入上传链路：app/server.py 的 /api/cases/extract-voices 末尾，当
+GS_AUTO_TRAIN=1 时 spawn 一个**脱离会话的后台进程**跑 `--all`
+（训练 40~60 分钟，不能占线程池/事件循环，也不能被服务重启杀死）。
+默认关：未经评估不占用 3090。
 """
 import argparse
+import glob
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -51,6 +59,7 @@ MIN_FREE_GIB = 8.0        # 低于此值排队等（Cosy 常驻 2.2G，训练峰
 WAIT_TIMEOUT = 3600.0     # 等显存最多 1 小时，超时就放弃本次
 MIN_CASES = 3             # 少于这么多样例不值得训
 MAX_MINUTES = 160.0       # 训练音频上限（分钟），防训练过久
+WEIGHT_DIR = os.path.join(GS, "repo", "SoVITS_weights_v2ProPlus")
 
 
 def log(msg):
@@ -104,6 +113,25 @@ def wait_vram():
         time.sleep(60)
 
 
+def training_running():
+    """是否已有训练在跑（手工的不带锁，必须查进程）。
+
+    2026-10-12 加：自动训练和 gs_fulltrain_all.sh 并行 = 两个训练抢 3090
+    （Cosy 常驻 2.2G + 训练峰值 10G×2），必 OOM，而且 OOM 会连累员工任务。
+    """
+    for pat in ("s2_train.py", "gs_run_group.sh"):
+        try:
+            r = subprocess.run(["pgrep", "-f", pat],
+                               capture_output=True, text=True, timeout=20)
+            if r.returncode == 0 and r.stdout.strip():
+                log("检测到训练进程 %s 在跑（pid %s），跳过自动训练"
+                    % (pat, r.stdout.split()[0]))
+                return True
+        except Exception as e:
+            log("⚠️ 查训练进程失败：%r" % e)
+    return False
+
+
 def run(cmd, cwd=None, timeout=7200):
     log("RUN: %s" % " ".join(cmd))
     p = subprocess.run(cmd, cwd=cwd, timeout=timeout,
@@ -116,7 +144,11 @@ def run(cmd, cwd=None, timeout=7200):
 
 
 def list_groups():
-    """案例库里所有说话人组及案例数。"""
+    """案例库里所有说话人组。返回 [(name, [cid..]), ..] 按案例数降序。
+
+    ⚠️ embed_groups 用的是 campplus ONNX（CPUExecutionProvider），
+    纯 CPU 不抢 GPU——这是能从常驻服务里安全调用它的前提。
+    """
     sys.path.insert(0, HERE)
     import mkcase_voices as mk
     cases = mk.load_json(os.path.join(
@@ -124,23 +156,74 @@ def list_groups():
     grp, _meta = mk.embed_groups(cases, 0.75)
     out = []
     for (nm, gd), cids in grp.items():
-        out.append((nm, len(cids)))
-    return sorted(out, key=lambda x: -x[1])
+        out.append((nm, cids))
+    return sorted(out, key=lambda x: -len(x[1]))
+
+
+def read_hold(spk):
+    """复用上次训练写下的 hold 案例 id，保证训练/测试划分稳定。
+
+    hold.txt 内容形如「测试区 = 案例 00b6a45ad6aa... 的前 60.0 秒（未进训练集）」。
+    换 hold = 换测试集，历史分数不可比；且新 hold 可能把旧训练集里的案例
+    划进测试区，间接开卷。
+    """
+    p = os.path.join(GS, "dataset_" + spk, "hold.txt")
+    try:
+        txt = open(p, encoding="utf-8").read()
+        m = re.search(r"案例\s+([0-9a-fA-F]{6,})", txt)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return ""
+
+
+def needs_train(spk, cids):
+    """这组的权重是否比案例旧（没变就不训，省 40~60 分钟/组）。"""
+    newest_w = 0.0
+    for f in glob.glob(os.path.join(WEIGHT_DIR, "%s_v2pro_e*.pth" % spk)):
+        try:
+            newest_w = max(newest_w, os.path.getmtime(f))
+        except OSError:
+            pass
+    if newest_w <= 0:
+        return True                     # 从未训过
+    newest_c = 0.0
+    sys.path.insert(0, HERE)
+    import mkcase_voices as mk
+    for cid in cids:
+        try:
+            p = mk.case_audio(cid)
+            if os.path.exists(p):
+                newest_c = max(newest_c, os.path.getmtime(p))
+        except Exception:
+            pass
+    if newest_c <= 0:
+        return True                     # 查不到案例时间，稳妥起见训
+    # 留 60s 余量，防文件系统时间精度/打包顺序造成的误判
+    return newest_c > newest_w + 60
 
 
 def train_one(spk, max_minutes=MAX_MINUTES, hold="", dry=False):
     """跑完 prep → preprocess → train → unload。返回 True=成功。"""
     log("=" * 60)
     log("开始训练说话人组：%s" % spk)
-    rc = run([VENV, os.path.join(HERE, "gs_prep_group.py"),
-              "--spk", spk, "--max-minutes", str(max_minutes)]
+    prep = os.path.join(HERE, "gs_prep_group.py")
+    # 🔴 gs_run_group.sh 在 tools/ 不在 deploy/（2026-10-12 踩过：路径写错
+    #    直接 FileNotFoundError，而 auto_train 在后台跑，没人看见报错）。
+    grp_sh = os.path.join(HERE, "gs_run_group.sh")
+    rc = run([VENV, prep, "--spk", spk, "--max-minutes", str(max_minutes)]
              + (["--hold", hold] if hold else []), cwd=PROJ)
+    if rc != 0 and hold:
+        # 旧 hold 可能已不在组里（案例被删/重聚类），退回默认 hold 再试
+        log("⚠️ 带 hold=%s 准备失败，改用默认 hold 重试" % hold[:8])
+        rc = run([VENV, prep, "--spk", spk,
+                  "--max-minutes", str(max_minutes)], cwd=PROJ)
     if rc != 0:
         log("❌ 数据准备失败 %s（rc=%d）" % (spk, rc))
         return False
     for step in ("preprocess", "train"):
-        rc = run(["bash", os.path.join(ROOT, "deploy", "gs_run_group.sh"),
-                  spk, step], cwd=PROJ, timeout=14400)
+        rc = run(["bash", grp_sh, spk, step], cwd=PROJ, timeout=14400)
         if rc != 0:
             log("❌ %s 失败 %s（rc=%d）" % (step, spk, rc))
             return False
@@ -162,6 +245,8 @@ def maybe_train(added_cids=None, dry=False):
     if os.environ.get("GS_AUTO_TRAIN", "0") != "1":
         log("GS_AUTO_TRAIN 未开启，跳过自动训练")
         return []
+    if training_running():
+        return []
     if os.path.exists(LOCK):
         log("已有训练在跑（锁文件存在），跳过")
         return []
@@ -169,17 +254,20 @@ def maybe_train(added_cids=None, dry=False):
     try:
         groups = list_groups()
         done = []
-        for nm, n in groups:
-            if n < MIN_CASES:
+        for nm, cids in groups:
+            if len(cids) < MIN_CASES:
                 log("组 %s 只有 %d 条（< %d），跳过"
-                    % (nm, n, MIN_CASES))
+                    % (nm, len(cids), MIN_CASES))
+                continue
+            if not needs_train(nm, cids):
+                log("组 %s 权重比案例新，无需重训" % nm)
                 continue
             if dry:
-                log("[dry-run] 会训练 %s（%d 条案例）" % (nm, n))
+                log("[dry-run] 会训练 %s（%d 条案例）" % (nm, len(cids)))
                 continue
             if not wait_vram():
                 break
-            if train_one(nm):
+            if train_one(nm, hold=read_hold(nm)):
                 done.append(nm)
         return done
     finally:
@@ -199,9 +287,14 @@ def main():
     a = ap.parse_args()
 
     if a.dry_run:
-        for nm, n in list_groups():
-            flag = "→ 会训" if n >= MIN_CASES else "→ 跳过(素材不足)"
-            print("  %-10s %3d 条  %s" % (nm, n, flag))
+        for nm, cids in list_groups():
+            if len(cids) < MIN_CASES:
+                flag = "→ 跳过(素材不足)"
+            elif not needs_train(nm, cids):
+                flag = "→ 跳过(无变化)"
+            else:
+                flag = "→ 会训"
+            print("  %-10s %3d 条  %s" % (nm, len(cids), flag))
         return 0
     if a.spk:
         return 0 if train_one(a.spk, a.max_minutes, a.hold) else 1
