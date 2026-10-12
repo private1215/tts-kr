@@ -88,6 +88,101 @@ def build(sovits_path):
     return TTS_Config(cfg)
 
 
+# ---- 长文本分段（🔴 2026-10-12 补）----------------------------------------
+# 为什么必须外部分段：整段 321 字喂给 GS 的 text_split_method="cut1" 后，
+# 女声实测**覆盖率只有 0.150、CER 0.808** —— GPT 自回归在中后段跑飞，
+# 输出的 33.6s 音频里大部分是胡话（转录 179 字，其中约 150 字与原文无关）。
+# 男声同长度却是 0.889，说明这是概率性发散，不是必然失败，但线上不能赌。
+# 对策：外部按标点切成 ≤ SEG_MAX_CHARS 字的段，逐段推理再拼接。
+# 段短 → GPT 每段的自回归步数少 → 发散概率大幅下降，且失败只毁一段。
+SEG_MAX_CHARS = int(os.environ.get("GS_SEG_MAX_CHARS", "60"))
+SEG_GAP_SEC = float(os.environ.get("GS_SEG_GAP", "0.30"))
+_SEG_END = "。！？.!?；;\n"
+
+
+def split_text(text, max_chars=SEG_MAX_CHARS):
+    """按句末标点切成 ≤ max_chars 字的片段。
+
+    ⚠️ 只在**句末标点**处切，绝不从词中间硬断 —— 硬断会让 GPT 学到
+    错误的韵律边界，句子首尾都会读得很怪。
+    韩语口播稿标点密集（财经稿尤其），60 字上限基本都能在标点处落刀。
+    """
+    parts, buf = [], ""
+    for ch in text:
+        # 连续句末符（ASR 转写常见 "..."/"。。"）不再另起一段——
+        # 否则会切出 "。뚫어" 这种 2 字碎段，GPT 读到就是一顿怪腔。
+        if ch in _SEG_END and not buf.strip():
+            if parts:
+                parts[-1] = parts[-1] + ch
+            continue
+        buf += ch
+        if ch in _SEG_END:
+            parts.append(buf.strip())
+            buf = ""
+        elif len(buf) >= max_chars:
+            # 兜底：超长且没标点，退到最近的空格切，避免无限累积
+            sp = buf.rfind(" ")
+            if sp > max_chars * 0.5:
+                parts.append(buf[:sp].strip())
+                buf = buf[sp + 1:]
+            else:
+                parts.append(buf.strip())
+                buf = ""
+    if buf.strip():
+        parts.append(buf.strip())
+    return [p for p in parts if p]
+
+
+def synth_segs(tts, text, prompt, prompt_text, path, seed=42,
+               max_chars=SEG_MAX_CHARS, gap_sec=SEG_GAP_SEC):
+    """分段推理 + 拼接。段间补 gap_sec 静音，模拟自然换气停顿。"""
+    segs = split_text(text, max_chars)
+    print("   分段 %d 段（上限 %d 字/段）" % (len(segs), max_chars), flush=True)
+    chunks, sr0 = [], None
+    gap = None
+    for i, s in enumerate(segs):
+        out = None
+        for item in tts.run(_mk_req(s, prompt, prompt_text, seed)):
+            out = item
+        if out is None:
+            raise RuntimeError("第 %d 段没有产出音频" % (i + 1))
+        sr, audio = out
+        audio = np.asarray(audio)
+        sr0 = sr
+        if gap is None:
+            gap = np.zeros(int(gap_sec * sr), dtype=audio.dtype)
+        chunks.append(audio)
+        if i < len(segs) - 1:
+            chunks.append(gap)
+        print("   [%d/%d] %d字 -> %.1fs" % (i + 1, len(segs), len(s),
+                                            len(audio) / sr), flush=True)
+    y = np.concatenate(chunks)
+    sf.write(path, y, sr0, subtype="PCM_16")
+    print("   ->", path, "%.1fs @%dHz" % (len(y) / sr0, sr0), flush=True)
+    return len(segs)
+
+
+def _mk_req(text, prompt, prompt_text, seed=42):
+    return {
+        "text": text,
+        "text_lang": "ko",
+        "ref_audio_path": prompt,
+        "prompt_text": prompt_text,
+        "prompt_lang": "ko",
+        "top_k": 15,
+        "top_p": 1.0,
+        "temperature": 1.0,
+        "text_split_method": "cut1",
+        "batch_size": 1,
+        "speed_factor": 1.0,
+        "fragment_interval": 0.3,
+        "seed": seed,
+        "parallel_infer": True,
+        "repetition_penalty": 1.35,
+        "use_cuda_graph": False,     # 本机 cuda_graph 捕获会卡住
+    }
+
+
 def synth(tts, text, prompt, prompt_text, path, seed=42):
     out = None
     for item in tts.run({
@@ -124,6 +219,11 @@ def main():
     ap.add_argument("--epoch", default="40")
     ap.add_argument("--skip-zeroshot", action="store_true",
                     help="只跑微调版（省一半时间）")
+    ap.add_argument("--seg", type=int, default=0,
+                    help=">0 时启用外部分段推理，值=每段最大字数"
+                         "（长文本发散的解法，建议 40~60）")
+    ap.add_argument("--tag-suffix", default="",
+                    help="输出文件名后缀，用来区分整段/分段两次跑的结果")
     args = ap.parse_args()
 
     merged = os.path.join(CASES_DIR, args.hold, "merged.wav")
@@ -171,18 +271,23 @@ def main():
     w = pick_weight(args.spk, args.epoch)
     print("微调权重:", w, flush=True)
 
+    sf_ = args.tag_suffix
+    _run = synth_segs if args.seg > 0 else synth
+    _kw = {"max_chars": args.seg} if args.seg > 0 else {}
+
     if not args.skip_zeroshot:
         print("=== 零样本（官方预训练，未微调）===", flush=True)
         tts = TTS(build(PRETRAINED_SOVITS))
-        synth(tts, ptext, prompt, ptext_prompt,
-              os.path.join(OUT, "gs_%s_zeroshot.wav" % tag))
+        _run(tts, ptext, prompt, ptext_prompt,
+             os.path.join(OUT, "gs_%s_zeroshot%s.wav" % (tag, sf_)), **_kw)
         del tts
         torch.cuda.empty_cache()
 
     print("=== 微调后 ===", flush=True)
     tts = TTS(build(w))
-    synth(tts, ptext, prompt, ptext_prompt,
-          os.path.join(OUT, "gs_%s_ft_e%s.wav" % (tag, args.epoch)))
+    _run(tts, ptext, prompt, ptext_prompt,
+         os.path.join(OUT, "gs_%s_ft_e%s%s.wav" % (tag, args.epoch, sf_)),
+         **_kw)
     print("DONE", flush=True)
 
 
