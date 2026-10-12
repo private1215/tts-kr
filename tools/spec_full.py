@@ -41,9 +41,14 @@ GROUPS = [
 ]
 
 
-def build(spk, is_male, qwen_voice, txt_name, cid, pf, cosy):
+def build(spk, is_male, qwen_voice, txt_name, cid, pf, cosy, online=None):
     """pf = 文件名前缀：full-f / full-m
-    cosy = Cosy 长文案产物路径（None 表示还没跑）"""
+    cosy = Cosy 长文案产物路径（None 表示还没跑）
+    online = 走线上链路的三引擎产物（tools/engine_full_cmp.py 的 fullp_*）。
+            🔴 2026-10-12：**优先用线上链路产出**。CLI 裸推理没过后处理链，
+            拿来跟线上成品比韵律等于让 GS/Cosy 裸奔上场（已犯过一次）。
+            online 里的项存在就覆盖同引擎的 CLI 项。
+    """
     ref = "/mnt/tts/data/cases/%s/merged.wav" % cid
     txt = os.path.join(OUT, txt_name)
     cands = [
@@ -61,6 +66,13 @@ def build(spk, is_male, qwen_voice, txt_name, cid, pf, cosy):
     # Cosy 产物在才收进来（没跑完不塞 None，否则引擎会把它当成缺失报错）
     if cosy and os.path.exists(cosy):
         cands.append(("Cosy零样本", cosy, False))
+    # 线上链路产出：同引擎的 CLI 项被它顶掉
+    for name, path in (online or []):
+        if not os.path.exists(path):
+            continue
+        cands = [(n, p, r) for (n, p, r) in cands
+                 if not n.startswith(name.split()[0])]
+        cands.append((name, path, False))
     return [{"name": n, "path": p, "is_male": is_male, "ref": r,
              "text_file": txt} for n, p, r in cands]
 
@@ -68,8 +80,14 @@ def build(spk, is_male, qwen_voice, txt_name, cid, pf, cosy):
 def main():
     for spk, is_male, voice, txt_name, cid, fn in GROUPS:
         pf = "full-f" if not is_male else "full-m"
+        gp = "f" if not is_male else "m"
         cosy = os.path.join(OUT, "cosy_full_%s.wav" % ("m" if is_male else "f"))
-        spec = build(spk, is_male, voice, txt_name, cid, pf, cosy)
+        online = [
+            ("Qwen " + voice, os.path.join(DIAG, "fullp_%s_qwen.wav" % gp)),
+            ("Cosy零样本", os.path.join(DIAG, "fullp_%s_cosyvoice3.wav" % gp)),
+            ("GS微调+分段", os.path.join(DIAG, "fullp_%s_gptsovits.wav" % gp)),
+        ]
+        spec = build(spk, is_male, voice, txt_name, cid, pf, cosy, online)
         miss = [s["path"] for s in spec if not os.path.exists(s["path"])]
         with open(os.path.join(HERE, fn), "w", encoding="utf-8") as f:
             json.dump(spec, f, ensure_ascii=False, indent=2)
