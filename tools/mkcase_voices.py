@@ -1,17 +1,39 @@
 # -*- coding: utf-8 -*-
-"""从案例库批量生成克隆音色，直接放进「预设音色」，员工不必自己录音。
+"""从案例库批量生成克隆音色（语音模板），员工不必自己录音。
+
+🔴 口径（2026-10-12 统一，写注释前先看，别再写错）
+------------------------------------------------
+本平台做的是**替代 ElevenLabs**（https://elevenlabs.io/zh）：
+- **案例库里的音频全部是 ElevenLabs 生成的**，不是真人录音。
+  ⛔ 别再写「真人原声 / 本人原声」——案例只是**标杆**：既是要克隆的音色来源，
+  也是衡量我们做得够不够好的尺子。
+- 术语：案例 = 标杆音频 = EL 产出；音色模板 = 从案例提取的可复用音色；
+  验收 = 同文案下「我们 vs EL」听不出差别。
 
 为什么要有这个
 --------------
-案例库上传者 prompted：既然案例里已经有真人原声，为什么还要员工自己上传录音？
-答案是**不需要**。案例库每条都是几分钟的高质量原声 + 逐字稿，正好是现成的
-克隆素材；缺的只是「挑最好听的 15 秒 + 把文字稿对齐截出来」这一步 —— 而
-`app/voice_trim.py` 本来就是干这个的（员工自己录音色时也走它）。
+案例是 ElevenLabs 的产出，本身就是现成的克隆素材（几分钟音频 + 逐字稿），
+缺的只是「挑最像这个人的 15 秒 + 把文字稿对齐截出来」——`app/voice_trim.py`
+就是干这个的。
 
-🔴 关键前提：案例库 35 条听着多，实际只有 **4 个人**在发声（2026-10-09 盘点）：
-    案例-男声 1 条 / 案例-女声 1 条 / yohan 12 条 / SOLA 21 条（20 女 + 1 男）
-    所以「一条案例一个音色」会得到 35 个几乎一样的选项，员工照样不会选。
-    本脚本按 **(说话人, 性别)** 聚类，一组只出一个音色 —— 这就是全部的差异。
+🔴 关键前提（2026-10-12 **实测**修正，旧的「4 个人」说法已作废）：
+    用 campplus 嵌入对 36 条案例聚类，实际只有 **2 个核心声音**：
+        SOLA（女）22 条 / yohan（男）13 条 / elara（女）1 条
+    ——注意 22 条比按名字分组多出来：`案例-女声`(00b6a45ad6aa) 其实和 SOLA
+    是同一个人，`案例-男声`(1a6c20a60481) 和 yohan 是同一个人，还有 1 条名字
+    填 SOLA 却标成 male 的也被纠正回女声组。
+    👉 推论：员工在用的 `EL_female` ≈ `SOLA_female`、`EL_male` ≈ `yohan_male`，
+       是同一个人取材不同的切片（这解释了 SOLA_female 0.9331 > EL_female 0.8898）。
+    所以「一条案例一个音色」会得到 36 个几乎一样的选项，员工照样不会选 ——
+    必须聚类，一组只出一个音色。
+
+两种分组方式（--group-by）
+--------------------------
+- `name`（旧，默认不改行为）：按案例填写的**说话人名字 + 性别**分组。
+  名字填错/填漏/一条案例多个音色时都会分错。
+- `embed`：**按声音聚类**（campplus 嵌入，阈值 0.75），不依赖名字。
+  能自动合并"同人不同名"、纠正性别标错。这才是「拆解后自动分类音色」。
+  ⚠️ 组内最低相似度低于阈值 = 这组可能混进了别人，日志会打 ⚠️。
 
 产出
 ----
@@ -23,8 +45,9 @@
 
 用法
 ----
-    venv/bin/python tools/mkcase_voices.py              # 先 dry-run 看计划
-    venv/bin/python tools/mkcase_voices.py --apply      # 真正写入
+    venv/bin/python tools/mkcase_voices.py                          # dry-run
+    venv/bin/python tools/mkcase_voices.py --group-by embed          # 按声音聚类
+    venv/bin/python tools/mkcase_voices.py --group-by embed --apply  # 真正写入
     venv/bin/python tools/mkcase_voices.py --apply --only yohan,SOLA
 
 ⚠️ 与 `install_builtin_voices.py` 的分工：那一个是把 make_builtin_voices.py
@@ -237,6 +260,121 @@ def groups(cases):
     return g
 
 
+# ---------------------------------------------------------------------------
+# 嵌入级聚类：按「声音」分组，而不是按「名字」（2026-10-12）
+#
+# 为什么要这个：案例是 ElevenLabs 的产出，上传时未必知道是哪个人念的，名字可能
+# 填错、填漏，甚至**一条案例里就不止一个音色**。按名字分组会：
+#   · 同一人写了两个名字 → 拆成两组，素材白白少一半
+#   · 两个人共用一个名字 → 合成一组，音色被污染
+#   · 一条案例里换了个人 → 完全发现不了
+# 按声音分组这三件事都能自动解决，这才是「拆解后自动分类音色」。
+# ---------------------------------------------------------------------------
+EMB_SEG_SEC = 8.0      # 每段取样时长（秒）
+EMB_N_SEG = 6          # 每条案例取几段
+EMB_SIM_THR = 0.75     # 同人阈值，与 tools/spkchk.py 口径一致
+
+
+def case_embedding(cid, n_seg=EMB_N_SEG, seg_sec=EMB_SEG_SEC, sr_out=16000):
+    """一条案例的说话人嵌入：均匀取若干段各自算 campplus，再平均归一化。
+
+    ⚠️ 取多段而不是整段：几分钟的音频里混着停顿/呼吸/电平起伏，单段嵌入会被
+       偶然状态带偏；多段平均才接近这个人的"常态"。
+    ⚠️ 必须 16k：campplus 吃的是 kaldi fbank@16k，不是 24k 波形（_embed 的注释）。
+    """
+    import librosa
+    paths = case_audio(cid)
+    if not paths:
+        return None
+    try:
+        x = read_mono(paths)
+    except Exception as e:
+        log.warning("  %s 读音频失败: %s", cid[:8], repr(e)[:60])
+        return None
+    if x is None or len(x) < sr_out:
+        return None
+    x16 = librosa.resample(np.asarray(x, dtype=np.float32),
+                           orig_sr=TARGET_SR, target_sr=sr_out)
+    n = int(seg_sec * sr_out)
+    total = len(x16)
+    if total <= n:
+        spans = [(0, total)]
+    else:
+        # 从 5% 处起铺开：最开头常有片头静音/音乐，取到会拉偏嵌入
+        starts = np.linspace(int(0.05 * total), max(total - n, 0), n_seg).astype(int)
+        spans = [(int(s), min(int(s) + n, total)) for s in starts]
+    embs = []
+    for a, b in spans:
+        seg = x16[a:b]
+        if len(seg) < int(0.5 * sr_out):
+            continue
+        try:
+            embs.append(_embed(seg))
+        except Exception as e:
+            log.warning("  %s 段 %d-%d 嵌入失败: %s", cid[:8], a, b, repr(e)[:60])
+    if not embs:
+        return None
+    m = np.mean(np.stack(embs), axis=0)
+    nrm = np.linalg.norm(m)
+    return m / nrm if nrm else m
+
+
+def cluster_by_embed(emb_map, thr=EMB_SIM_THR):
+    """贪心聚类：余弦相似度 >= thr 的案例并成「同一个人的声音」。
+
+    emb_map: {cid: emb(已归一化)}
+    返回 [{"members":[cid..], "centroid":emb, "sim_min":float}, ...]
+    sim_min 记的是组内**最低**相似度 —— 它低于阈值就是"这组混进了别人"的信号。
+    """
+    clusters = []
+    for cid, e in sorted(emb_map.items()):
+        best_i, best_s = -1, -1.0
+        for i, c in enumerate(clusters):
+            s = float(np.dot(c["centroid"], e))
+            if s > best_s:
+                best_s, best_i = s, i
+        if best_i >= 0 and best_s >= thr:
+            c = clusters[best_i]
+            c["members"].append(cid)
+            c["embs"].append(e)
+            c["sim_min"] = min(c["sim_min"], best_s)
+            m = np.mean(np.stack(c["embs"]), axis=0)
+            c["centroid"] = m / (np.linalg.norm(m) or 1.0)
+        else:
+            clusters.append({"members": [cid], "embs": [e],
+                             "centroid": e, "sim_min": 1.0})
+    return clusters
+
+
+def embed_groups(cases, thr=EMB_SIM_THR):
+    """按声音聚类，输出与 groups() 同构的 {(name, gender): [cid..]}。
+
+    组名取组内案例 speaker 的**众数**（只是拿来命名和生成音色 id，
+    分组本身完全由嵌入决定，名字错了也不影响分组结果）。
+    """
+    emb_map = {}
+    for cid in sorted(cases):
+        e = case_embedding(cid)
+        if e is not None:
+            emb_map[cid] = e
+        else:
+            log.warning("  %s 取不到嵌入，不参与聚类", cid[:8])
+    clusters = cluster_by_embed(emb_map, thr)
+    clusters.sort(key=lambda c: -len(c["members"]))
+    g = {}
+    meta = {}
+    for i, c in enumerate(clusters):
+        names = [(cases[m].get("name") or "").strip() for m in c["members"]]
+        names = [n for n in names if n]
+        nm = max(set(names), key=names.count) if names else ("spk%d" % (i + 1))
+        gds = [(cases[m].get("gender") or "").strip() for m in c["members"]]
+        gds = [x for x in gds if x]
+        gd = max(set(gds), key=gds.count) if gds else ""
+        g[(nm, gd)] = c["members"]
+        meta[(nm, gd)] = {"sim_min": c["sim_min"], "n": len(c["members"])}
+    return g, meta
+
+
 def pick_source(cases, cids):
     """从一组同人案例里挑**最佳**克隆源。
 
@@ -283,6 +421,11 @@ def main():
     ap.add_argument("--pick", default="centroid", choices=("centroid", "window"),
                     help="挑源方式：centroid=按说话人嵌入质心挑「最像这个人」的一段"
                          "（默认，会用上同人全部素材）；window=只挑最好切的连续段")
+    ap.add_argument("--group-by", default="name", choices=("name", "embed"),
+                    help="分组依据：name=按案例填写的说话人名（旧行为，默认）；"
+                         "embed=按 campplus 声音嵌入聚类（自动分类音色，不依赖名字）")
+    ap.add_argument("--embed-thr", type=float, default=EMB_SIM_THR,
+                    help="embed 模式的同人判定阈值（余弦，默认 %.2f）" % EMB_SIM_THR)
     args = ap.parse_args()
 
     from voice_trim import trim_reference        # 延迟导入：librosa 较慢
@@ -292,10 +435,20 @@ def main():
         log.error("读不到案例：%s", CASES_JSON)
         return 1
 
-    grp = groups(cases)
-    log.info("案例 %d 条 -> 按「说话人+性别」聚成 %d 组：", len(cases), len(grp))
-    for (nm, gender), cids in sorted(grp.items(), key=lambda kv: -len(kv[1])):
-        log.info("  %-14s %-7s %2d 条", nm, gender or "-", len(cids))
+    if args.group_by == "embed":
+        grp, cmeta = embed_groups(cases, args.embed_thr)
+        log.info("案例 %d 条 -> 按**声音嵌入**聚成 %d 组（阈值 %.2f）：",
+                 len(cases), len(grp), args.embed_thr)
+        for (nm, gender), cids in sorted(grp.items(), key=lambda kv: -len(kv[1])):
+            m = cmeta.get((nm, gender), {})
+            log.info("  %-14s %-7s %2d 条  组内最低相似度 %.4f%s",
+                     nm, gender or "-", len(cids), m.get("sim_min", 0),
+                     "  ⚠️ 疑似混入他人" if m.get("sim_min", 1) < args.embed_thr else "")
+    else:
+        grp = groups(cases)
+        log.info("案例 %d 条 -> 按「说话人+性别」聚成 %d 组：", len(cases), len(grp))
+        for (nm, gender), cids in sorted(grp.items(), key=lambda kv: -len(kv[1])):
+            log.info("  %-14s %-7s %2d 条", nm, gender or "-", len(cids))
 
     plan = []
     skipped = []

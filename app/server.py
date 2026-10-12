@@ -972,6 +972,14 @@ async def run_job(job):
     _preset = EMOTION_PRESETS.get(_emotion) or EMOTION_PRESETS[DEFAULT_EMOTION]
     _engine_name = (job.get("engine") or _preset["engine"]).strip()
     _cosy_instruct = _preset.get("instruct") or "neutral"
+    # 显式指定引擎（A/B 对照 / 管理员排查）：优先级最高，压过音色自带的 engine。
+    # 但下面两条「命名空间正确性」的强制规则不受它影响：
+    #   ① 预设音色属于 Cosy 命名空间 -> 必须 cosyvoice3，否则 Qwen 报未知音色
+    #   ② 员工选了非平稳情感 -> 必须 cosyvoice3，否则点了「激昂」听不出变化
+    _engine_forced = bool((job.get("engine_force") or "").strip())
+    if _engine_forced:
+        log.info("任务 %s 显式指定引擎=%s（压过音色自带 engine 字段）",
+                 job["id"], _engine_name)
     # 「预设音色」里选了 CosyVoice3 常驻音色 -> 引擎必须跟着切。
     # 否则会拿 Cosy 的音色 id 去喂 Qwen，而 Qwen 只认自己那 9 个发音人，
     # 会直接报未知音色（两个引擎的音色命名空间完全不相通）。
@@ -1030,8 +1038,10 @@ async def run_job(job):
         # 引擎取「管理员录入该音色时手动指定的」engine 字段（voices.json）。
         # 员工选了非平稳情感时**强制**改走 CosyVoice3 —— Qwen 克隆没有 instruct，
         # 只有 CosyVoice3 带得动情感，否则员工点了「激昂」却听不出任何变化。
+        # ⚠️ 提交时显式指定了引擎就不看这里（否则 voices.json 里写死的 qwen
+        #    会让 A/B 对照永远跑同一条链，2026-10-12）。
         _ve = (v.get("engine") or "").strip()
-        if _ve in VALID_ENGINES:
+        if not _engine_forced and _ve in VALID_ENGINES:
             _engine_name = _ve
         if _emotion != DEFAULT_EMOTION and _engine_name != "cosyvoice3":
             _engine_name = "cosyvoice3"
@@ -2336,8 +2346,17 @@ async def create_job(request: Request,
                      temperature: Optional[float] = Form(None),
                      subtalker_temperature: Optional[float] = Form(None),
                      enhance: Optional[bool] = Form(None),
-                     case_id: str = Form("")):
+                     case_id: str = Form(""),
+                     engine: str = Form("")):
     u = require(request)
+    # 显式指定引擎：只给 A/B 对照与管理员排查用。不传时行为与以前完全一致
+    # ——引擎仍由「情感预设 + 音色自带的 engine 字段」决定。
+    # 2026-10-12 加：此前 create_job 压根没收这个字段，voices.json 里每个音色的
+    # engine 又被写死成 qwen，导致任何 engine=cosyvoice3 的请求都被静默改成 qwen，
+    # 对照实验跑出来的是同一条链，结论完全不可信。
+    engine = (engine or "").strip()
+    if engine and engine not in VALID_ENGINES:
+        raise HTTPException(400, f"引擎需在 {list(VALID_ENGINES)} 之内")
     if temperature is not None and not (0.3 <= temperature <= 1.5):
         raise HTTPException(400, "temperature 需在 0.3~1.5 之间")
     try:
@@ -2391,7 +2410,9 @@ async def create_job(request: Request,
         "seed": seed,
         "speed": speed,
         "emotion": emotion,     # 员工只选情感，引擎由 EMOTION_PRESETS 自动分流
-        "engine": EMOTION_PRESETS[emotion]["engine"],
+        "engine": engine or EMOTION_PRESETS[emotion]["engine"],
+        # 显式指定的引擎：优先级高于音色自带的 engine 字段（见 run_job）
+        "engine_force": engine or None,
         "case_id": case_id or None,
         "temperature": temperature,
         # 韵律细节采样温度（模型第二路采样）。默认不传=沿用官方 0.9；

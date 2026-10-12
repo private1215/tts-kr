@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>句尾语调听选 — 韩语财经配音</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --line:#e3e6ea; --ink:#1c1f23; --sub:#5b6470;
+    --accent:#c0392b; --accent-soft:#fdeceb; --ok:#1e7d5a; --ok-soft:#e8f5ef;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:28px 20px 60px;background:var(--bg);color:var(--ink);
+       font:15px/1.65 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 6px}
+  .lead{color:var(--sub);margin:0 0 22px}
+  .note{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);
+        border-radius:8px;padding:14px 16px;margin:0 0 24px}
+  .note b{color:var(--accent)}
+  .group{background:var(--card);border:1px solid var(--line);border-radius:10px;
+         padding:18px 18px 22px;margin:0 0 20px}
+  .group h2{font-size:17px;margin:0 0 4px;display:flex;align-items:center;gap:10px}
+  .group h2 span.tag{font-size:12px;font-weight:400;color:var(--sub);
+        border:1px solid var(--line);border-radius:20px;padding:2px 10px}
+  .hint{color:var(--sub);font-size:13px;margin:0 0 14px}
+  .ref{background:var(--ok-soft);border:1px solid #cfe6da;border-radius:8px;
+       padding:12px 14px;margin:0 0 16px}
+  .ref .t{font-size:13px;color:var(--ok);font-weight:600;margin-bottom:8px}
+  .ref .d{font-size:12.5px;color:var(--sub);margin-top:6px}
+  .opts{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  @media(max-width:640px){.opts{grid-template-columns:1fr}}
+  .opt{border:1px solid var(--line);border-radius:8px;padding:12px 13px;background:#fcfcfd;
+       cursor:pointer;transition:.15s;position:relative}
+  .opt:hover{border-color:#c3cad2}
+  .opt.sel{border-color:var(--accent);background:var(--accent-soft)}
+  .opt .h{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+  .opt .k{width:26px;height:26px;border-radius:50%;border:1.5px solid #b9c0c8;
+          display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--sub)}
+  .opt.sel .k{border-color:var(--accent);background:var(--accent);color:#fff}
+  .opt .n{font-weight:600;font-size:14.5px}
+  .opt .sub{font-size:12px;color:var(--sub);font-weight:400;margin-left:auto}
+  audio{width:100%;height:38px;display:block}
+  .foot{margin-top:26px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  button{font:inherit;border-radius:7px;border:1px solid var(--line);background:var(--card);
+         padding:9px 16px;cursor:pointer;color:var(--ink)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  button:hover{opacity:.9}
+  #result{margin-left:4px;color:var(--ok);font-weight:600;font-size:14px}
+  .script{background:#fbfbfc;border:1px dashed var(--line);border-radius:8px;
+          padding:12px 14px;margin-top:10px;font-size:13px;color:var(--sub)}
+  .script .ko{color:var(--ink);font-size:13.5px;line-height:1.9;word-break:break-word}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>句尾语调 · 听选</h1>
+  <p class="lead">给懂韩语的同事听，<b>只需要选一个字母</b>，不用描述感受。</p>
+
+  <div class="note">
+    <b>怎么听：</b>先听绿色框里的 <b>参照</b>（标杆音频：ElevenLabs 生成的同文案版本，
+    即我们要对齐的目标），
+    再依次听 <b>A / B / C / D</b>，选一个<b>最像参照、最像韩国财经节目主持人</b>的。<br>
+    四个选项<b>只有「句尾音调往下降多少」这一个地方不一样</b>，音色、语速、停顿、内容完全相同。
+    拿不准就选"听起来最像参照的那个"。
+  </div>
+
+  <div class="group">
+    <h2>男声<span class="tag">EL_male</span></h2>
+    <p class="hint">四段各 21 秒，文案相同。</p>
+    <div class="ref">
+      <div class="t">参照（案例原声 · 不用选，只用来对比）</div>
+      <audio controls preload="none" src="male_ref.mp3"></audio>
+      <div class="d">这是韩国财经节目主持人的真实录音，就是我们想还原的目标。</div>
+    </div>
+    <div class="opts" data-g="男声">
+      <div class="opt" data-v="A"><div class="h"><div class="k">A</div><div class="n">选项 A</div><span class="sub">21s</span></div><audio controls preload="none" src="male_1.mp3"></audio></div>
+      <div class="opt" data-v="B"><div class="h"><div class="k">B</div><div class="n">选项 B</div><span class="sub">21s</span></div><audio controls preload="none" src="male_2.mp3"></audio></div>
+      <div class="opt" data-v="C"><div class="h"><div class="k">C</div><div class="n">选项 C</div><span class="sub">21s</span></div><audio controls preload="none" src="male_3.mp3"></audio></div>
+      <div class="opt" data-v="D"><div class="h"><div class="k">D</div><div class="n">选项 D</div><span class="sub">21s</span></div><audio controls preload="none" src="male_4.mp3"></audio></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h2>女声<span class="tag">EL_female</span></h2>
+    <p class="hint">四段各 23 秒，文案相同。</p>
+    <div class="ref">
+      <div class="t">参照（案例原声 · 不用选，只用来对比）</div>
+      <audio controls preload="none" src="female_ref.mp3"></audio>
+      <div class="d">同上，女声财经节目主持人的真实录音。</div>
+    </div>
+    <div class="opts" data-g="女声">
+      <div class="opt" data-v="A"><div class="h"><div class="k">A</div><div class="n">选项 A</div><span class="sub">23s</span></div><audio controls preload="none" src="female_1.mp3"></audio></div>
+      <div class="opt" data-v="B"><div class="h"><div class="k">B</div><div class="n">选项 B</div><span class="sub">23s</span></div><audio controls preload="none" src="female_2.mp3"></audio></div>
+      <div class="opt" data-v="C"><div class="h"><div class="k">C</div><div class="n">选项 C</div><span class="sub">23s</span></div><audio controls preload="none" src="female_3.mp3"></audio></div>
+      <div class="opt" data-v="D"><div class="h"><div class="k">D</div><div class="n">选项 D</div><span class="sub">23s</span></div><audio controls preload="none" src="female_4.mp3"></audio></div>
+    </div>
+  </div>
+
+  <div class="script">
+    <div>朗读文案（含数字 <b>21만 3500원</b>，可顺带确认数字读法是否正确）：</div>
+    <div class="ko">안녕하세요, 산일전기 주주 여러분. 반갑습니다, 정민철 프로입니다. 우리 주주님들께, 진짜 중요한 타점 하나 짚어드리려고, 이렇게 카메라 켰습니다. 와, 지금 산일전기, 기가 막힌 변곡점에 와 있거든요. 제가 왜 이렇게까지 강조하느냐, 맥락부터 짚어보죠. 시월 일일 종까 기준, 산일전기 이십일만삼천오백원.</div>
+  </div>
+
+  <div class="foot">
+    <button class="primary" id="copy">复制结果</button>
+    <button id="reset">清空重选</button>
+    <span id="result"></span>
+  </div>
+</div>
+
+<script>
+  var pick = {};
+  document.querySelectorAll('.opts').forEach(function(box){
+    var g = box.dataset.g;
+    box.querySelectorAll('.opt').forEach(function(o){
+      o.addEventListener('click', function(e){
+        if (e.target.tagName === 'AUDIO') return;
+        box.querySelectorAll('.opt').forEach(function(x){ x.classList.remove('sel'); });
+        o.classList.add('sel');
+        pick[g] = o.dataset.v;
+        show();
+      });
+    });
+  });
+  function txt(){
+    var a = pick['男声'], b = pick['女声'];
+    if (!a && !b) return '还没选';
+    var s = [];
+    if (a) s.push('男声: ' + a);
+    if (b) s.push('女声: ' + b);
+    return s.join('   |   ');
+  }
+  function show(){ document.getElementById('result').textContent = txt(); }
+  document.getElementById('copy').addEventListener('click', function(){
+    var t = txt();
+    if (t === '还没选') { alert('还没选'); return; }
+    navigator.clipboard.writeText(t).then(function(){
+      var el = document.getElementById('result');
+      el.textContent = t + '  （已复制）';
+    }, function(){ alert('复制失败，请手动记下：' + t); });
+  });
+  document.getElementById('reset').addEventListener('click', function(){
+    pick = {};
+    document.querySelectorAll('.opt').forEach(function(x){ x.classList.remove('sel'); });
+    show();
+  });
+</script>
+</body>
+</html>

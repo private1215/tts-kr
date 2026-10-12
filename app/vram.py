@@ -85,8 +85,56 @@ def release_qwen():
         log.warning("卸载 Qwen 失败: %s", repr(e)[:120])
 
 
+COSY_UNIT = os.environ.get("TTS_COSY_UNIT", "/etc/systemd/system/cosy-tts.service")
+
+
+def _cosy_gpu_isolated():
+    """CosyVoice3 是不是跑在**另一张卡**上（独立进程）。
+
+    🔴 这段串行逻辑的前提是「两个引擎抢同一张 12G 卡」，那个前提**在 Cosy 被迁到
+    3090 之后就不成立了**（2026-10-12 实测：nvidia-smi 显示 cosy_server 进程占
+    GPU-b67eee2c（3090）5.3 GiB，主服务占 GPU-94853612（3060）4.2 GiB，两卡隔离）。
+    前提不成立却还在跑，后果是**每次情感任务都白付一次 Qwen 卸载 + 重载**：
+    员工点「激昂」→ 卸 Qwen → 等 3060 空闲（最多 90s）→ Cosy 在 3090 上生成（根本
+    不用 3060）→ 收尾再重载 Qwen。纯浪费，还让情感任务明显变慢。
+
+    判断方式（保守优先，拿不到信息就按「不隔离」处理，保持原有安全行为）：
+      1. 环境变量 TTS_COSY_GPU_ISOLATED=1/0 显式指定，最优先
+      2. 否则读 cosy 单元的 CUDA_VISIBLE_DEVICES，和本进程自己的比；不同 -> 隔离
+      3. 读不到 -> False（继续串行，宁可慢也不要 OOM）
+    """
+    forced = os.environ.get("TTS_COSY_GPU_ISOLATED", "").strip().lower()
+    if forced in ("1", "true", "yes"):
+        return True
+    if forced in ("0", "false", "no"):
+        return False
+    try:
+        mine = os.environ.get("CUDA_VISIBLE_DEVICES", "").strip()
+        theirs = ""
+        with open(COSY_UNIT, encoding="utf-8") as fh:
+            for line in fh:
+                s = line.strip()
+                if s.startswith("Environment=CUDA_VISIBLE_DEVICES="):
+                    theirs = s.split("=", 1)[1].strip()
+                    break
+        if not mine or not theirs:
+            return False
+        return mine != theirs
+    except Exception as e:
+        log.warning("判断 Cosy 是否异卡失败（按同卡处理，继续串行）: %s", repr(e)[:120])
+        return False
+
+
 def switch_to(engine_name, log_prefix=""):
-    """跑 engine_name 之前，把另一个引擎赶出显存并等显存真的释放。幂等，可重复调用。"""
+    """跑 engine_name 之前，把另一个引擎赶出显存并等显存真的释放。幂等，可重复调用。
+
+    两个引擎**不在同一张卡**时直接跳过 —— 这时候卸载本地引擎没有任何意义，
+    只会白白付出加载开销（详见 _cosy_gpu_isolated 的说明）。
+    """
+    if _cosy_gpu_isolated():
+        log.info("%s引擎按 GPU 隔离运行（Qwen 与 Cosy 不在同一张卡），跳过显存串行切换",
+                 log_prefix)
+        return None
     if engine_name == "cosyvoice3":
         release_qwen()
         free = wait_free_vram(MIN_FREE_FOR_COSY)
@@ -99,7 +147,12 @@ def switch_to(engine_name, log_prefix=""):
 
 
 def restore_qwen(warm=True):
-    """收尾：卸掉 CosyVoice3，把 Qwen 恢复到常驻稳态（下个任务零加载等待）。"""
+    """收尾：卸掉 CosyVoice3，把 Qwen 恢复到常驻稳态（下个任务零加载等待）。
+
+    GPU 隔离时 Qwen 压根没被卸过，所以整段都可以跳过 —— 连 warmup 都不用做。
+    """
+    if _cosy_gpu_isolated():
+        return None
     switch_to("qwen")
     if not warm:
         return

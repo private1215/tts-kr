@@ -27,17 +27,22 @@ from spkchk import read16, embed, CAMPPLUS  # noqa: E402
 from app.asr_check import transcribe, cer  # noqa: E402
 
 GT = open("/mnt/tts/diag/gs_long.txt", encoding="utf-8").read().strip()
-REF = "/mnt/tts/projects/gpt-sovits/out/prompt_10s.wav"   # 이민정 案例原声 10s（测试区）
+# 🔴 口径（2026-10-12 统一）：案例库音频**全部是 ElevenLabs 生成的**，不是真人录音。
+#    一律称「案例 / 标杆音频」，不要写「真人原声」。
+REF = "/mnt/tts/projects/gpt-sovits/out/prompt_10s.wav"  # 이민정 案例（EL 生成）10s 测试区
 
 CAND = [
-    ("GPT-SoVITS 微调 e30", "/mnt/tts/projects/gpt-sovits/out/gs_long_hh_v2pro_e30_s480.wav"),
-    ("Qwen3TTS EL_female(当前生产)", "/mnt/tts/diag/gs-long-qwen.wav"),
+    ("Qwen 生产链(当前默认)", "/mnt/tts/diag/qwen-long-r2.wav"),
+    ("Cosy 生产链(走后处理)", "/mnt/tts/diag/cosy-prod-long.wav"),
+    ("Cosy CLI 裸跑(无后处理)", "/mnt/tts/projects/gpt-sovits/out/cosy_f_long_s42.wav"),
+    ("GPT-SoVITS 微调 e30(裸跑)", "/mnt/tts/projects/gpt-sovits/out/gs_long_hh_v2pro_e30_s480.wav"),
 ]
 
-# 同一份文本的真人原声（산일전기 案例），只用来当"时长应该差不多多久"的参照。
+# 同一份文本的标杆音频（산일전기 案例，ElevenLabs 生成），只用来当"时长应该差不多多久"的参照。
 # ⚠️ 案例全文 4218 字，我们只取前 2902 字，所以不能直接拿案例总时长比 ——
-#    要按真人语速折算成"同样 2902 字该多久"，否则 dur_ratio 会算成假的 0.77。
-HUMAN = "/mnt/tts/data/cases/799e4d7060ce/merged.wav"
+#    要按标杆语速折算成"同样 2902 字该多久"，否则 dur_ratio 会算成假的 0.77。
+#    注意这里的"标杆语速"是 EL 生成的语速，不是真人语速。
+HUMAN = "/mnt/tts/data/cases/799e4d7060ce/merged.wav"     # 名称沿用，指标杆音频
 HUMAN_CHARS = 4218
 # 参考语速：也可直接用本系统自己的验收口径（8.26 字/秒，来自 4046 字 / 489.8s）
 OUR_CPS = 4046 / 489.8
@@ -146,11 +151,11 @@ def main():
     print("目标文案 %d 字" % len(GT))
     print("尾句:", GT[-40:])
     hd = dur(HUMAN)
-    hcps = HUMAN_CHARS / hd if hd else 0        # 真人语速（字/秒）
+    hcps = HUMAN_CHARS / hd if hd else 0        # 标杆语速（字/秒，EL 生成）
     exp_h = len(GT) / hcps if hcps else 0       # 同样字数真人该说多久
     exp_o = len(GT) / OUR_CPS                   # 我们自己的验收口径
-    print("真人原声: 全文 %d 字 / %.1fs -> %.2f 字/秒" % (HUMAN_CHARS, hd or -1, hcps))
-    print("按真人语速折算，%d 字应约 %.1fs" % (len(GT), exp_h))
+    print("标杆音频(EL): 全文 %d 字 / %.1fs -> %.2f 字/秒" % (HUMAN_CHARS, hd or -1, hcps))
+    print("按标杆(EL)语速折算，%d 字应约 %.1fs" % (len(GT), exp_h))
     print("按本系统验收口径(%.2f 字/秒)，应约 %.1fs" % (OUR_CPS, exp_o))
     print()
 

@@ -88,7 +88,7 @@ def case_text(cid):
     return "\n".join(open(p, encoding="utf-8").read().strip() for p in segs)
 
 
-def submit_job(text, voice, title, case_id="", seed=None):
+def submit_job(text, voice, title, case_id="", seed=None, engine=None):
     """提交生成任务。⚠️ 不能用 multipart（-F text=@file），那是文件上传，
     服务端 Form(str) 会报 "Input should be a valid string"。
 
@@ -98,6 +98,12 @@ def submit_job(text, voice, title, case_id="", seed=None):
     `case_id`：对标案例。带上它，服务端全部目标值（峰值/响度/停顿/语速/PROSO）
     就按**这条案例自身**取，而不是同性别案例库的中位数。验收时本来就是跟
     这条案例比，所以带上是「生产口径=验收口径」；`--case 0` 可关掉做对照。
+
+    `engine`：显式指定 qwen / cosyvoice3。
+    🔴 做引擎对照时**必须走生产服务提交，不能拿 CLI 直出比**：
+    CLI 出来的音频没经过后处理链（PBA 停顿对齐 / EQ / proso / 呼吸 / 响度闭环），
+    而 Qwen 那份是走完整链的，两者比等于让 Cosy 裸奔上场，结论不可信。
+    走生产提交才是同一条流水线上的公平对照。
     """
     form = {
         "title": title,
@@ -109,6 +115,8 @@ def submit_job(text, voice, title, case_id="", seed=None):
     }
     if case_id:
         form["case_id"] = case_id
+    if engine:
+        form["engine"] = engine
     # 拒绝采样实验用：不传就是服务端默认 42
     if seed is not None:
         form["seed"] = str(int(seed))
