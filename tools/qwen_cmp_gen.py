@@ -12,17 +12,22 @@ sys.path.insert(0, "/mnt/tts/projects/qwen3-tts")
 
 from tools.eval5 import login, submit_job, wait_job, wait_dir  # noqa: E402
 
-TEXT = "/mnt/tts/projects/gpt-sovits/out/text_sola_00b6a45a.txt"
 OUT_DIR = "/mnt/tts/diag"
-VOICES = ["SOLA_female", "EL_female"]
 
 
 def main():
-    txt = open(TEXT, encoding="utf-8").read().strip()
-    print("文本 %d 字" % len(txt), flush=True)
+    """用法: qwen_cmp_gen.py <文本文件> <音色,逗号分隔> <标题前缀>"""
+    argv = sys.argv[1:]
+    text_path = argv[0] if argv else \
+        "/mnt/tts/projects/gpt-sovits/out/text_sola_00b6a45a.txt"
+    voices = (argv[1].split(",") if len(argv) > 1
+              else ["SOLA_female", "EL_female"])
+    prefix = argv[2] if len(argv) > 2 else "gs-cmp"
+    txt = open(text_path, encoding="utf-8").read().strip()
+    print("文本 %d 字  音色 %s" % (len(txt), voices), flush=True)
     login()
-    for v in VOICES:
-        title = "gs-cmp-" + v
+    for v in voices:
+        title = "%s-%s" % (prefix, v)
         j = submit_job(txt, v, title, seed=42)
         jid = j.get("id")
         st = wait_job(jid, timeout=1800)
