@@ -223,6 +223,21 @@ PBA_CV = float(os.environ.get("TTS_PBA_CV", "0.28"))
 # < 案例 0.834 —— 差的不是"变化量"是"分布形状"（我们前两桶 73% vs 案例 46%）。
 # 小 CV 的对数正态恰恰会把停顿挤成一坨，调 CV 是南辕北辙。
 PAUSE_FROM_CASES = os.environ.get("TTS_PAUSE_FROM_CASES", "1") != "0"
+# 🔴 2026-10-12 卡顿事故订正：停顿目标分布改用**可听口径**。
+#    旧的 pause_samples（cases.json）是入库时用 prosody_report.
+#    sent_windows 量的，把句间 -40dB 的**有声轻音**（呼吸/气声/室底）
+#    也算成"停顿"：女声标杆 154 个"停顿"里只有 2 个低于 -45dB。
+#    reshuffle 照这个分布用 _fit_seg 把我们的停顿拉到 0.5~1.0s，
+#    填进去的是数字静音 → 女声成品 126s 出 14 个 0.6~0.92s 死寂
+#    断档，而案例 459s 只有 2 个、同文案裸推理只有 1 个。
+#    员工盲听 6/7 票选裸推理那版（静音占比 2.7% vs 案例 3.3%）——
+#    裸推理本来是对的，是后处理把节奏改坏了。
+#    可听分布由 tools/case_audible_pauses.py 重测（能量口径：16k、
+#    20ms 帧、dB>-45 为有声、内部静音>=0.25s），落独立文件，
+#    重跑工具不用重启（mtime 缓存）。TTS_PAUSE_TARGET=sent 回旧行为。
+PAUSE_TARGET_MODE = os.environ.get("TTS_PAUSE_TARGET", "audible")
+PAUSE_AUDIBLE_JSON = os.environ.get(
+    "TTS_PAUSE_AUDIBLE_JSON", "/mnt/tts/data/pause_targets_audible.json")
 # ---- 停顿条数预算（r22b）：静音占比是唯一五例同向的系统性缺陷 ----------
 # 2026-10-07 五案例「成品 − 案例」带符号偏差，只有三项方向一致：
 #     sil +7.8 ~ +17.1%（均值 +12.5%） / C +2.3 ~ +9.5% / dur -0.7 ~ -4.1%
@@ -2195,27 +2210,40 @@ async def feedback_page():
 
 @app.get("/api/fb/items")
 async def fb_items():
-    """题目清单。匿名可读（员工登录后才能提交，但页面本身不拦）。"""
+    """题目清单。匿名可读（员工登录后才能提交，但页面本身不拦）。
+
+    no-store：题目会随 items.json 更新，不能让他被浏览器启发式缓存。"""
     p = os.path.join(FB_DIR, "items.json")
     if not os.path.exists(p):
-        return {"items": []}
+        return JSONResponse({"items": []},
+                            headers={"Cache-Control": "no-store"})
     try:
         with open(p, "r", encoding="utf-8") as f:
             j = json.load(f)
     except Exception:
-        return {"items": []}
-    return {"items": j.get("items") or []}
+        return JSONResponse({"items": []},
+                            headers={"Cache-Control": "no-store"})
+    return JSONResponse({"items": j.get("items") or []},
+                        headers={"Cache-Control": "no-store"})
 
 
 @app.get("/fb-audio/{name}")
 async def fb_audio(name: str):
-    """题干音频。只认文件名，防目录穿越。"""
+    """题干音频。只认文件名，防目录穿越。
+
+    🔴 2026-10-12：缓存头从 no-store 改成 public+max-age=3600。
+       员工 10-10 投诉过"播放会卡顿"——题干 mp3 是静态不可变的，
+       no-store 让每次播放（含重放同一段）都重新走一遍 HTTP，
+       页面同时挂着 ~40 个 player，争抢下首播容易 Stall。
+       FileResponse 仍带 ETag/Last-Modified，文件若被替换会按
+       条件请求重验证，不会出现"换了题还放旧音频"。
+    """
     safe = os.path.basename(name)
     p = os.path.join(FB_DIR, safe)
     if not os.path.isfile(p):
         raise HTTPException(404, "音频不存在")
     return FileResponse(p, media_type="audio/mpeg",
-                        headers={"Cache-Control": "no-store"})
+                        headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.post("/api/fb/vote")
@@ -3489,6 +3517,27 @@ def _bench_cases(gender):
     return _pool_cases(gender)
 
 
+_AUDIBLE_CACHE = {"mtime": None, "data": None}
+
+
+def _load_pause_audible():
+    """读可听停顿独立文件（mtime 缓存：tools/case_audible_pauses.py
+    重跑后不用重启服务，下一个任务自动用上新数据）。"""
+    try:
+        mt = os.path.getmtime(PAUSE_AUDIBLE_JSON)
+    except OSError:
+        return None
+    if _AUDIBLE_CACHE["data"] is None or mt != _AUDIBLE_CACHE["mtime"]:
+        try:
+            with open(PAUSE_AUDIBLE_JSON, encoding="utf-8") as f:
+                _AUDIBLE_CACHE["data"] = json.load(f)
+            _AUDIBLE_CACHE["mtime"] = mt
+        except Exception as e:
+            log.warning("可听停顿文件读取失败，回落 sent_windows 口径: %r", e)
+            return None
+    return _AUDIBLE_CACHE["data"]
+
+
 def pause_targets(gender):
     """停顿分布的目标样本：把该性别所有合规案例的停顿样本拼起来。
 
@@ -3497,9 +3546,35 @@ def pause_targets(gender):
 
     ⚠️ 借的是**形状**不是均值：reshuffle 拿到后会整体缩放到它自己的 mu 回归
        值上（mu 由句均时长决定，我们句子比案例碎，均值不能照抄）。
+
+    🔴 2026-10-12：默认（PAUSE_TARGET_MODE=audible）用 tools/
+        case_audible_pauses.py 重测的**可听口径**分布。旧口径
+        （cases.json 的 pause_samples）把句间有声轻音当停顿，
+        reshuffle 照它把我们的停顿填成 0.6~0.9s 数字静音，成品
+        126s 出 14 个死寂断档（案例 459s 只有 2 个）——就是员工
+        投诉的"卡顿"。可听口径下 >=0.6s 的样本只占 4%（旧口径
+        33.9%），目标分布回到案例真正的听觉节奏。
     """
     if not PAUSE_FROM_CASES:
         return None
+    if PAUSE_TARGET_MODE == "audible":
+        aud = _load_pause_audible()
+        if aud:
+            out = []
+            for c in _pool_cases(gender):      # 分布类：用全集
+                ps = aud.get(c.get("id") or "")
+                if not ps:
+                    continue
+                try:
+                    # 🔴 防御：只收 0.1~5 秒（与旧口径同一道防线）。
+                    out.extend(v for v in (float(x) for x in ps)
+                               if 0.1 <= v <= 5.0)
+                except (TypeError, ValueError):
+                    pass
+            if out:
+                return out
+            log.warning("可听停顿文件里没有 %s 案例的数据，回落 sent_windows 口径",
+                        gender)
     out = []
     for c in _pool_cases(gender):      # 分布类：用全集，单案例样本量不够
         ps = c.get("pause_samples")

@@ -518,7 +518,7 @@ details.adv summary:hover{color:var(--txt2)}
         <div class="hint" id="gpick"></div>
 
         <details class="adv" id="advVoice">
-          <summary data-i18n="voiceAdv">换音色 / 情感 / 语速（高级）</summary>
+          <summary data-i18n="voiceAdv">换音色 / 语速（高级）</summary>
           <div class="advbody">
         <!-- 🔴 统一成一个音色下拉。原先「预设音色 / 录入音色克隆」是两个 tab
              + 两个下拉，员工必须知道「克隆」这个词才找得到最好的那条链路。
@@ -557,10 +557,13 @@ details.adv summary:hover{color:var(--txt2)}
         <label data-i18n="language">语言</label>
         <select id="language"></select>
 
-        <label data-i18n="emotion">情感</label>
-        <select id="emotion"></select>
-        <div class="hint" id="emotionTip" style="display:none;margin-top:4px;color:#b45309"></div>
-        <div class="hint" data-i18n="emotionHint">选一种语气即可，引擎和参数由系统自动匹配。「平稳」准确度最高；需要情绪起伏时选其它项。</div>
+        <!-- 🔴 2026-10-12 下架情感下拉框（员工反馈优化轮）：
+             情绪不是员工选出来的，是从案例语音里拆解后由参考音频复刻的
+             （零样本克隆天然继承参考音频的情绪与韵律）。下拉框只剩
+             instruct 一个作用，且会用通用情绪指令覆盖案例自带的风格，
+             与"复刻案例情绪"的目标直接冲突。员工操作最小化 = 只粘贴
+             文案 + 选男/女。API 仍收 emotion 字段（A/B 对照用），
+             不传即 standard。 -->
 
         <label data-i18n="speed">语速</label>
         <select id="speed"></select>
@@ -705,7 +708,7 @@ const I18N = {
     searchPh:'搜索标题或内容…', allStatus:'全部状态', allOwner:'全部成员',
     stRunning:'生成中', stQueued:'排队中', stDone:'已完成', stError:'失败',
     countFmt:(n,seg)=>`${n} 字 · 约 ${seg} 段`,
-    gMale:'男声', gFemale:'女声', voiceAdv:'换音色 / 情感 / 语速（高级）',
+    gMale:'男声', gFemale:'女声', voiceAdv:'换音色 / 语速（高级）',
     grpCase:'案例克隆（还原度最高）', grpOther:'其他克隆音色',
     grpQwen:'千问自带音色（还原度低于案例克隆）',
     qwenSpkNote:(n)=>`当前：${n} —— 千问出厂音色，未针对案例调优，还原度通常比案例克隆低 2~3 分`,
@@ -849,7 +852,7 @@ const I18N = {
     searchPh:'Search title or text…', allStatus:'All status', allOwner:'All members',
     stRunning:'running', stQueued:'queued', stDone:'done', stError:'error',
     countFmt:(n,seg)=>`${n} chars · ~${seg} segments`,
-    gMale:'Male', gFemale:'Female', voiceAdv:'Change voice / emotion / speed (advanced)',
+    gMale:'Male', gFemale:'Female', voiceAdv:'Change voice / speed (advanced)',
     grpCase:'Case clones (best fidelity)', grpOther:'Other cloned voices',
     grpQwen:'Qwen built-in voices (lower fidelity than case clones)',
     qwenSpkNote:(n)=>`Now: ${n} — a stock Qwen voice, not tuned to our cases; usually 2~3 points below case clones`,
@@ -993,7 +996,7 @@ const I18N = {
     searchPh:'제목이나 내용 검색…', allStatus:'전체 상태', allOwner:'전체 멤버',
     stRunning:'생성중', stQueued:'대기중', stDone:'완료', stError:'실패',
     countFmt:(n,seg)=>`${n}자 · 약 ${seg}개 구간`,
-    gMale:'남성', gFemale:'여성', voiceAdv:'음성 / 감정 / 속도 변경 (고급)',
+    gMale:'남성', gFemale:'여성', voiceAdv:'음성 / 속도 변경 (고급)',
     grpCase:'케이스 클론 (재현도 최고)', grpOther:'기타 클론 음성',
     grpQwen:'Qwen 기본 음성 (케이스 클론보다 재현도 낮음)',
     qwenSpkNote:(n)=>`현재: ${n} — 케이스에 맞춰 조정되지 않은 Qwen 기본 음성입니다. 재현도는 보통 케이스 클론보다 2~3점 낮습니다`,
@@ -1136,7 +1139,7 @@ const I18N = {
     searchPh:'タイトル・本文を検索…', allStatus:'すべての状態', allOwner:'全メンバー',
     stRunning:'生成中', stQueued:'待機中', stDone:'完了', stError:'失敗',
     countFmt:(n,seg)=>`${n}文字 · 約${seg}セグメント`,
-    gMale:'男性', gFemale:'女性', voiceAdv:'音色 / 感情 / 速度を変更（詳細）',
+    gMale:'男性', gFemale:'女性', voiceAdv:'音色 / 速度を変更（詳細）',
     grpCase:'ケースクローン（再現度最高）', grpOther:'その他のクローン音色',
     grpQwen:'Qwen 標準音色（ケースクローンより再現度が低い）',
     qwenSpkNote:(n)=>`現在: ${n} — ケースに合わせて調整していない Qwen 標準音色です。再現度は通常ケースクローンより 2~3 点低くなります`,
@@ -1625,49 +1628,9 @@ async function loadMeta(){
   try{ META.info = await (await api('/api/voices')).json(); }catch(e){ META.info = META.info || {}; }
   renderSpeakers(); renderLanguages(); renderVoices(); renderVoiceList(); renderVsel();
   await loadCaseIndex(); updateGpick(); updateVselHint();   /* 案例名要等这一份才显示得出来 */
-  renderSpeeds(); renderEmotions();
-}
-/* 情感档位：员工只选语气，引擎/指令/参数由后端 EMOTION_PRESETS 自动分流 */
-function renderEmotions(){
-  const em = $('#emotion');
-  if(!em) return;
-  const list = (META.emotions && META.emotions.length)
-    ? META.emotions
-    : [{key:'standard'},{key:'excited'},{key:'warm'},{key:'serious'}];
-  const NAMES = {
-    standard:{zh:'平稳（发音最稳，无情感）',en:'Standard (no emotion)',ko:'차분 (감정 없음)',ja:'標準（感情なし）'},
-    excited: {zh:'激昂',en:'Excited',ko:'격앙',ja:'熱烈'},
-    warm:    {zh:'亲切',en:'Warm',ko:'다정',ja:'親しみ'},
-    serious: {zh:'严肃',en:'Serious',ko:'엄숙',ja:'厳粛'}
-  };
-  const L = (window.UI && UI.lang) || 'zh';
-  const prev = em.value;
-  // ⚠️ engine 不可用（当前只有 qwen 在线，CosyVoice3 未部署）时必须置灰：
-  //    否则员工选了「激昂」，后端会尝试切引擎失败后**静默回退 Qwen**，
-  //    任务照样成功、不报错，但成品和「平稳」逐字节一样 —— 白等一轮排队。
-  const OFF = {zh:'（暂未开放）',en:' (soon)',ko:' (준비 중)',ja:'（準備中）'};
-  em.innerHTML = list.map(o=>{
-    const n = (NAMES[o.key] && NAMES[o.key][L]) || NAMES[o.key].en;
-    const okk = o.available !== false;
-    return `<option value="${o.key}"${okk ? '' : ' disabled'}>${n}${okk ? '' : (OFF[L]||OFF.en)}</option>`;
-  }).join('');
-  const usable = list.filter(o=>o.available !== false).map(o=>String(o.key));
-  const keys = list.map(o=>String(o.key));
-  const def  = String(META.emotion_default || 'standard');
-  em.value = (prev && usable.includes(prev)) ? prev
-           : (usable.includes(def) ? def : (usable[0] || keys[0]));
-  // 下拉下方再补一句原因，避免员工以为是音色坏了
-  const tip = $('#emotionTip');
-  if(tip){
-    const offN = list.length - usable.length;
-    tip.textContent = offN > 0 ? ({
-      zh:`有 ${offN} 项暂不可用：对应引擎（CosyVoice3）尚未上线，选了也只是出和「平稳」一样的成品，已置灰。`,
-      en:`${offN} disabled: their engine (CosyVoice3) is offline — picking them would silently fall back to Standard.`,
-      ko:`${offN}개 항목 사용 불가: 해당 엔진(CosyVoice3)이 미배포 상태이며 선택해도 「차분」과 동일한 결과가 나옵니다.`,
-      ja:`${offN}件は未対応：エンジン(CosyVoice3)が未導入のため、選んでも「標準」と同じ結果になります。`
-    }[L] || '') : '';
-    tip.style.display = offN > 0 ? '' : 'none';
-  }
+  renderSpeeds();
+  /* 2026-10-12：情感下拉已下架——情绪由案例参考音频复刻，员工不选。
+     renderEmotions() 一并移除；提交处不传 emotion，后端落 standard。 */
 }
 
 /* 语速档位由后端 /api/meta 下发（模型本身没有 speed 接口，靠 atempo 后处理） */

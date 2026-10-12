@@ -121,6 +121,11 @@ def main():
                     help="训练音频总时长上限（分钟）")
     ap.add_argument("--hold", default="",
                     help="留出作测试区的案例 id（默认取组内第一条）")
+    ap.add_argument("--exclude-cer", type=float, default=0.0,
+                    help="剔除任一 segment CER 超过此值的案例（0=不过滤）。"
+                         "案例上传时已算好 segment CER，零成本。"
+                         "LoRA 首轮据此剔除过 ba24c0925311（CER .57/.73，"
+                         "文本与音频对不上，喂模型等于教错发音）")
     args = ap.parse_args()
 
     cids, meta = get_group(args.spk)
@@ -133,6 +138,35 @@ def main():
     train_cids = [c for c in cids if c != hold]
     print("留出测试区：%s（前 %.0fs），其余 %d 条进训练集"
           % (hold, HOLD_SEC, len(train_cids)), flush=True)
+
+    # ---- CER 质量门槛：文本与音频对不上的案例，整条剔除 --------------------
+    # 为什么整条剔除而不是只剔坏 segment：merged.wav 是整条念的，
+    # 坏 segment 说明这条案例的文字稿/音频本身有问题（对齐坏了），
+    # 同一条的其他 segment 也可能连带不准。实测全库除 ba24c0925311
+    # （0.728）外都 ≤0.154，这个门槛只拦灾难，不误伤。
+    if args.exclude_cer > 0:
+        try:
+            all_cases = json.load(open(CASES_JSON, encoding="utf-8"))
+            all_cases = all_cases if isinstance(all_cases, list) else list(
+                all_cases.get("cases", all_cases.values()))
+            cmap = {c["id"]: c for c in all_cases}
+        except Exception as e:
+            print("⚠️ 读 cases.json 失败，跳过 CER 过滤：%r" % e, flush=True)
+            cmap = {}
+        kept = []
+        for cid in train_cids:
+            c = cmap.get(cid) or {}
+            cs = [s.get("cer") or 0.0 for s in (c.get("segments") or [])]
+            mx = max(cs) if cs else 0.0
+            if mx > args.exclude_cer:
+                print("  🚫 剔除 %s：segment CER %.3f > %.2f（文本音频对不上）"
+                      % (cid[:8], mx, args.exclude_cer), flush=True)
+                continue
+            kept.append(cid)
+        if len(kept) < len(train_cids):
+            print("CER 过滤：%d -> %d 条" % (len(train_cids), len(kept)),
+                  flush=True)
+        train_cids = kept
 
     out = os.path.join(GS_DIR, "dataset_" + args.spk)
     os.makedirs(os.path.join(out, "train"), exist_ok=True)

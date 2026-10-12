@@ -59,6 +59,11 @@ MIN_FREE_GIB = 8.0        # 低于此值排队等（Cosy 常驻 2.2G，训练峰
 WAIT_TIMEOUT = 3600.0     # 等显存最多 1 小时，超时就放弃本次
 MIN_CASES = 3             # 少于这么多样例不值得训
 MAX_MINUTES = 160.0       # 训练音频上限（分钟），防训练过久
+CER_GATE = 0.35           # segment CER 超此值的案例整条剔除（与 app/asr_check.py
+                          # 的 TTS_ASR_CER 默认值一致）。案例上传时已算好 CER，
+                          # 零成本；实测全库除 ba24c0925311（.728）外都 ≤0.154，
+                          # 只拦灾难不误伤。2026-10-12：正在跑的 yohan 训练就因
+                          # 没这道门吃进了 8.8 分钟错位数据，整轮重启。
 WEIGHT_DIR = os.path.join(GS, "repo", "SoVITS_weights_v2ProPlus")
 
 
@@ -212,13 +217,15 @@ def train_one(spk, max_minutes=MAX_MINUTES, hold="", dry=False):
     # 🔴 gs_run_group.sh 在 tools/ 不在 deploy/（2026-10-12 踩过：路径写错
     #    直接 FileNotFoundError，而 auto_train 在后台跑，没人看见报错）。
     grp_sh = os.path.join(HERE, "gs_run_group.sh")
-    rc = run([VENV, prep, "--spk", spk, "--max-minutes", str(max_minutes)]
+    rc = run([VENV, prep, "--spk", spk, "--max-minutes", str(max_minutes),
+              "--exclude-cer", str(CER_GATE)]
              + (["--hold", hold] if hold else []), cwd=PROJ)
     if rc != 0 and hold:
         # 旧 hold 可能已不在组里（案例被删/重聚类），退回默认 hold 再试
         log("⚠️ 带 hold=%s 准备失败，改用默认 hold 重试" % hold[:8])
         rc = run([VENV, prep, "--spk", spk,
-                  "--max-minutes", str(max_minutes)], cwd=PROJ)
+                  "--max-minutes", str(max_minutes),
+                  "--exclude-cer", str(CER_GATE)], cwd=PROJ)
     if rc != 0:
         log("❌ 数据准备失败 %s（rc=%d）" % (spk, rc))
         return False

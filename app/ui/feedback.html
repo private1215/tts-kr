@@ -82,6 +82,18 @@ button.gh:hover{border-color:var(--accent);color:var(--accent)}
 .msg.err{color:var(--err)}
 .prog{color:var(--dim);font-size:12.5px}
 .empty{color:var(--dim);text-align:center;padding:40px 0}
+/* 登录闸门：没登录时挡住提交，员工不用猜为什么提交不了 */
+.gate{background:var(--panel);border:1px solid var(--warn);border-left:3px solid var(--warn);
+  border-radius:var(--r-sm);padding:15px 16px;margin-bottom:20px}
+.gate h3{margin:0 0 6px;font-size:15px;font-weight:650;color:var(--warn)}
+.gate p{margin:0 0 11px;color:var(--txt2);font-size:13px}
+.gate .row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.gate input{background:var(--panel2);color:var(--txt);border:1px solid var(--line2);
+  border-radius:var(--r-xs);padding:8px 12px;font:inherit;font-size:13.5px;width:170px;outline:none}
+.gate input:focus{border-color:var(--accent)}
+.gate .gmsg{font-size:12.8px;margin-top:9px;color:var(--err)}
+.gate .gmsg.ok{color:var(--ok)}
+.who{color:var(--dim);font-size:12.5px;margin-right:auto}
 </style>
 </head>
 <body>
@@ -98,6 +110,19 @@ button.gh:hover{border-color:var(--accent);color:var(--accent)}
     <b>怎么听：</b>先听绿色框里的 <b>参照</b>（真实案例录音，不用选），再听 <b>A / B / C / D</b>，
     选<b>最像参照、最像韩国财经节目主持人</b>的那个。同一题的四个选项只有<b>一个变量</b>不同，
     音色、语速、内容都一样。拿不准就选"听起来最像参照的"。
+  </div>
+
+  <div class="gate" id="gate" style="display:none">
+    <h3>请先登录，才能提交</h3>
+    <p>提交需要确认你的身份（同一道题只记你最后一次选择，不会重复计票）。
+       用公司分配的账号密码登录即可，你的选择都已经保存在这个页面里，登录后直接提交。</p>
+    <div class="row">
+      <span class="who" id="who"></span>
+      <input id="lgUser" type="text" placeholder="账号" autocomplete="username">
+      <input id="lgPass" type="password" placeholder="密码" autocomplete="current-password">
+      <button class="pri" id="lgBtn">登录</button>
+    </div>
+    <div class="gmsg" id="lgMsg"></div>
   </div>
 
   <div id="list"><div class="empty">正在加载…</div></div>
@@ -204,10 +229,17 @@ document.getElementById('submit').onclick = async function(){
     var r = await fetch('/api/fb/vote', {method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({picks: picks, free: document.getElementById('free').value.trim()})});
-    var j = await r.json();
+    if (r.status === 401){
+      // 登录态失效（服务重启会清掉所有登录）。选择都在本地存着，
+      // 引导登录后重提交即可——员工不需要理解"401"是什么。
+      m.textContent = '';
+      showGate('登录已过期，请重新登录后再点一次提交。你的选择没有丢。');
+      return;
+    }
+    var j = await r.json().catch(function(){ return null; });
     if (j && j.ok){ m.className = 'msg'; m.textContent = '已提交，谢谢！还可以继续改，改完再提交一次即可。'; }
-    else { m.className = 'msg err'; m.textContent = '提交失败：' + ((j && j.msg) || r.status); }
-  }catch(e){ m.className = 'msg err'; m.textContent = '网络错误'; }
+    else { m.className = 'msg err'; m.textContent = '提交失败：' + ((j && j.msg) || r.status) + '，请稍后再试'; }
+  }catch(e){ m.className = 'msg err'; m.textContent = '网络错误，请检查网络后重试'; }
 };
 
 document.getElementById('clear').onclick = function(){
@@ -216,6 +248,69 @@ document.getElementById('clear').onclick = function(){
   render();
 };
 
+// ---- 登录态：没登录就挡住提交，别再让员工对着"401"发呆 -------------------
+// 为什么需要：服务重启会清掉内存里的所有登录态（SESSIONS 是内存字典），
+// 员工浏览器里的 cookie 当时就失效了。以前这个页面没有任何提示，
+// 员工点一次提交失败一次，完全不知道为什么（2026-10-12 实际发生过：
+// 日志里同一员工连续 15 次 401）。
+function showGate(msg){
+  var g = document.getElementById('gate');
+  g.style.display = '';
+  var lm = document.getElementById('lgMsg');
+  if (msg){ lm.textContent = msg; lm.className = 'gmsg'; }
+  g.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+function hideGate(name){
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('lgMsg').textContent = '';
+  document.getElementById('lgMsg').className = 'gmsg';
+  if (name){
+    var w = document.getElementById('who');
+    w.textContent = '已登录：' + name;
+  }
+}
+async function checkMe(){
+  try{
+    var r = await fetch('/api/me', {cache:'no-store'});
+    if (r.status === 401){ showGate(''); return false; }
+    var j = await r.json();
+    hideGate(j && j.username);
+    return true;
+  }catch(e){ /* 网络抖动不拦，提交时再判 */ return true; }
+}
+async function doLogin(){
+  var btn = document.getElementById('lgBtn');
+  var lm = document.getElementById('lgMsg');
+  var u = document.getElementById('lgUser').value.trim();
+  var p = document.getElementById('lgPass').value;
+  if (!u || !p){ lm.textContent = '请输入账号和密码'; lm.className = 'gmsg'; return; }
+  btn.disabled = true; btn.textContent = '登录中…';
+  lm.textContent = ''; lm.className = 'gmsg';
+  try{
+    var r = await fetch('/api/login', {method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: 'username=' + encodeURIComponent(u) + '&password=' + encodeURIComponent(p)});
+    var j = await r.json().catch(function(){ return null; });
+    if (r.ok && j && j.username){
+      hideGate(j.username);
+      var m = document.getElementById('msg');
+      m.className = 'msg'; m.textContent = '登录成功，请再点一次「提交」。';
+    } else {
+      lm.textContent = (j && j.msg) || '账号或密码错误，请重试';
+      lm.className = 'gmsg';
+    }
+  }catch(e){ lm.textContent = '网络错误，请稍后重试'; lm.className = 'gmsg'; }
+  btn.disabled = false; btn.textContent = '登录';
+}
+document.getElementById('lgBtn').onclick = doLogin;
+document.getElementById('lgPass').addEventListener('keydown', function(e){
+  if (e.key === 'Enter') doLogin();
+});
+document.getElementById('lgUser').addEventListener('keydown', function(e){
+  if (e.key === 'Enter') document.getElementById('lgPass').focus();
+});
+
+checkMe();
 load();
 </script>
 </body>
