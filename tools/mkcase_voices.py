@@ -93,13 +93,39 @@ KNOWN_SPEAKER = {"案例-男声": "EL_male", "案例-女声": "EL_female"}
 _G = {"male": {"zh": "男声", "en": "male", "ko": "남성", "ja": "男性"},
       "female": {"zh": "女声", "en": "female", "ko": "여성", "ja": "女性"}}
 
+# 标明这个音色是从案例库提取的（四语）
+_SUFFIX_CASE = {"zh": "（案例）", "en": " (case)", "ko": " (케이스)", "ja": "（ケース）"}
+_NONE = {"zh": "", "en": "", "ko": "", "ja": ""}
 
-def make_labels(name, gender):
-    """给音色一个「人话」的显示名。voices.json 的 key 用 ASCII（避免接口/路径
-    编码问题），展示名另存一份多语 label，前端按界面语言挑。"""
-    g = _G.get(gender) or _G["male"]
-    return {"zh": f"{name} {g['zh']}", "en": f"{name} ({g['en']})",
-            "ko": f"{name} {g['ko']}", "ja": f"{name} {g['ja']}"}
+
+def make_labels(name, gender, suffix=True):
+    """给音色一个「人话」的显示名，**四语都要**（zh / en / ko / ja）。
+
+    🔴 为什么必须四语（2026-10-12）：
+       本项目做的是**韩语**财经配音，而员工用的是**中文**界面，界面还支持英/日。
+       音色名只写英文的话，切到韩语界面就会掉回英文 key（如 `SOLA_female`），
+       员工根本看不懂 —— 这正是之前 `elara` / `yo han` 两个音色没有 label 时
+       的实际表现。
+       key 本身保持 ASCII（要进文件路径和接口参数，不能带韩文），
+       展示名走 voices.json 的 label，由前端 `voiceName()` 按 UI 语言挑。
+
+    ⚠️ 韩语不能只写「SOLA 여성」：여성/남성 是"女性/男性"这个属性词，
+       直接跟在名字后面很生硬；接上 음성（声音）才是自然的「SOLA 女性声音」。
+    """
+    g = _G.get(gender)
+    s = _SUFFIX_CASE if suffix else _NONE
+    # ⚠️ 性别未知时**不要**兜底成男声（2026-10-12 实测踩坑：elara 的 gender 是空的，
+    #    默认 male 让它显示成「elara 男声」，而案例库标的是 female）。
+    #    宁可只显示名字，也不要给员工一个错的性别。
+    if g is None:
+        return {"zh": f"{name}{s['zh']}", "en": f"{name}{s['en']}",
+                "ko": f"{name} 음성{s['ko']}", "ja": f"{name}ボイス{s['ja']}"}
+    return {
+        "zh": f"{name} {g['zh']}{s['zh']}",
+        "en": f"{name} ({g['en']}){s['en']}",
+        "ko": f"{name} {g['ko']} 음성{s['ko']}",
+        "ja": f"{name} {g['ja']}ボイス{s['ja']}",
+    }
 
 
 def load_json(p, default):
@@ -564,6 +590,21 @@ def main():
         if changed:
             log.info("  ✅ %s 补上 gender=%s bench_case=%s",
                      vname, v.get("gender"), v.get("bench_case"))
+
+    # 补缺失的四语显示名（2026-10-12）：
+    #   历史音色（elara / yo han 等）是早期手工录入的，没有 label 字段。
+    #   缺 label 时前端 voiceName() 会一路掉回英文 key，中文/韩语界面下
+    #   员工看到的是 "elara" 这种，完全看不懂 —— 国际化不能只做一半。
+    #   这里统一补齐，名字取 src_speaker（没有就用 key），性别取 gender。
+    for vname, v in voices.items():
+        lb = v.get("label") or {}
+        if all((lb.get(k) or "").strip() for k in ("zh", "en", "ko", "ja")):
+            continue
+        base = (v.get("src_speaker") or "").strip() or vname
+        gd = (v.get("gender") or "").strip()
+        new = make_labels(base, gd, suffix=bool(v.get("src_case")))
+        v["label"] = new
+        log.info("  ✅ %s 补上四语显示名: zh=%s | ko=%s", vname, new["zh"], new["ko"])
 
     try:
         json.dump(voices, open(VOICES_JSON, "w", encoding="utf-8"),
