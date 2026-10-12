@@ -37,6 +37,7 @@ from pipeline import (CHUNK_MAX_CHARS, split_chunks, chunk_limit_chars,
                       CHUNK_MAX_SECONDS)
 import asr_check
 import cosy_client
+import gs_client                 # GPT-SoVITS 服务（:8200，走 3090）
 import vram
 import engine_select
 import pba
@@ -717,7 +718,7 @@ AUTO_SELECT_ON_CREATE = os.environ.get("TTS_AUTO_SELECT_ON_CREATE", "0") != "0"
 
 DEFAULT_ENGINE = os.environ.get("TTS_DEFAULT_ENGINE", "qwen")
 
-VALID_ENGINES = ("qwen", "cosyvoice3")
+VALID_ENGINES = ("qwen", "cosyvoice3", "gptsovits")
 
 MODEL_DIRS = {
     "custom_voice": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-CustomVoice"),
@@ -956,6 +957,40 @@ def read_audio(path):
 
 # ============================ 任务执行 ============================
 
+# 🔴 线上音色名 → GPT-SoVITS 微调说话人组名的映射。
+# 为什么需要：案例库嵌入聚类实测只有 **2 个核心声音**（2026-10-12）：
+#     SOLA（女，22 条）/ yohan（男，13 条）/ elara（女，1 条）
+# 而 voices.json 里的名字是历史遗留的（EL_*、SOLA_*、yohan_*、builtin_*…），
+# 它们其实是同一批人的不同切片，所以必须统一指到那两套微调权重上。
+# ⚠️ 不要用 F0 反推性别来决定用哪套权重 —— pyin 八度错误已两次翻车，
+#    性别一律以案例库人工标注为准（见 MEMORY.md）。
+GS_VOICE_GROUP = {
+    "EL_female": "SOLA", "SOLA_female": "SOLA",
+    "builtin_female": "SOLA", "elara": "SOLA",
+    "EL_male": "yohan", "yohan_male": "yohan",
+    "builtin_male": "yohan",
+}
+# 兜底：按案例库标注的性别反查（音色名不在上表时）
+GS_GENDER_GROUP = {"female": "SOLA", "male": "yohan", "unknown": "SOLA"}
+GS_DEFAULT_GROUP = os.environ.get("GS_DEFAULT_GROUP", "SOLA")
+
+
+def _gs_group_of(job):
+    """决定这个任务该用哪套 GS 微调权重。
+
+    优先级：显式音色映射 > 音色自带的 gender > 系统默认。
+    ⚠️ 拿不到就用默认，**绝不猜性别**（F0 判性别不可靠）。
+    """
+    vname = (job.get("voice") or "").strip()
+    if vname and vname in GS_VOICE_GROUP:
+        return GS_VOICE_GROUP[vname]
+    v = voices.get(vname) or {}
+    g = (v.get("gender") or "").strip().lower()
+    if g in GS_GENDER_GROUP:
+        return GS_GENDER_GROUP[g]
+    return GS_DEFAULT_GROUP
+
+
 async def run_job(job):
     loop = asyncio.get_running_loop()
     job["status"] = "running"
@@ -972,6 +1007,11 @@ async def run_job(job):
     _preset = EMOTION_PRESETS.get(_emotion) or EMOTION_PRESETS[DEFAULT_EMOTION]
     _engine_name = (job.get("engine") or _preset["engine"]).strip()
     _cosy_instruct = _preset.get("instruct") or "neutral"
+    # 🔴 GS 分支需要的两件事：说话人组名 + 分段字数。
+    #    分段是**正确性的前提**（整段喂会触发自回归发散，女声覆盖率 0.15），
+    #    不是可选优化，所以默认 50 字/段，只有做反面参照时才显式关掉。
+    _gs_spk = _gs_group_of(job)
+    _gs_seg = int(os.environ.get("GS_SEG", "50"))
     # 显式指定引擎（A/B 对照 / 管理员排查）：优先级最高，压过音色自带的 engine。
     # 但下面两条「命名空间正确性」的强制规则不受它影响：
     #   ① 预设音色属于 Cosy 命名空间 -> 必须 cosyvoice3，否则 Qwen 报未知音色
@@ -1114,6 +1154,41 @@ async def run_job(job):
                 job["stage"] = "generating"
         return _progress
 
+    def _synth_gs(text_ci):
+        """GPT-SoVITS 分支：走独立服务的 HTTP 接口。
+
+        🔴 为什么要单独接 GS：实测（2026-10-12）它是唯一在男女声上都通过
+        「音色 + 语调 + 完整性」三关的方案：
+            女声 音色 0.933 / 覆盖率 0.956 vs Qwen 0.851 / 0.941
+            男声 音色 0.936 / 覆盖率 0.953 vs Qwen 0.822 / 0.927
+        但它**必须外部分段**才能用（整段会发散），所以这里把整块文本交给
+        GS 服务，由服务端按 --seg 切段推理再拼接，主服务只看结果。
+        """
+        ok, payload = gs_client.synth(
+            text=text_ci[1],
+            ref_wav=ref_wav_path or "",
+            ref_text=ref_text or "",
+            spk=_gs_spk,
+            seed=int(text_ci[2]),
+            seg=_gs_seg,
+        )
+        if not ok:
+            raise RuntimeError("GPT-SoVITS 生成失败: %s" % payload)
+        import io as _io
+        import soundfile as _sf
+        y, sr = _sf.read(_io.BytesIO(payload), dtype="float32")
+        if getattr(y, "ndim", 1) > 1:
+            y = y.mean(axis=1)
+        st = {
+            "segments": 1, "chars": len(text_ci[1]),
+            "gen_seconds": 0.0, "audio_seconds": len(y) / float(sr),
+            "abnormal_segments": 0, "slow_fixed": 0, "voice_matched": 0,
+            "segments_detail": [],
+            "plan": {"engine": "gptsovits", "emotion": _emotion,
+                     "seg": _gs_seg},
+        }
+        return y, sr, st
+
     def _synth_cosy(text_ci):
         """CosyVoice3 分支：走独立服务的 HTTP 接口。
 
@@ -1154,11 +1229,16 @@ async def run_job(job):
     #     回退零样本从而设了 ref_wav_path，现象很有迷惑性）。2026-10-09。
     _cosy_ready = (_engine_name == "cosyvoice3"
                    and bool(ref_wav_path or _cosy_spk_id))
+    # 🔴 GS 是「克隆」引擎，必须带参考音频；预设音色（Cosy 命名空间）走不了。
+    _gs_ready = (_engine_name == "gptsovits"
+                 and bool(ref_wav_path))
 
     def _synth(text_ci):
         """单次块生成，返回 (audio, sr, stats)。"""
         if _cosy_ready:
             return _synth_cosy(text_ci)
+        if _gs_ready:
+            return _synth_gs(text_ci)
         return engine.synth_long(
             text=text_ci[1],
             mode=job["mode"],
@@ -2250,18 +2330,22 @@ def engine_available(name):
     """某引擎现在能不能真的用。带 60 秒缓存，避免每次 /api/meta 都去连端口。"""
     if name == "qwen":
         return True
-    if name != "cosyvoice3":
+    if name not in ("cosyvoice3", "gptsovits"):
         return False
+    # ⚠️ 每个引擎**各自**记时间戳：共用一把 ts 的话，查 B 会命中刚查 A
+    #    写下的新鲜缓存，于是一个引擎挂了会被另一个引擎的健康状态掩盖。
     now = time.time()
-    if now - _ENGINE_AVAIL["ts"] < _ENGINE_AVAIL_TTL:
-        return _ENGINE_AVAIL["cosyvoice3"]
+    k = name + ":ts"
+    if now - _ENGINE_AVAIL.get(k, 0) < _ENGINE_AVAIL_TTL:
+        return _ENGINE_AVAIL.get(name, False)
     ok = False
     try:
-        ok = bool(cosy_client.health(timeout=3.0)[0])
+        mod = cosy_client if name == "cosyvoice3" else gs_client
+        ok = bool(mod.health(timeout=3.0)[0])
     except Exception:
         ok = False
-    _ENGINE_AVAIL["ts"] = now
-    _ENGINE_AVAIL["cosyvoice3"] = ok
+    _ENGINE_AVAIL[k] = now
+    _ENGINE_AVAIL[name] = ok
     return ok
 
 

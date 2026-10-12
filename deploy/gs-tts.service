@@ -1,0 +1,23 @@
+[Unit]
+Description=GPT-SoVITS TTS Service (port 8200, GPU 3090)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/mnt/tts/projects/gpt-sovits
+Environment=GS_REPO=/mnt/tts/projects/gpt-sovits/repo
+Environment=GS_PORT=8200
+# 🔴 用 UUID 指定 3090，不要写数字编号 —— 驱动/内核版本变化会让编号反转，
+#    写死编号会把模型扔到 3060 上，直接 OOM（10-09 踩过）。
+Environment=CUDA_VISIBLE_DEVICES=GPU-b67eee2c-c672-6915-910d-617c62abebee
+Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+Environment=HF_HUB_OFFLINE=1
+ExecStart=/mnt/tts/projects/gpt-sovits/venv/bin/python serve.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/mnt/tts/projects/gpt-sovits/gs_service.log
+StandardError=append:/mnt/tts/projects/gpt-sovits/gs_service.log
+
+[Install]
+WantedBy=multi-user.target
