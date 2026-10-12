@@ -355,7 +355,16 @@ details.adv summary:hover{color:var(--txt2)}
     <!-- 上传入口：案例越多，拆出来的规律越稳（后端上传后会自动跑韵律六维拆解） -->
     <div id="caseTop" style="display:flex;align-items:center;gap:10px;margin:10px 0">
       <button class="mini primary" id="csAdd" data-i18n="upBtn">+ 上传案例</button>
+      <button class="mini" id="csExtract" data-i18n="csExtractBtn">⟳ 重新拆解音色</button>
       <span class="hint" data-i18n="upTip">多上传几份，拆出来的规律才稳</span>
+    </div>
+
+    <!-- 🔴 自动拆解音色进行中的状态条：不阻塞员工，上传完立刻可用，
+         音色在后台慢慢补齐。之前按钮写着"上传并自动拆解"却根本没调接口。 -->
+    <div id="csExtractBar" style="display:none;margin:6px 0 10px;padding:8px 12px;
+         border-radius:8px;background:rgba(59,130,246,.10);
+         border:1px solid rgba(59,130,246,.30);font-size:13px">
+      <span data-i18n="csExtracting">正在拆解案例音色（按声音自动分类），约需几分钟…</span>
     </div>
 
     <div id="caseList"><span class="hint" data-i18n="loading">加载中...</span></div>
@@ -739,6 +748,11 @@ const I18N = {
     chunkHint:(n)=>`共 ${n} 段，按文案自动分块（句末断开，未拼接）`,
     caseBtn:'标杆案例', caseTitle:'标杆案例',
     upBtn:'+ 上传案例', upTip:'多上传几份，拆出来的规律才稳',
+    csExtractBtn:'⟳ 重新拆解音色',
+    csExtracting:'正在拆解案例音色（按声音自动分类），约需几分钟…',
+    csExtractDone:n=>'已生成/更新 '+n+' 个音色模板',
+    csExtractNone:'没有新增音色（案例不足或说话人已存在）',
+    csExtractFail:'拆解失败，请稍后重试或联系管理员',
     upTitle:'上传标杆案例',
     upSub:'一段音频配一份文案，多个文件按文件名一一对应（1.mp3 ↔ 1.txt）。没给文案的段会自动用 ASR 转写补上，之后可校对。',
     upName:'案例名称', upNamePh:'比如：EL-男声-财经播报-第3期',
@@ -877,6 +891,11 @@ const I18N = {
     chunkHint:(n)=>`${n} parts, auto-split at sentence ends (not merged)`,
     caseBtn:'Benchmarks', caseTitle:'Benchmark cases',
     upBtn:'+ Upload', upTip:'More cases = more reliable patterns',
+    csExtractBtn:'⟳ Re-extract voices',
+    csExtracting:'Extracting voice templates (auto-clustering by speaker), a few minutes…',
+    csExtractDone:n=>n+' voice template(s) created/updated',
+    csExtractNone:'No new voice (too few cases or speaker already exists)',
+    csExtractFail:'Extraction failed, please retry later or contact admin',
     upTitle:'Upload benchmark case',
     upSub:'One audio per script file, matched by filename order (1.mp3 \u2194 1.txt). Segments without a script are transcribed by ASR and can be corrected later.',
     upName:'Case name', upNamePh:'e.g. EL-male-finance-ep03',
@@ -1016,6 +1035,11 @@ const I18N = {
     chunkHint:(n)=>`총 ${n}개 파트, 문장 끝에서 자동 분할(병합 안 함)`,
     caseBtn:'标杆案例', caseTitle:'标杆案例',
     upBtn:'+ 사례 업로드', upTip:'사례가 많을수록 패턴이 안정적입니다',
+    csExtractBtn:'⟳ 음성 다시 추출',
+    csExtracting:'음성 템플릿 추출 중(화자 자동 분류), 몇 분 정도 소요됩니다…',
+    csExtractDone:n=>n+'개 음성 템플릿 생성/갱신',
+    csExtractNone:'새 음성 없음(사례 부족 또는 화자 이미 존재)',
+    csExtractFail:'추출 실패, 나중에 다시 시도하거나 관리자에게 문의',
     upTitle:'벤치마크 사례 업로드',
     upSub:'오디오와 스크립트를 파일명 순서로 1:1 매칭합니다(1.mp3 \u2194 1.txt). 스크립트가 없으면 ASR로 자동 전사하며 나중에 수정할 수 있습니다.',
     upName:'사례 이름', upNamePh:'예: EL-남성-경제-3회',
@@ -1154,6 +1178,11 @@ const I18N = {
     chunkHint:(n)=>`全${n}パート、文末で自動分割（結合なし）`,
     caseBtn:'标杆案例', caseTitle:'标杆案例',
     upBtn:'+ 事例をアップロード', upTip:'事例が多いほど法則が安定します',
+    csExtractBtn:'⟳ 音声を再抽出',
+    csExtracting:'音声テンプレート抽出中（話者自動分類）、数分かかります…',
+    csExtractDone:n=>n+'件の音声テンプレートを作成/更新',
+    csExtractNone:'新しい音声なし（事例不足または話者が既に存在）',
+    csExtractFail:'抽出失敗、後で再試行するか管理者に連絡',
     upTitle:'ベンチマーク事例をアップロード',
     upSub:'音声と原稿はファイル名順に1対1で対応します（1.mp3 \u2194 1.txt）。原稿がない場合はASRが自動文字起こしし、後で修正できます。',
     upName:'事例名', upNamePh:'例: EL-男性-経済-第3回',
@@ -1919,6 +1948,7 @@ const openCases = ()=>{ $('#caseMask').style.display='flex'; loadCases(); };
 $('#btnCases').onclick    = openCases;   // 任务队列那一栏
 $('#btnCasesTop').onclick = openCases;   // 页头导航（新加，入口不再藏两层）
 $('#csAdd').onclick    = ()=>{ showCaseUpload(); };
+$('#csExtract').onclick= ()=>{ manualExtractVoices(); };
 $('#upBack').onclick   = ()=>{ backCaseList(); };
 $('#upCancel').onclick = ()=>{ backCaseList(); };
 $('#upSubmit').onclick = submitCaseUpload;
@@ -2007,6 +2037,9 @@ async function submitCaseUpload(){
     $('#upAudio').value=''; $('#upText').value='';
     renderUpFiles();
     backCaseList();
+    // 🔴 链路闭环：上传完自动跑一次案例拆解，按声音聚类生成音色模板。
+    //    不 await —— 员工上传完就能继续干活，音色在后台补齐。
+    kickExtractVoices();
   }catch(e){
     $('#upErr').textContent = t('upFail') + '：' + (e.message || e);
   }finally{
@@ -2014,6 +2047,37 @@ async function submitCaseUpload(){
     $('#upSubmit').disabled = false;
   }
 }
+
+/* 案例拆解 → 音色模板（不阻塞）。
+   后端跑 tools/mkcase_voices.py：按声音聚类 → 挑最佳片段 → 对齐文字稿
+   → 写 voices.json → 自动 reload。耗时几十秒到几分钟。
+   ⚠️ 这里刻意不 await：员工上传完就该能继续用，音色晚一点出现没关系。
+   ⚠️ 失败也不弹红字报错打断员工，只记在控制台 —— 拆解失败不阻塞生成。 */
+let _csExtracting = false;
+async function kickExtractVoices(manual){
+  if(_csExtracting) return;
+  const bar = $('#csExtractBar');
+  _csExtracting = true;
+  if(bar) bar.style.display = '';
+  try{
+    const r = await api('/api/cases/extract-voices', {method:'POST'});
+    const j = await r.json().catch(()=>({}));
+    if(j && j.added && j.added.length){
+      toast(t('csExtractDone')(j.added.length, j.added.join('、')));
+    }else if(manual){
+      toast(t('csExtractNone'));
+    }
+    // 重新拉 /api/meta + /api/voices 并重绘音色列表（后端 reload 后内存已更新）
+    await loadMeta();
+  }catch(e){
+    console.warn('案例音色自动拆解失败（不影响生成）:', e);
+    if(manual) toast(t('csExtractFail'));
+  }finally{
+    _csExtracting = false;
+    if(bar) bar.style.display = 'none';
+  }
+}
+async function manualExtractVoices(){ return kickExtractVoices(true); }
 
 async function loadCases(){
   $('#caseDetail').style.display='none'; $('#caseUpload').style.display='none';

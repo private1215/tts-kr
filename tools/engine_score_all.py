@@ -82,20 +82,16 @@ def timbre(path):
 
 
 def score_one(path, is_male, ref_text=None):
-    """返回 {音色无关的韵律/完整性指标}；emb 单独存（要跟参照比）。"""
+    """返回 {韵律 + 完整性指标}；emb 单独存（要跟参照比）。
+
+    ⚠️ 韵律一律走 `prosody_cmp.measure`（**Praat 口径**）。
+       第一版这里自己拼了一遍并调用 `PR.measure`，那个走的是 librosa.pyin，
+       和 Praat 的 med / drop 混在同一张表里 —— 跨口径数字不可比。
+    """
     w16 = _wav16(path)
     try:
-        x, sr = PR.load(w16)
-        segs, cuts, hop = PR.sent_windows(x, sr)
-        m = PR.measure(w16)
-        dur = len(x) / float(sr)
-        m["med"] = proso.med_of(x, sr, is_male=is_male)
-        m["drop"] = PC.tail_drop(x, sr, is_male, segs)
-        m["prate"] = (len(cuts) / dur * 60.0) if dur > 1.0 else None
-        syl = PC._syllables(ref_text) if ref_text else None
-        m["sps"] = (syl / dur) if syl else None
-        m["dur"] = dur
-        # 完整性
+        m = PC.measure(w16, is_male, ref_text, name=os.path.basename(path))
+        # 完整性（ASR 要 16k，w16 已经是）
         hyp = ASR.transcribe(w16, language="ko")
         h = ASR.normalize(hyp)
         r = ASR.normalize(ref_text) if ref_text else ""

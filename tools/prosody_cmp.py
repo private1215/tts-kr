@@ -77,6 +77,53 @@ def _syllables(text):
     return n
 
 
+def praet_abe(t, f, segs_sec, tail_sec=TAIL_SEC):
+    """🔴 用 **Praat 口径** 一次算出 A / B / E —— 与 med / drop 同源。
+
+    为什么不能再用 `prosody_report.measure` 的 A/B/E：
+    那个走的是 librosa.pyin，而 med/drop 走 Praat（app/proso.tier_of）。
+    2026-10-12 第一版把两套数放进同一张表 —— **跨口径数字不可比**，
+    这是项目里反复踩过、明确写进 MEMORY 的坑。这里统一到 Praat。
+
+    另一个好处：pyin 几分钟音频要 1~2 分钟，Praat 只要 1~2 秒，
+    36 条案例的全库画像才能跑得动（否则必超时）。
+
+    segs_sec 为 [(start,end),...]（秒）；为空时退化为整段一句。
+    """
+    f = np.asarray(f, dtype=np.float64)
+    f = f[f > 0]
+    if f.size < 8:
+        return None, None, None
+    semi_all = 12.0 * np.log2(f + 1e-12)
+    # B：全局音高跨度
+    B = float(np.percentile(semi_all, 95) - np.percentile(semi_all, 5))
+
+    if not segs_sec:
+        segs_sec = [(0.0, float(t[-1]) if len(t) else 0.0)]
+
+    per, sl = [], []
+    for s0, e0 in segs_sec[:80]:
+        m = (t >= s0) & (t < e0)
+        ff = f[m]
+        if ff.size >= 5:
+            per.append(12.0 * np.log2(np.percentile(ff, 85) /
+                                      np.percentile(ff, 15) + 1e-12))
+        a = max(s0, e0 - tail_sec)
+        m2 = (t >= a) & (t < e0)
+        if e0 - a >= 0.15:
+            ft = f[m2]
+            if ft.size >= 5:
+                ft = ft[(ft > np.percentile(ft, 5)) &
+                        (ft < np.percentile(ft, 95))]
+                if ft.size >= 5:
+                    semi = 12.0 * np.log2(ft / np.median(ft) + 1e-12)
+                    sl.append(np.polyfit(np.arange(len(semi)), semi, 1)[0] *
+                              len(semi))
+    A = float(np.median(per)) if len(per) >= 2 else None
+    E = float(np.std(sl)) if len(sl) >= 2 else None
+    return A, B, E
+
+
 def tail_drop(x, sr, is_male, segs, tail_sec=TAIL_SEC):
     """句尾定向降幅（半音）。负 = 降调，正 = 上扬。
 
@@ -87,16 +134,72 @@ def tail_drop(x, sr, is_male, segs, tail_sec=TAIL_SEC):
     t, f = proso.tier_of(x, sr, is_male=is_male)
     if t is None:
         return None
+    segs_sec = [(s / float(sr), e / float(sr)) for s, e in segs[:80]]
+    return _drop_from(t, f, segs_sec, tail_sec)
+
+
+def cdf_of(x, sr, cuts):
+    """C 能量动态 / D 语速CV / F 停顿熵 —— 只用 RMS，不碰 F0。
+
+    ⚠️ 为什么不用 `prosody_report.measure`：它为了算 A/B/E 会跑一遍
+    librosa.pyin，几分钟的音频要 1~2 分钟。全库 36 条案例跑下来必超时。
+    而 C/D/F 与 F0 无关，这里自己算，口径与 prosody_report 完全一致
+    （同样的 50ms/25ms 帧、同样的 p10~p90 / 3 秒窗 / 8 桶直方图）。
+    """
+    x = np.asarray(x, dtype=np.float64)
+    W, H = int(0.05 * sr), int(0.025 * sr)
+    n = (len(x) - W) // H
+    if n < 20:
+        return None, None, None
+    e = np.sqrt(np.array([np.mean(x[i * H:i * H + W] ** 2)
+                          for i in range(n)]) + 1e-12)
+    edb = 20 * np.log10(e + 1e-12)
+    voiced = edb[edb > np.percentile(edb, 25)]
+    C = (float(np.percentile(voiced, 90) - np.percentile(voiced, 10))
+         if len(voiced) > 20 else None)
+
+    fps = 1 / (H / sr)
+    d = np.clip(np.diff(e, prepend=e[0]), 0, None)
+    k = max(int(0.02 * fps), 1)
+    d = np.convolve(d, np.ones(k) / k, mode="same")
+    ab = d > np.percentile(d, 70)
+    Wn = int(3.0 * fps)
+    rates, louds = [], []
+    for i in range(0, len(ab) - Wn, Wn):
+        rates.append(np.sum((ab[i + 1:i + Wn]) &
+                            (~ab[i:i + Wn - 1])) / 3.0)
+        louds.append(np.mean(e[i:i + Wn]))
+    r, lo_ = np.array(rates), np.array(louds)
+    if len(r) > 3:
+        r = r[lo_ > np.percentile(lo_, 15)]
+    D = float(r.std() / r.mean()) if len(r) > 3 and r.mean() > 0 else None
+
+    runs = np.array([(j - i) / sr for i, j in cuts])
+    runs = runs[runs >= 0.28]
+    F = None
+    if len(runs) >= 5:
+        hist = np.histogram(runs, bins=8)[0].astype(float)
+        prob = hist / hist.sum()
+        prob = prob[prob > 0]
+        F = float(-(prob * np.log2(prob)).sum() / np.log2(8))
+    return C, D, F
+
+
+def _drop_from(t, f, segs_sec, tail_sec=TAIL_SEC):
+    """给定已算好的 PitchTier，算句尾定向降幅（半音）。
+
+    抽出来是为了让 `measure()` 里 t/f 只取一次、四处复用 —— 全库 36 条案例
+    的画像提取靠这个才不会超时（pyin 口径跑一遍要 1 小时以上）。
+    """
     drops = []
-    for s, e in segs[:80]:
-        s0, e0 = s / float(sr), e / float(sr)
+    for s0, e0 in segs_sec[:80]:
         a = max(s0, e0 - tail_sec)
         if e0 - a < 0.15:
             continue
         m = (t >= a) & (t < e0)
         if m.sum() < 5:
             continue
-        ff = f[m]
+        ff = np.asarray(f, dtype=np.float64)[m]
         ff = ff[(ff > np.percentile(ff, 10)) & (ff < np.percentile(ff, 90))]
         if len(ff) < 5:
             continue
@@ -106,12 +209,29 @@ def tail_drop(x, sr, is_male, segs, tail_sec=TAIL_SEC):
 
 
 def measure(path, is_male, text=None, name=""):
+    """全部走 **Praat 口径**，不混 pyin。
+
+    C / D / F 与 F0 无关，仍复用 prosody_report（RMS 口径，同源）；
+    A / B / E / med / drop 一律走 app/proso.tier_of 的 PitchTier。
+    ⚠️ 只有 t/f 取一次、四处复用，才跑得动 36 条案例的全库画像。
+    """
     x, sr = PR.load(path)
     segs, cuts, hop = PR.sent_windows(x, sr)
-    m = PR.measure(path, name=name)
+    c, d, f_ = cdf_of(x, sr, cuts)
+    m = {"name": name or os.path.basename(path), "C": c, "D": d, "F": f_}
+    segs_sec = [(s / float(sr), e / float(sr)) for s, e in segs]
     dur = len(x) / float(sr)
-    m["med"] = proso.med_of(x, sr, is_male=is_male)
-    m["drop"] = tail_drop(x, sr, is_male, segs)
+
+    t, f = proso.tier_of(x, sr, is_male=is_male)
+    if t is None:
+        m.update({"med": None, "drop": None, "A": None, "B": None, "E": None})
+    else:
+        v = np.asarray(f, dtype=np.float64)
+        v = v[v > 0]
+        m["med"] = float(np.median(v)) if v.size >= 8 else None
+        m["drop"] = _drop_from(t, f, segs_sec)
+        m["A"], m["B"], m["E"] = praet_abe(t, f, segs_sec)
+
     m["prate"] = (len(cuts) / dur * 60.0) if dur > 1.0 else None
     syl = _syllables(text) if text else None
     m["sps"] = (syl / dur) if syl else None

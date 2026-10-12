@@ -2977,10 +2977,18 @@ async def extract_case_voices(request: Request,
     proj = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     cmd = [sys.executable, script, "--apply", "--pick", "window",
            "--min-cases", str(int(min_cases or 3))]
+    # 🔴 2026-10-12 修：这里是 `async def`，直接 subprocess.run 会把
+    #    **FastAPI 的事件循环整个堵住** —— 提取最长 7 分钟，期间所有员工的
+    #    页面请求、任务查询、生成排队全部卡死，表现就是"服务器挂了"。
+    #    必须丢到线程池里跑，让事件循环继续转。
+    #    （前端现在上传完就自动触发一次，这个问题从"偶发"变成"必然"，必须修。）
     try:
-        p = subprocess.run(cmd, cwd=proj, timeout=420,
-                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                           text=True, env=_script_env())
+        p = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: subprocess.run(cmd, cwd=proj, timeout=420,
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT,
+                                   text=True, env=_script_env()))
     except subprocess.TimeoutExpired:
         log.warning("案例音色提取超时（420s）")
         return {"ok": False, "error": "提取超时（7 分钟），请稍后重试或联系管理员"}
