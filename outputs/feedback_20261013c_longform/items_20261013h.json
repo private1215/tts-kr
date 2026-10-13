@@ -1,0 +1,148 @@
+{
+  "_comment": [
+    "第六轮 20261013h：v4/v2 修复验证（微观片段制）。",
+    "本轮修复对应第五轮反馈：男声「还是有一丢丢快」→ v4=窗口系数整体+3%；",
+    "女声「断句夹啊声」→ 停顿清洗（内部停顿整体替换干净room tone，长度不变）；",
+    "女声「语速太快」→ 逐窗语速对齐；女声停顿数量分歧（EL有12处长停顿vs OmniVoice 2处）",
+    "→ 生成 v2b 补齐EL停顿画像，让员工裁决加不加。",
+    "盲标映射见 manifest 第六轮_20261013h。控制题轮换为男声EL结尾段复制两遍。",
+    "硬规则：同维度 A/B 语义一致（A=最新修复版）；无默认答案；统一192k，无loudnorm。"
+  ],
+  "items": [
+    {
+      "id": "ctrl_pace_20261013h",
+      "dim": "热身",
+      "title": "先热个身：听两段，哪段语速更快？",
+      "desc": "依次听第 1 段和第 2 段。\n\n🎯 问题：哪段念得**更快**？\n\n✅ 凭耳朵，不用想太多。",
+      "ref": null,
+      "options": [
+        {"key": "A", "file": "h6_ctrl1.mp3", "label": "第 1 段更快"},
+        {"key": "B", "file": "h6_ctrl2.mp3", "label": "第 2 段更快"},
+        {"key": "C", "file": null, "label": "两段一样快"},
+        {"key": "D", "file": null, "label": "没听清"}
+      ]
+    },
+    {
+      "id": "f_tail_pace_20261013h",
+      "dim": "女声·结尾段：语速",
+      "title": "女声结尾：上次说太快，这次两段都调了",
+      "desc": "上次你反馈女声**结尾语速太快**，这次两个版本都做了调整。\n\n先听目标的结尾段，再听第 1、2 段（都是结尾段）。\n\n🎯 只看一件事：**语速**哪段更接近目标？",
+      "ref": {"file": "g5_fref_t.mp3", "label": "目标声音·结尾段（先听这个）"},
+      "options": [
+        {"key": "A", "file": "h6_fa_t.mp3", "label": "第 1 段"},
+        {"key": "B", "file": "h6_fb_t.mp3", "label": "第 2 段"},
+        {"key": "C", "file": null, "label": "两段差不多"},
+        {"key": "D", "file": null, "label": "两段都还是太快"},
+        {"key": "E", "file": null, "label": "没听清"}
+      ]
+    },
+    {
+      "id": "f_mid_natural_20261013h",
+      "dim": "女声·中段：念得自不自然",
+      "title": "女声中段：哪段念得最自然",
+      "desc": "先听目标的中间段，再听第 1、2 段。\n\n🎯 只看一件事：哪段**念得最自然舒服**（像不像真人念的）？",
+      "ref": {"file": "g5_fref_m.mp3", "label": "目标声音·中间段（先听这个）"},
+      "options": [
+        {"key": "A", "file": "h6_fa_m.mp3", "label": "第 1 段"},
+        {"key": "B", "file": "h6_fb_m.mp3", "label": "第 2 段"},
+        {"key": "C", "file": null, "label": "两段差不多"},
+        {"key": "D", "file": null, "label": "都念得不自然"},
+        {"key": "E", "file": null, "label": "没听清"}
+      ]
+    },
+    {
+      "id": "f_pause_probe_20261013h",
+      "dim": "女声·停顿处检查",
+      "title": "听这段：断句处还有没有「啊」的声音？",
+      "desc": "上次你反馈**断句的时候有『啊』的声音夹着**。这一段的句子间停顿全部做了清理。\n\n请专门留意**句子之间安静下来的那一下**。\n\n🎯 还能听到「啊」或别的怪声音吗？",
+      "ref": {"file": "h6_fa_m.mp3", "label": "听这一段（注意断句处）"},
+      "options": [
+        {"key": "A", "file": null, "label": "有，还能听到「啊」或怪声音"},
+        {"key": "B", "file": null, "label": "没有，停顿很干净"},
+        {"key": "C", "file": null, "label": "有一点，但说不清"}
+      ]
+    },
+    {
+      "id": "f_pause_rhythm_20261013h",
+      "dim": "女声·断句节奏",
+      "title": "这两段断句节奏不一样：哪段更像目标",
+      "desc": "下面两段的断句方式不同：一版停顿偏短促连着念，另一版在段落处停得更久（更接近目标的念法）。\n\n先听目标，再听第 1、2 段。\n\n🎯 哪段的**断句节奏**更像目标？",
+      "ref": {"file": "g5_fref_m.mp3", "label": "目标声音·中间段（先听这个）"},
+      "options": [
+        {"key": "A", "file": "h6_fa_m.mp3", "label": "第 1 段"},
+        {"key": "B", "file": "h6_fc_m.mp3", "label": "第 2 段"},
+        {"key": "C", "file": null, "label": "两段差不多"},
+        {"key": "E", "file": null, "label": "没听清"}
+      ]
+    },
+    {
+      "id": "m8197_tail_pace_20261013h",
+      "dim": "男声·结尾段：语速",
+      "title": "男声结尾：又调了一版，看看够不够",
+      "desc": "上次你说男声结尾**还是有一丢丢快**，这次整体又放慢了一点。\n\n先听目标的结尾段，再听第 1、2 段。\n\n🎯 只看一件事：**语速**哪段更接近目标？",
+      "ref": {"file": "g5_mref_t.mp3", "label": "目标声音·结尾段（先听这个）"},
+      "options": [
+        {"key": "A", "file": "h6_ma_t.mp3", "label": "第 1 段"},
+        {"key": "B", "file": "g5_ma_t.mp3", "label": "第 2 段"},
+        {"key": "C", "file": null, "label": "两段差不多"},
+        {"key": "D", "file": null, "label": "两段都还是太快"},
+        {"key": "E", "file": null, "label": "没听清"}
+      ]
+    },
+    {
+      "id": "m8197_tail_ship_20261013h",
+      "dim": "男声·结尾段：能不能直接用",
+      "title": "还是刚才那两段：哪段能直接用",
+      "desc": "再听一遍刚才男声结尾的两段（可以跳着听）。\n\n🎯 哪段你觉得**拿来直接交给客户也没问题**？（整体感觉）",
+      "ref": {"file": "g5_mref_t.mp3", "label": "目标声音·结尾段"},
+      "options": [
+        {"key": "A", "file": "h6_ma_t.mp3", "label": "第 1 段"},
+        {"key": "B", "file": "g5_ma_t.mp3", "label": "第 2 段"},
+        {"key": "C", "file": null, "label": "都不行"},
+        {"key": "E", "file": null, "label": "没听清"}
+      ]
+    },
+    {
+      "id": "m_same_tail_pace_20261013h",
+      "dim": "男声·另一篇结尾：语速",
+      "title": "另一篇男声稿子的结尾：哪段语速更像目标",
+      "desc": "这是**另一篇**男声稿子，同样做了放慢调整。先听目标的结尾段，再听第 1、2 段。\n\n🎯 只看一件事：**语速**哪段更接近目标？",
+      "ref": {"file": "h6_sref_t.mp3", "label": "目标声音·结尾段（先听这个）"},
+      "options": [
+        {"key": "A", "file": "h6_sa_t.mp3", "label": "第 1 段"},
+        {"key": "B", "file": "h6_sb_t.mp3", "label": "第 2 段"},
+        {"key": "C", "file": null, "label": "两段差不多"},
+        {"key": "D", "file": null, "label": "两段都还是太快"},
+        {"key": "E", "file": null, "label": "没听清"}
+      ]
+    },
+    {
+      "id": "f_problem_20261013h",
+      "dim": "女声·问题定位",
+      "title": "女声这两个新版本，最不满意的是？",
+      "desc": "凭刚才听女声几段的印象回答（不用再听）。\n\n🎯 **最让你不满意的一点**是什么？只挑最主要的那个。",
+      "ref": null,
+      "options": [
+        {"key": "A", "file": null, "label": "语速还是不合适"},
+        {"key": "B", "file": null, "label": "停顿/断句听着怪"},
+        {"key": "C", "file": null, "label": "嗓子（声音本身）不像"},
+        {"key": "D", "file": null, "label": "断句处还有「啊」或杂音"},
+        {"key": "E", "file": null, "label": "没什么大问题"}
+      ]
+    },
+    {
+      "id": "m_problem_20261013h",
+      "dim": "男声·问题定位",
+      "title": "男声这两个新版本，最不满意的是？",
+      "desc": "凭刚才听男声几段的印象回答（不用再听）。\n\n🎯 **最让你不满意的一点**是什么？只挑最主要的那个。",
+      "ref": null,
+      "options": [
+        {"key": "A", "file": null, "label": "语速还是不合适"},
+        {"key": "B", "file": null, "label": "停顿/断句听着怪"},
+        {"key": "C", "file": null, "label": "嗓子（声音本身）不像"},
+        {"key": "D", "file": null, "label": "有杂音或停顿处有怪声音"},
+        {"key": "E", "file": null, "label": "没什么大问题"}
+      ]
+    }
+  ]
+}
