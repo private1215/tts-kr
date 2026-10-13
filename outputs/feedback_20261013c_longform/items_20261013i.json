@@ -1,0 +1,55 @@
+{
+ "items": [
+  {"id": "ctrl_pace_20261013i", "dim": "热身", "title": "先热个身：听两段，哪段语速更快？",
+   "desc": "依次听第 1 段和第 2 段。\n\n🎯 问题：哪段念得**更快**？\n\n✅ 凭耳朵，不用想太多。",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": "h6_ctrl1.mp3", "label": "第 1 段更快"},
+    {"key": "B", "file": "h6_ctrl2.mp3", "label": "第 2 段更快"},
+    {"key": "C", "file": null, "label": "两段一样快"},
+    {"key": "D", "file": null, "label": "没听清"}]},
+
+  {"id": "f_pause_probe_20261013i", "dim": "女声·停顿处复查", "title": "女声停顿处清理过了：再听一次",
+   "desc": "上次这段（女声中间段）**断句处能听到「啊」的声音**。这次句子之间的停顿全部重新清理过了。\n\n请专门留意**句子之间安静下来的那一下**。\n\n🎯 还能听到「啊」或别的怪声音吗？",
+   "ref": {"file": "h7_fa_m.mp3", "label": "听这一段（注意断句处）"},
+   "options": [
+    {"key": "A", "file": null, "label": "有，还能听到「啊」或怪声音"},
+    {"key": "B", "file": null, "label": "没有，停顿很干净"},
+    {"key": "C", "file": null, "label": "有一点，但比上次明显好"},
+    {"key": "D", "file": null, "label": "没听清"}]},
+
+  {"id": "m_pause_probe_20261013i", "dim": "男声·停顿处复查", "title": "男声停顿处也清理了：再听一次",
+   "desc": "上次这段（男声结尾段）**停顿处有怪声音**。这次每处停顿的内容都换成了干净的静音。\n\n请留意**每一处停顿**。\n\n🎯 还能听到怪声音吗？",
+   "ref": {"file": "h7_ma_m.mp3", "label": "听这一段（注意每处停顿）"},
+   "options": [
+    {"key": "A", "file": null, "label": "有，还有怪声音"},
+    {"key": "B", "file": null, "label": "没有，停顿很干净"},
+    {"key": "C", "file": null, "label": "有一点，但比上次明显好"},
+    {"key": "D", "file": null, "label": "没听清"}]},
+
+  {"id": "f_number_20261013i", "dim": "女声·电话号码念法", "title": "听电话号码那段：停顿自然吗",
+   "desc": "上次你提到**念电话号码的时候没有停顿、不自然**。\n\n这段里面有逐位念的电话号码，请留意那几句。\n\n🎯 电话号码念得有停顿、够自然吗？",
+   "ref": {"file": "h7_fn_m.mp3", "label": "听这一段（注意电话号码部分）"},
+   "options": [
+    {"key": "A", "file": null, "label": "没有停顿，含混一片"},
+    {"key": "B", "file": null, "label": "有停顿，念得自然"},
+    {"key": "C", "file": null, "label": "比上次好，但还不够"},
+    {"key": "D", "file": null, "label": "没听清"}]},
+
+  {"id": "f_ship_20261013i", "dim": "女声·能不能直接用", "title": "女声这段：能直接用了吗",
+   "desc": "先听目标声音的中间段，再听修过的这段（就是刚才听过的女声中间段）。\n\n🎯 这段现在**拿来直接交给客户**，你觉得行不行？（整体感觉）",
+   "ref": {"file": "g5_fref_m.mp3", "label": "目标声音·中间段（先听这个）"},
+   "options": [
+    {"key": "A", "file": "h7_fa_m.mp3", "label": "可以直接用"},
+    {"key": "B", "file": "h7_fa_m.mp3", "label": "还有点问题，但接近了"},
+    {"key": "C", "file": null, "label": "还是不行"}]},
+
+  {"id": "m_ship_20261013i", "dim": "男声·能不能直接用", "title": "男声这段：能直接用了吗",
+   "desc": "先听目标声音的结尾段，再听修过的这段（就是刚才听过的男声结尾段）。\n\n🎯 这段现在**拿来直接交给客户**，你觉得行不行？（整体感觉）",
+   "ref": {"file": "g5_mref_t.mp3", "label": "目标声音·结尾段（先听这个）"},
+   "options": [
+    {"key": "A", "file": "h7_ma_m.mp3", "label": "可以直接用"},
+    {"key": "B", "file": "h7_ma_m.mp3", "label": "还有点问题，但接近了"},
+    {"key": "C", "file": null, "label": "还是不行"}]}
+ ]
+}
