@@ -1,0 +1,86 @@
+{
+ "female": [
+  {
+   "name": "ref_EL案例原声",
+   "cos": 1.0
+  },
+  {
+   "name": "cand5_千问裸推理",
+   "cos": 0.9409
+  },
+  {
+   "name": "cand4_cosy裸推理",
+   "cos": 0.9237
+  },
+  {
+   "name": "cand7_GS",
+   "cos": 0.9127
+  },
+  {
+   "name": "cand9_OmniVoice",
+   "cos": 0.8975
+  },
+  {
+   "name": "cand1_千问线上链",
+   "cos": 0.8743
+  },
+  {
+   "name": "cand3_cosy线上链",
+   "cos": 0.8743
+  },
+  {
+   "name": "cand6_串联千问→cosy",
+   "cos": 0.8717
+  },
+  {
+   "name": "cand2_cosy线上链",
+   "cos": 0.848
+  },
+  {
+   "name": "cand8_VoxCPM2",
+   "cos": 0.8459
+  }
+ ],
+ "male": [
+  {
+   "name": "ref_EL案例原声",
+   "cos": 1.0
+  },
+  {
+   "name": "cand9_OmniVoice",
+   "cos": 0.9572
+  },
+  {
+   "name": "cand5_cosy裸推理",
+   "cos": 0.9425
+  },
+  {
+   "name": "cand7_GS",
+   "cos": 0.9366
+  },
+  {
+   "name": "cand2_千问裸推理",
+   "cos": 0.9331
+  },
+  {
+   "name": "cand8_VoxCPM2",
+   "cos": 0.8882
+  },
+  {
+   "name": "cand6_串联千问→cosy",
+   "cos": 0.8854
+  },
+  {
+   "name": "cand1_千问线上链",
+   "cos": 0.8495
+  },
+  {
+   "name": "cand4_cosy线上链",
+   "cos": 0.848
+  },
+  {
+   "name": "cand3_cosy线上链",
+   "cos": 0.8241
+  }
+ ]
+}
