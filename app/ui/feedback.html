@@ -101,15 +101,15 @@ button.gh:hover{border-color:var(--accent);color:var(--accent)}
   <div class="head">
     <div>
       <h1>听感反馈</h1>
-      <p class="sub">听完选一个字母就行，不用描述感受。你的选择会直接决定下一步怎么调。</p>
+      <p class="sub">按每题说明听音；发现断句或卡顿时，暂停并记录问题时间点。不会默认替你选择。</p>
     </div>
     <a class="back" href="/">← 返回生成页</a>
   </div>
 
   <div class="tip">
-    <b>怎么听：</b>先听绿色框里的 <b>参照</b>（真实案例录音，不用选），再听 <b>A / B / C / D</b>，
-    选<b>最像参照、最像韩国财经节目主持人</b>的那个。同一题的四个选项只有<b>一个变量</b>不同，
-    音色、语速、内容都一样。拿不准就选"听起来最像参照的"。
+    <b>怎么听：</b>以每题说明为准。单音频题只定位问题，不比较版本、不重新选音色，也不代表可交付。
+    比较题只有验证通过才会出现；差不多、都不行、没听清均为独立答案，不能归入 A 或 B。
+    定位题保留完整音频上下文，建议范围不是句子边界；可向前后拖动，把当前句听完整。
   </div>
 
   <div class="gate" id="gate" style="display:none">
@@ -130,7 +130,7 @@ button.gh:hover{border-color:var(--accent);color:var(--accent)}
   <div class="free">
     <h3>还有什么不对？</h3>
     <p class="sub" style="margin:0 0 9px">除了上面的选择题，如果听出别的问题（断句、语速、数字读法、某个字发音、情绪、气口…），写在这里。</p>
-    <textarea id="free" placeholder="例：第二段的数字 21만 3500원 读得快了；长句子中间没有换气；情绪太平…"></textarea>
+    <textarea id="free" maxlength="4000" placeholder="例：女声中段，原音频 03:12.4，句子没说完却停住；重听同一位置仍出现。可用题目下的按钮自动填写时间点，再补现象。"></textarea>
   </div>
 
   <div class="bar">
@@ -144,6 +144,11 @@ button.gh:hover{border-color:var(--accent);color:var(--accent)}
 <script>
 var ITEMS = [], PICK = {};
 var LS = 'tts_fb_pick_v1';
+var FREE_LS = 'tts_fb_free_v2';
+try { document.getElementById('free').value = localStorage.getItem(FREE_LS) || ''; } catch(e) {}
+document.getElementById('free').addEventListener('input', function(){
+  try { localStorage.setItem(FREE_LS, this.value); } catch(e) {}
+});
 try { PICK = JSON.parse(localStorage.getItem(LS) || '{}'); } catch (e) { PICK = {}; }
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
@@ -162,10 +167,14 @@ function render(){
          +  (cur ? '<span class="idone">已选 ' + esc(cur) + '</span>' : '') + '</div>';
     if (it.desc) html += '<p class="idesc">' + esc(it.desc) + '</p>';
     if (it.ref){
-      html += '<div class="ref"><div class="rt">参照（' + esc(it.ref.label || '案例原声')
-           +  ' · 不用选）</div><audio controls preload="none" src="/fb-audio/'
+      html += '<div class="ref"><div class="rt">' + esc(it.ref.label || '待听音频')
+           +  '</div><audio controls preload="none" src="/fb-audio/'
            +  esc(it.ref.file) + '"></audio>'
            +  (it.ref.note ? '<div class="rd">' + esc(it.ref.note) + '</div>' : '') + '</div>';
+    }
+    if (it.mode === 'diagnostic') {
+      html += '<div class="bar"><button class="gh seek">跳到建议起点</button>'
+           + '<button class="gh mark">记录当前问题时间点</button></div>';
     }
     html += '<div class="opts">';
     (it.options || []).forEach(function(o){
@@ -182,6 +191,30 @@ function render(){
   box.innerHTML = html;
   Array.prototype.forEach.call(box.querySelectorAll('.item'), function(el){
     var id = el.dataset.id;
+    var it = ITEMS.find(function(x){ return x.id === id; });
+    if (it.mode === 'diagnostic') {
+      var audio = el.querySelector('audio');
+      el.querySelector('.seek').onclick = function(){
+        function seek(){ audio.currentTime = it.focus.start_seconds; }
+        if (audio.readyState >= 1) seek();
+        else { audio.addEventListener('loadedmetadata', seek, {once:true}); audio.load(); }
+      };
+      el.querySelector('.mark').onclick = function(){
+        if (!audio || audio.readyState < 1) {
+          document.getElementById('msg').textContent = '请先加载并播放音频，再暂停记录。'; return;
+        }
+        audio.pause();
+        var free = document.getElementById('free');
+        var stamp = '[' + id + ' | ' + it.version + ' | 原音频秒=' + audio.currentTime.toFixed(3)
+          + ' | sha256=' + it.source_sha256 + '] 现象：\n';
+        if (free.value.length + stamp.length + 1 > 4000) {
+          document.getElementById('msg').textContent = '反馈已接近4000字，请先提交。'; return;
+        }
+        free.value += (free.value ? '\n' : '') + stamp;
+        free.dispatchEvent(new Event('input'));
+        free.focus();
+      };
+    }
     Array.prototype.forEach.call(el.querySelectorAll('.opt'), function(o){
       o.addEventListener('click', function(e){
         if (e.target.tagName === 'AUDIO') return;
