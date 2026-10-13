@@ -1,0 +1,632 @@
+{
+  "部署版本": "20261013c_longform",
+  "部署结果": "成功",
+  "部署时间_UTC": "2026-10-13T06:50:45Z",
+  "目标": {
+    "服务器": "ssh yuyin",
+    "项目": "/mnt/tts/projects/qwen3-tts",
+    "反馈目录": "/mnt/tts/data/tone-ab"
+  },
+  "1_统一编码": {
+    "命令模板": "ffmpeg -nostdin -y -i <in.wav> -vn -ac 1 -ar 44100 -c:a libmp3lame -b:a 192k <out.mp3>",
+    "ffmpeg版本": "8.0.1 (libmp3lame)",
+    "参数": {
+      "采样率": 44100,
+      "声道": 1,
+      "码率": "192k",
+      "编码器": "libmp3lame"
+    },
+    "未使用的处理": [
+      "loudnorm",
+      "dynaudnorm",
+      "compand",
+      "volume/增益",
+      "任何单条归一化"
+    ],
+    "说明": "12 条使用逐字相同的命令行，仅输入/输出文件名不同；未对任何单条额外施加增益。",
+    "命名映射": {
+      "case1-ref": "c1_ref.mp3",
+      "case1-cand1..5": "c1_1..5.mp3",
+      "case2-ref": "c2_ref.mp3",
+      "case2-cand2..5 等": "c2_1..5.mp3 (case2-candN -> c2_N.mp3)"
+    },
+    "每条": [
+      {
+        "文件": "c1_ref.mp3",
+        "来源wav": "case1-ref.wav",
+        "wav时长_秒": 525.296,
+        "mp3时长_秒": 525.297,
+        "时长差异_秒": 0.0014,
+        "wav_sha256": "56c7caa7af77c271cf2c7d7c2b6f4f64fd122ced57e29d4cabab3255729fdaca",
+        "mp3_sha256": "179e26c5bd429d7d543a91aff1e88fd0cd86641f9f4c1f93369a7461d58d65ce",
+        "mp3字节": 12609035
+      },
+      {
+        "文件": "c1_1.mp3",
+        "来源wav": "case1-cand1.wav",
+        "wav时长_秒": 520.51,
+        "mp3时长_秒": 520.511,
+        "时长差异_秒": 0.0005,
+        "wav_sha256": "8aed27199b160237e6702a876df9156a627d2bfc346ff7d69fb8519c6b27d815",
+        "mp3_sha256": "42e8b8761ebda764cf8917d93f58dadc21895f9705b1653c26b3fd2a1e508f7f",
+        "mp3字节": 12493679
+      },
+      {
+        "文件": "c1_2.mp3",
+        "来源wav": "case1-cand2.wav",
+        "wav时长_秒": 520.39,
+        "mp3时长_秒": 520.39,
+        "时长差异_秒": 0.0001,
+        "wav_sha256": "dee8bb2d698a9254519e2145840b6b2acabd805426108841c41e8319cf34b6a9",
+        "mp3_sha256": "90ef2cc2a72ab978a08d6e0c096d987c4ed9e6693f6e54bc561a9b8141b48236",
+        "mp3字节": 12491171
+      },
+      {
+        "文件": "c1_3.mp3",
+        "来源wav": "case1-cand3.wav",
+        "wav时长_秒": 520.526,
+        "mp3时长_秒": 520.526,
+        "时长差异_秒": 0.0002,
+        "wav_sha256": "47d6884d0b83cb0f26c00a0717108d7b806985ecbecca379d1b64ee5314aefb1",
+        "mp3_sha256": "dd06315810b9c60ab5bc29dfd05d751a0929d4d793d00b554a1865e8acd98b55",
+        "mp3字节": 12494305
+      },
+      {
+        "文件": "c1_4.mp3",
+        "来源wav": "case1-cand4.wav",
+        "wav时长_秒": 507.96,
+        "mp3时长_秒": 507.96,
+        "时长差异_秒": 0.0,
+        "wav_sha256": "dac2236aa7085b295d7b73b5b712e2f514a34b08f2895291a9038c9a4e7f121c",
+        "mp3_sha256": "0df5a659c3e053b433ee2bb6959684ffc66b98744fd1a84e2c28b179ea028027",
+        "mp3字节": 12192748
+      },
+      {
+        "文件": "c1_5.mp3",
+        "来源wav": "case1-cand5.wav",
+        "wav时长_秒": 543.403,
+        "mp3时长_秒": 543.403,
+        "时长差异_秒": 0.0002,
+        "wav_sha256": "f1579da0c0be3c7339c2f40b54f599ee2382d0fdf56883c4e2c4f292319cf46e",
+        "mp3_sha256": "924bc6d761a0b504df6e456bcdaf3536f1dc0c5488ff011f02e5093ca24733bd",
+        "mp3字节": 13043504
+      },
+      {
+        "文件": "c2_ref.mp3",
+        "来源wav": "case2-ref.wav",
+        "wav时长_秒": 555.18,
+        "mp3时长_秒": 555.181,
+        "时长差异_秒": 0.0015,
+        "wav_sha256": "28fe6b04052b5ed83831baad25dc744afc99848d068e91b60543d25b8b9d7997",
+        "mp3_sha256": "816aee108c9acf1f1d9ee8889f2aa74fbb272e8b438451b0b775c0251cd5f4cd",
+        "mp3字节": 13326253
+      },
+      {
+        "文件": "c2_1.mp3",
+        "来源wav": "case2-cand1.wav",
+        "wav时长_秒": 556.695,
+        "mp3时长_秒": 556.695,
+        "时长差异_秒": 0.0005,
+        "wav_sha256": "cfc6580ae0c4b56a5f09c97f2636b178fd0be9e870714c4125095910d3798b16",
+        "mp3_sha256": "5068c974ff90d9821463aca5974c040c3c7659e5695f9728e82288f1dc753546",
+        "mp3字节": 13361989
+      },
+      {
+        "文件": "c2_2.mp3",
+        "来源wav": "case2-cand2.wav",
+        "wav时长_秒": 530.498,
+        "mp3时长_秒": 530.498,
+        "时长差异_秒": 0.0004,
+        "wav_sha256": "4e55049a9adaa7650402707ae23a03399c716e614fd335182c91dc69aa389040",
+        "mp3_sha256": "888fe67174af483935007b13a94c40dd0b3b6d175cfca45280ef3534feee9f0a",
+        "mp3字节": 12733796
+      },
+      {
+        "文件": "c2_3.mp3",
+        "来源wav": "case2-cand3.wav",
+        "wav时长_秒": 556.554,
+        "mp3时长_秒": 556.554,
+        "时长差异_秒": 0.0004,
+        "wav_sha256": "17b273c442c452ab70f8673cb2bab2f0fbf65c0e77397f5d978670a9fb5a84cb",
+        "mp3_sha256": "271d43a2f2b55e8293cdbb3931abce2c83fc1629e658c30ccafec478d3c57ce3",
+        "mp3字节": 13358854
+      },
+      {
+        "文件": "c2_4.mp3",
+        "来源wav": "case2-cand4.wav",
+        "wav时长_秒": 556.289,
+        "mp3时长_秒": 556.289,
+        "时长差异_秒": 0.0002,
+        "wav_sha256": "f8afaefd3525b7f711ba90ea85faf0110824fa1fb4be56ef3665e30838f86758",
+        "mp3_sha256": "18f14f68792abc4c5a7eca6d0f9216b6c9332c3cdb1707541adcc35e014d5cea",
+        "mp3字节": 13352585
+      },
+      {
+        "文件": "c2_5.mp3",
+        "来源wav": "case2-cand5.wav",
+        "wav时长_秒": 539.48,
+        "mp3时长_秒": 539.48,
+        "时长差异_秒": 0.0,
+        "wav_sha256": "267b0aed6247a2e05ea4b2654e6bde1f56247e2591a5e009e25f8f5a8bae7d24",
+        "mp3_sha256": "d693d9d335e6bd05a721bf629965da94e8b72b6b36e6ed666aad6cd32cff222f",
+        "mp3字节": 12948836
+      }
+    ],
+    "最大时长差异_秒": 0.0015
+  },
+  "2_编码前后有效性检查": {
+    "时长差异": "全部 ≤ 0.0015 秒（MP3 帧补齐，非内容增删），判定通过",
+    "可解码": "12/12 通过（ffmpeg -f null - 完整解码，无错误输出）",
+    "非静音": "12/12 通过（volumedetect：mean_volume -22.9 ~ -26.9 dB，max_volume -1.1 ~ -4.0 dB）",
+    "流参数复核": "12/12 均为 44100 Hz / 单声道 / 约 192 kbps",
+    "电平差异说明": "各条 mean_volume 天然不同（未做归一化，符合「不得只给部分音频加增益」要求）"
+  },
+  "3_备份": {
+    "备份路径": "/mnt/tts/backups/feedback_20261013T065045052742Z",
+    "内容": [
+      "tone-ab/（完整拷贝，含 items.json、votes.jsonl、旧音频共 65 个文件）",
+      "feedback.html（改前 UI）",
+      "before.json（备份前每个文件 sha256）"
+    ],
+    "备份前文件数": 65,
+    "备份前每个文件sha256": {
+      "pause_2.mp3": "4f17197ae197602838cc22cb1264456e29025e1b17162a1a9ecbc6d611ab1dd1",
+      "male_2.mp3": "854485aab9bc7018f25f403e5eac2bb23f6a8a4d6a49ec9eb2365aae4aa4e67a",
+      "fb_m_gsft_mid.mp3": "560cadf7a90b9107e05c10ab8999b0de25c815bcc264294ab81d21b279a72dfa",
+      "fb_m_cosy_head.mp3": "af538b2b9e44b723c3add54abdfe3fb6e375176e526eb8a1928229d78967e335",
+      "female_3.mp3": "dd465a4ff2cb3277be90ba4d3ce57c8451c6af36a1d562d4d30c4a4146417e68",
+      "fb_m_gszs_head.mp3": "713ed830961326d114ddc71dd45dbf64f4a72bb81fa467803979e9060109b888",
+      "pause_3.mp3": "2f51dcf6e80beb15493de9ed913eef759e2245e0858ab90baf2561946632d95a",
+      "manifest_20261013b_diag.json": "fa7511667e17a443127bdda372927b8492c548dac43ea065527b0269a4ee7c1c",
+      "fd_m_A_online_head.mp3": "fbadc33d816a57431c3c407e71f75952a6e319caed0c8d6d429bc831895d81f8",
+      "fb_f_gszs_head.mp3": "89c0298ae43f2d521ef42cb7fd05c44026dcdfe04df7606b82f7a21a0d899b4b",
+      "fd_m_B_direct_head.mp3": "df8742a9ff4ca235626c2de9f2ebff45d98beb51d6e8236bb50218c5dd07957f",
+      "diag_20261013b_diag_m_37c6fa93fc23.mp3": "734c267d3b66432ac18908a1efd9b76135c84b2243da6e29f6c35f49db26cef8",
+      "fb2_f_new_head.mp3": "692b8c64936a197b9d2eee7614c2027050833e5ef3bb1a1ae5e5ebac3fad5fb6",
+      "fb_m_gszs_mid.mp3": "3eedca602a7008f0e034c8f415cb911d821cb28554bca61cbb92210f970bb410",
+      "fb_f_gszs_mid.mp3": "27c4c22287282da9184781fffa5a732984f971d5a186ff788394779967552d82",
+      "hh_el.mp3": "6bb436db25493142407e46f83750271e6ccde57de7fef477c9290a92e56ed7e0",
+      "hh_sola.mp3": "95f0d3491e0de5ca8db1ba80a139ff666d38c175dcbe9e497e2e8055d4f59a51",
+      "items_20261013b_diag.json": "36506e08c7941e8579350e0ef51833f9175fb8bd20e7461bc3015a455274d3a3",
+      "fb_f_gsft_mid.mp3": "fa92c3a834500df08a293ffc13367123f46c61d64178cd75f01603f892af72f6",
+      "fb_m_cosy_mid.mp3": "d1b9356c9345e59b940fdb3bc06d70140a88fe891ba625497ec077c562d17a48",
+      "pause_1.mp3": "5c0d320e772a80c4a8e92a6af092095dc27605c674d8c0b0684b0cc42869f5c5",
+      "fb_m_gsft_head.mp3": "0ec58c786b437c953da51149bbc1afdf46038579f9282cd6f93dff8f72920b8a",
+      "diag_20261013b_diag_f_638e629a5b2d.mp3": "eeb9a52003f2f5d9aa85aea4fbb043f290bea10a5eaeee545cc1054418fa1940",
+      "long_mid.mp3": "9cc2e09b997d0203e5a5643f1bdb83e28c8f0ec0bef1e783e38d8f764c4b661f",
+      "fb2_m_new_head.mp3": "929a531fe934496cf6d6897131bee038e16f709e8c58382b647b3df95339e194",
+      "items.json.bak-1013": "7aa984bd70186e3b5393720286c7c3c4a0312da091ace759a67b7d3f1862c94a",
+      "male_4.mp3": "0d273e28071830e649ffa62ae06f1d31514f98914ddb165aa984a6bd2bfe2ec8",
+      "lt_engine_b.mp3": "ef2ba34031a38b72ece7f2d775c9d080ce1e2e04763eb1ac4f63b36932fb315d",
+      "male_ref.mp3": "f59a0ba338ff975bc5f366b5b79ec6affea89a2bb631f6dcef8444f8309e2fa5",
+      "fd_f_target_head.mp3": "bff18d6c39d7039215edce8d43c508cdc9619ff14ed455af96373f5d93204f02",
+      "female_4.mp3": "c4a7378a1715b20136c882662889e44f1c2a4e40f74864c56d8afad3a350677d",
+      "male_1.mp3": "363130f9f7593e4e4b9decd849e62713cd4fd8afb5d1c58b52806669e8c9bcc1",
+      "fb_f_ref_mid.mp3": "f1859f623a12f2c8d7237a3b5e125ef2706f68ce17416b85d7c7bfa5524c86fb",
+      "male_3.mp3": "7bff212e9d714e812f196ee2f6e9579663756a1bd6d4d52b8738f2bcc942dd29",
+      "fd_m_target_head.mp3": "46b12167ab7db43526a71e821957ba82c37758331af405509f828a68b27ada0d",
+      "votes.jsonl": "edb0e32da290c965921b43852e5122d31e45fe379d02e7865429bfc64595880b",
+      "hh_ref.mp3": "f74bf6fa1b2019ef4861abb7ee8799d59750cdad9421367461412904cc7c093a",
+      "fb_m_qwen_mid.mp3": "66fa7b030b3c466fb516980c4eb6d4deee9e2bc3491e36b37f20c08f6f6cc39d",
+      "fb_f_cosy_head.mp3": "169dddadc28dd05cda8c0bb99d53c0c1d72bb4b246a478c510c82cd6bdfa1956",
+      "hh_elara.mp3": "2e366a9fe8768412fb3199983167eb09027fe278bda402131e744100a8b1c18d",
+      "female_1.mp3": "2f71a09ccb39e00bc4b3a61e7527f5b09bffb534f1a3de0f531b7b1536f07674",
+      "cosy_long.mp3": "81a74421aa17a909f580be757560ca57b25dd54ea15e825e7cedd63faebfa597",
+      "fb_m_qwen_head.mp3": "5e9a68044e46476ff19e36bb0011b32b61e657c5ed4b89c4e3f9fda48f8c72a8",
+      "long_head.mp3": "d2e7ac8de8595ee7ab5f8c47b013a7f0194665cb2a3f744647abadffcfadf583",
+      "pause_4.mp3": "c02e1d74461a31849131b7096d77e53f4d42fac8e761bae81c273888f041f41f",
+      "cosy_zs.mp3": "8e8370052bcae40636142941354fa5e5cc8bf54752420f9eb365f16a0e49642a",
+      "gs_zs.mp3": "5fb28b63ae250480c8345b08c40c83e008238d5f7f5e65aaa2ed7f6db8e506f6",
+      "items.json": "36506e08c7941e8579350e0ef51833f9175fb8bd20e7461bc3015a455274d3a3",
+      "female_ref.mp3": "5fc68d89a97a40d88f5b7096042cf55ab5aa247c6ef1b727e992dd698308f5bb",
+      "female_2.mp3": "7cf200f4b572cf4fd52a7a7ea743dcf5a49a89531accfbde22dfa6ec7aebefc1",
+      "fb_f_qwen_head.mp3": "8c65776edd4d0347b6e58881e02aa323b4f98d45088ab14bf8b5f86dc57ab015",
+      "long_tail.mp3": "0962ca37bd2e8217e75c88f53d576f0195f0b6f9d790e19625976df41fd5dc08",
+      "fb_m_ref_mid.mp3": "69358913bbd853bd94655bc0f6b5c6b4326bcaa525d4312959bfefbb4333437b",
+      "fb_f_qwen_mid.mp3": "f88c82235138e4fa05191f125fe73f509f5fd4d1472bdc95c487490943fdb038",
+      "fd_f_A_online_head.mp3": "61335e22a6fa4f4db5ab9092c14c0c8ef6c94d09e2e9d99951fe1628efa5d461",
+      "fb_f_ref_head.mp3": "680b389f788785fed1b3a9e5eaa49c2b91f0c4a90a2b6ab0f06eec7b2a4a1db1",
+      "fb2_f_old_head.mp3": "9484ff35b0884ba3eb5d3c7c6ab24bb80fd5b05c851c8ceeb39da5bbec323771",
+      "cosy_exc.mp3": "a83d6c6d890629612e892ff9dc3beeef89b2ad7042f9ab8622b93dd9fedea697",
+      "fb_m_ref_head.mp3": "4a70690e80010b8e97fa7362f656d456b71f61afffbade88fa9c71c49ab0bfd4",
+      "fd_f_B_direct_head.mp3": "76dd8fda38db3be53af16bcf66d6521aae11547c2faa5654dc21257d3bea99eb",
+      "fb_f_cosy_mid.mp3": "4ef3be9be89f1d6423168d2b7ff4a12e5fa7e026d514424a9caaec3107d1989e",
+      "gs_ft.mp3": "7faf99ff9bfc3bfe58c6b155fed9e7e9eca69a9a890b97bc2661d5bd61134474",
+      "lt_engine_a.mp3": "7f884edd220286cfd164592ac3c038ddbd9b7059e92667f4b46988454bed89c2",
+      "fb_f_gsft_head.mp3": "4a5f888fa163c84493f8d148a86c4ddc23bd52e5ff606fe1f50c5c95561b7611",
+      "fb2_m_old_head.mp3": "3debbab990119f93c2eaab6c1f650e8b3ef713bcc5b03504d249e7fa3f41006e"
+    }
+  },
+  "4_写入": {
+    "新增文件数": 13,
+    "文件": [
+      "c1_ref.mp3",
+      "c1_1.mp3",
+      "c1_2.mp3",
+      "c1_3.mp3",
+      "c1_4.mp3",
+      "c1_5.mp3",
+      "c2_ref.mp3",
+      "c2_1.mp3",
+      "c2_2.mp3",
+      "c2_3.mp3",
+      "c2_4.mp3",
+      "c2_5.mp3",
+      "manifest_20261013c_longform.json"
+    ],
+    "写入方式": "sudo（密码仅经 stdin printf 传入 sudo -S，未写入任何文件）；逐文件原子写（tmp + fsync + os.replace）",
+    "重名检查": "写入前已列线上清单（65 个文件），无任何 c1_*/c2_*/manifest_20261013c_longform.json 同名，不覆盖不删除",
+    "manifest": {
+      "线上路径": "/mnt/tts/data/tone-ab/manifest_20261013c_longform.json",
+      "sha256": "97ae78802b67a107ae2a349f8036838c482754eb4364baf036a5bcafc50eeec6",
+      "是否属于items": false,
+      "是否被items引用": false,
+      "引用核查": "items_20261013c.json 全文不含 manifest / 引擎名 / job / 音色名（已逐词检查均为 False）"
+    }
+  },
+  "5_items热更新": {
+    "方式": "原子替换（tmp + fsync + os.replace），未重启服务",
+    "替换前校验": "线上 items.json sha256 与备份副本一致（防并发变更），校验通过后才替换",
+    "items_sha256_替换前": "36506e08c7941e8579350e0ef51833f9175fb8bd20e7461bc3015a455274d3a3",
+    "items_sha256_替换后": "8e11f5f15e8b3488cceb8b14700f3015b4fad1355904f5516e82adfe7a0ac62d",
+    "题量": 6,
+    "题id": [
+      "long_f_voice_20261013c",
+      "long_f_smooth_20261013c",
+      "long_f_ship_20261013c",
+      "long_m_voice_20261013c",
+      "long_m_smooth_20261013c",
+      "long_m_ship_20261013c"
+    ],
+    "服务MainPID": "1610488（部署前后一致，未重启）"
+  },
+  "6_UI": {
+    "文件": "/mnt/tts/projects/qwen3-tts/app/ui/feedback.html",
+    "本地改前备份": "app/ui/feedback.html.bak-20261013c",
+    "服务器改前备份": "/mnt/tts/backups/feedback_20261013T065045052742Z/feedback.html",
+    "sha256_改前": "2ae0c61be4918442ca864ea3e4c67fa2b4d724f60823e3644491f3bf12c1a767",
+    "sha256_改后": "c21406bb8200b79791feeddbca2d91a7fa8ea6a0c8cc8bffe4afa86506f7b47d",
+    "改动范围": "仅顶部 .tip 文案一处（diff 共 1 段，6 行 -> 8 行），其余代码零改动",
+    "新tip保留的语义": [
+      "比较题不默认答案（不会替你预先勾选任何一项）",
+      "差不多/都不行/都不像/没听清 为独立答案，不折算成某一方胜出",
+      "定位题保留完整音频、可前后拖动、「跳到建议起点」与「记录当前问题时间点」仍可用"
+    ],
+    "diagnostic分支": "保留（feedback.html 第 177 / 197 行 it.mode === 'diagnostic'，线上页面复核仍存在 2 处）"
+  },
+  "7_部署后验证": {
+    "全部通过": true,
+    "失败项": [],
+    "回滚执行": false,
+    "明细": {
+      "api_fb_items_返回新题库": "通过（6 题，id 与本地一致）",
+      "Cache-Control no-store": "通过（cache-control: no-store）",
+      "feedback页面可达": "通过（HTTP 200，页面内容等于新 UI 文件）",
+      "12个mp3支持Range": "通过（12/12 返回 206，Range: bytes=0-1023）",
+      "votes_jsonl以备份内容为前缀": "通过（True，备份 1222 字节，当前 1222 字节，未变长）",
+      "服务MainPID不变": "通过（1610488，未重启）",
+      "旧文件sha256未变": "通过（65 个旧文件逐一比对，仅 items.json 按预期变更，其余 64 个完全一致，无缺失）",
+      "线上文件总数": "78 = 65 旧 + 13 新"
+    }
+  },
+  "8_员工访问URL路径": {
+    "路径": "/feedback",
+    "局域网": "http://192.168.1.101:8000/feedback",
+    "远程": "http://100.89.104.29:8000/feedback",
+    "音频路径": "/fb-audio/<file>（Range 206 已验证）",
+    "接口": "/api/fb/items（no-store 已验证）"
+  },
+  "后台manifest（盲标->真实身份，不在下发内容里）": {
+    "_说明": "后台台账（盲标->真实身份）。仅存档于服务器，不属于 items.json，也不被下发给员工的题目引用。禁止把\"引擎\"字段写进 items。",
+    "版本": "20261013c_longform",
+    "生成时间_UTC": "2026-10-13T06:47:54.090752+00:00",
+    "统一编码参数": {
+      "命令模板": "ffmpeg -nostdin -y -i <in.wav> -vn -ac 1 -ar 44100 -c:a libmp3lame -b:a 192k <out.mp3>",
+      "采样率": 44100,
+      "声道": 1,
+      "目标码率": "192k",
+      "未使用滤镜": [
+        "loudnorm",
+        "dynaudnorm",
+        "compand",
+        "volume",
+        "aresample增益"
+      ],
+      "说明": "12 条使用完全一致的参数，未对任何单条施加增益或归一化。"
+    },
+    "音频映射": [
+      {
+        "盲标文件": "c1_ref.mp3",
+        "来源wav": "case1-ref.wav",
+        "角色": "目标基准(案例原声)",
+        "案例": "ce1a3fda551a",
+        "性别": "女",
+        "链路": "基准",
+        "引擎": null,
+        "参考音色": null,
+        "是否复用历史资产": null,
+        "job_id": null,
+        "wav时长_秒": 525.296,
+        "wav_sha256": "56c7caa7af77c271cf2c7d7c2b6f4f64fd122ced57e29d4cabab3255729fdaca",
+        "mp3时长_秒": 525.297,
+        "mp3_sha256": "179e26c5bd429d7d543a91aff1e88fd0cd86641f9f4c1f93369a7461d58d65ce",
+        "mp3字节": 12609035,
+        "时长差异_秒": 0.0014
+      },
+      {
+        "盲标文件": "c1_1.mp3",
+        "来源wav": "case1-cand1.wav",
+        "角色": "候选方案",
+        "案例": "ce1a3fda551a",
+        "性别": "女",
+        "链路": "线上完整链",
+        "引擎": "qwen",
+        "参考音色": "EL_female",
+        "是否复用历史资产": false,
+        "job_id": "fb76065b2f27",
+        "源产物": [
+          "/mnt/tts/output/长稿多方案-M2/长稿多方案-M2-1.mp3",
+          "/mnt/tts/output/长稿多方案-M2/长稿多方案-M2-2.mp3",
+          "/mnt/tts/output/长稿多方案-M2/长稿多方案-M2-3.mp3"
+        ],
+        "ASR内容线索_CER": 0.0483,
+        "wav时长_秒": 520.51,
+        "wav_sha256": "8aed27199b160237e6702a876df9156a627d2bfc346ff7d69fb8519c6b27d815",
+        "mp3时长_秒": 520.511,
+        "mp3_sha256": "42e8b8761ebda764cf8917d93f58dadc21895f9705b1653c26b3fd2a1e508f7f",
+        "mp3字节": 12493679,
+        "时长差异_秒": 0.0005
+      },
+      {
+        "盲标文件": "c1_2.mp3",
+        "来源wav": "case1-cand2.wav",
+        "角色": "候选方案",
+        "案例": "ce1a3fda551a",
+        "性别": "女",
+        "链路": "线上完整链",
+        "引擎": "cosyvoice3",
+        "参考音色": "SOLA_female",
+        "是否复用历史资产": true,
+        "job_id": "81e99d131e9b",
+        "源产物": [
+          "/mnt/tts/output/AB-女-参考SOLA_female-ce1a3fda551a/AB-女-参考SOLA_female-ce1a3fda551a-1.mp3",
+          "/mnt/tts/output/AB-女-参考SOLA_female-ce1a3fda551a/AB-女-参考SOLA_female-ce1a3fda551a-2.mp3"
+        ],
+        "ASR内容线索_CER": 0.077,
+        "wav时长_秒": 520.39,
+        "wav_sha256": "dee8bb2d698a9254519e2145840b6b2acabd805426108841c41e8319cf34b6a9",
+        "mp3时长_秒": 520.39,
+        "mp3_sha256": "90ef2cc2a72ab978a08d6e0c096d987c4ed9e6693f6e54bc561a9b8141b48236",
+        "mp3字节": 12491171,
+        "时长差异_秒": 0.0001
+      },
+      {
+        "盲标文件": "c1_3.mp3",
+        "来源wav": "case1-cand3.wav",
+        "角色": "候选方案",
+        "案例": "ce1a3fda551a",
+        "性别": "女",
+        "链路": "线上完整链",
+        "引擎": "cosyvoice3",
+        "参考音色": "EL_female",
+        "是否复用历史资产": true,
+        "job_id": "bc8196e72fed",
+        "源产物": [
+          "/mnt/tts/output/自测-女-真实口径-ce1a3fda551a/自测-女-真实口径-ce1a3fda551a-1.mp3",
+          "/mnt/tts/output/自测-女-真实口径-ce1a3fda551a/自测-女-真实口径-ce1a3fda551a-2.mp3",
+          "/mnt/tts/output/自测-女-真实口径-ce1a3fda551a/自测-女-真实口径-ce1a3fda551a-3.mp3"
+        ],
+        "ASR内容线索_CER": 0.0795,
+        "wav时长_秒": 520.526,
+        "wav_sha256": "47d6884d0b83cb0f26c00a0717108d7b806985ecbecca379d1b64ee5314aefb1",
+        "mp3时长_秒": 520.526,
+        "mp3_sha256": "dd06315810b9c60ab5bc29dfd05d751a0929d4d793d00b554a1865e8acd98b55",
+        "mp3字节": 12494305,
+        "时长差异_秒": 0.0002
+      },
+      {
+        "盲标文件": "c1_4.mp3",
+        "来源wav": "case1-cand4.wav",
+        "角色": "候选方案",
+        "案例": "ce1a3fda551a",
+        "性别": "女",
+        "链路": "裸推理",
+        "引擎": "cosyvoice3",
+        "参考音色": "EL_female",
+        "是否复用历史资产": false,
+        "job_id": null,
+        "源产物": [
+          "/mnt/tts/diag/longsubmit-20261013/M4.wav"
+        ],
+        "ASR内容线索_CER": 0.0571,
+        "wav时长_秒": 507.96,
+        "wav_sha256": "dac2236aa7085b295d7b73b5b712e2f514a34b08f2895291a9038c9a4e7f121c",
+        "mp3时长_秒": 507.96,
+        "mp3_sha256": "0df5a659c3e053b433ee2bb6959684ffc66b98744fd1a84e2c28b179ea028027",
+        "mp3字节": 12192748,
+        "时长差异_秒": 0.0
+      },
+      {
+        "盲标文件": "c1_5.mp3",
+        "来源wav": "case1-cand5.wav",
+        "角色": "候选方案",
+        "案例": "ce1a3fda551a",
+        "性别": "女",
+        "链路": "裸推理",
+        "引擎": "qwen",
+        "参考音色": "EL_female",
+        "是否复用历史资产": false,
+        "job_id": null,
+        "源产物": [
+          "/mnt/tts/diag/longsubmit-20261013/Q2.wav"
+        ],
+        "ASR内容线索_CER": 0.041,
+        "wav时长_秒": 543.403,
+        "wav_sha256": "f1579da0c0be3c7339c2f40b54f599ee2382d0fdf56883c4e2c4f292319cf46e",
+        "mp3时长_秒": 543.403,
+        "mp3_sha256": "924bc6d761a0b504df6e456bcdaf3536f1dc0c5488ff011f02e5093ca24733bd",
+        "mp3字节": 13043504,
+        "时长差异_秒": 0.0002
+      },
+      {
+        "盲标文件": "c2_ref.mp3",
+        "来源wav": "case2-ref.wav",
+        "角色": "目标基准(案例原声)",
+        "案例": "d172b8c4efb3",
+        "性别": "男",
+        "链路": "基准",
+        "引擎": null,
+        "参考音色": null,
+        "是否复用历史资产": null,
+        "job_id": null,
+        "wav时长_秒": 555.18,
+        "wav_sha256": "28fe6b04052b5ed83831baad25dc744afc99848d068e91b60543d25b8b9d7997",
+        "mp3时长_秒": 555.181,
+        "mp3_sha256": "816aee108c9acf1f1d9ee8889f2aa74fbb272e8b438451b0b775c0251cd5f4cd",
+        "mp3字节": 13326253,
+        "时长差异_秒": 0.0015
+      },
+      {
+        "盲标文件": "c2_1.mp3",
+        "来源wav": "case2-cand1.wav",
+        "角色": "候选方案",
+        "案例": "d172b8c4efb3",
+        "性别": "男",
+        "链路": "线上完整链",
+        "引擎": "qwen",
+        "参考音色": "EL_male",
+        "是否复用历史资产": false,
+        "job_id": "9501d27c7fd6",
+        "源产物": [
+          "/mnt/tts/output/长稿多方案-M1/长稿多方案-M1-1.mp3",
+          "/mnt/tts/output/长稿多方案-M1/长稿多方案-M1-2.mp3",
+          "/mnt/tts/output/长稿多方案-M1/长稿多方案-M1-3.mp3"
+        ],
+        "ASR内容线索_CER": 0.1331,
+        "wav时长_秒": 556.695,
+        "wav_sha256": "cfc6580ae0c4b56a5f09c97f2636b178fd0be9e870714c4125095910d3798b16",
+        "mp3时长_秒": 556.695,
+        "mp3_sha256": "5068c974ff90d9821463aca5974c040c3c7659e5695f9728e82288f1dc753546",
+        "mp3字节": 13361989,
+        "时长差异_秒": 0.0005
+      },
+      {
+        "盲标文件": "c2_2.mp3",
+        "来源wav": "case2-cand2.wav",
+        "角色": "候选方案",
+        "案例": "d172b8c4efb3",
+        "性别": "男",
+        "链路": "裸推理",
+        "引擎": "qwen",
+        "参考音色": "EL_male",
+        "是否复用历史资产": false,
+        "job_id": null,
+        "源产物": [
+          "/mnt/tts/diag/longsubmit-20261013/Q1.wav"
+        ],
+        "ASR内容线索_CER": 0.1054,
+        "wav时长_秒": 530.498,
+        "wav_sha256": "4e55049a9adaa7650402707ae23a03399c716e614fd335182c91dc69aa389040",
+        "mp3时长_秒": 530.498,
+        "mp3_sha256": "888fe67174af483935007b13a94c40dd0b3b6d175cfca45280ef3534feee9f0a",
+        "mp3字节": 12733796,
+        "时长差异_秒": 0.0004
+      },
+      {
+        "盲标文件": "c2_3.mp3",
+        "来源wav": "case2-cand3.wav",
+        "角色": "候选方案",
+        "案例": "d172b8c4efb3",
+        "性别": "男",
+        "链路": "线上完整链",
+        "引擎": "cosyvoice3",
+        "参考音色": "yohan_male",
+        "是否复用历史资产": true,
+        "job_id": "159b1c5e6a66",
+        "源产物": [
+          "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3/AB-男-参考yohan_male-d172b8c4efb3-1.mp3",
+          "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3/AB-男-参考yohan_male-d172b8c4efb3-2.mp3",
+          "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3/AB-男-参考yohan_male-d172b8c4efb3-3.mp3",
+          "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3/AB-男-参考yohan_male-d172b8c4efb3-4.mp3",
+          "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3/AB-男-参考yohan_male-d172b8c4efb3-5.mp3"
+        ],
+        "ASR内容线索_CER": 0.2421,
+        "wav时长_秒": 556.554,
+        "wav_sha256": "17b273c442c452ab70f8673cb2bab2f0fbf65c0e77397f5d978670a9fb5a84cb",
+        "mp3时长_秒": 556.554,
+        "mp3_sha256": "271d43a2f2b55e8293cdbb3931abce2c83fc1629e658c30ccafec478d3c57ce3",
+        "mp3字节": 13358854,
+        "时长差异_秒": 0.0004
+      },
+      {
+        "盲标文件": "c2_4.mp3",
+        "来源wav": "case2-cand4.wav",
+        "角色": "候选方案",
+        "案例": "d172b8c4efb3",
+        "性别": "男",
+        "链路": "线上完整链",
+        "引擎": "cosyvoice3",
+        "参考音色": "EL_male",
+        "是否复用历史资产": true,
+        "job_id": "35391b1f0e1f",
+        "源产物": [
+          "/mnt/tts/output/自测-男-真实口径-d172b8c4efb3/自测-男-真实口径-d172b8c4efb3-1.mp3",
+          "/mnt/tts/output/自测-男-真实口径-d172b8c4efb3/自测-男-真实口径-d172b8c4efb3-2.mp3",
+          "/mnt/tts/output/自测-男-真实口径-d172b8c4efb3/自测-男-真实口径-d172b8c4efb3-3.mp3"
+        ],
+        "ASR内容线索_CER": 0.1387,
+        "wav时长_秒": 556.289,
+        "wav_sha256": "f8afaefd3525b7f711ba90ea85faf0110824fa1fb4be56ef3665e30838f86758",
+        "mp3时长_秒": 556.289,
+        "mp3_sha256": "18f14f68792abc4c5a7eca6d0f9216b6c9332c3cdb1707541adcc35e014d5cea",
+        "mp3字节": 13352585,
+        "时长差异_秒": 0.0002
+      },
+      {
+        "盲标文件": "c2_5.mp3",
+        "来源wav": "case2-cand5.wav",
+        "角色": "候选方案",
+        "案例": "d172b8c4efb3",
+        "性别": "男",
+        "链路": "裸推理",
+        "引擎": "cosyvoice3",
+        "参考音色": "EL_male",
+        "是否复用历史资产": false,
+        "job_id": null,
+        "源产物": [
+          "/mnt/tts/diag/longsubmit-20261013/M3.wav"
+        ],
+        "ASR内容线索_CER": 0.1157,
+        "wav时长_秒": 539.48,
+        "wav_sha256": "267b0aed6247a2e05ea4b2654e6bde1f56247e2591a5e009e25f8f5a8bae7d24",
+        "mp3时长_秒": 539.48,
+        "mp3_sha256": "d693d9d335e6bd05a721bf629965da94e8b72b6b36e6ed666aad6cd32cff222f",
+        "mp3字节": 12948836,
+        "时长差异_秒": 0.0
+      }
+    ],
+    "禁止性声明": "本轮候选人音频未经人工试听，不得宣称任何方案胜出或通过验收；ASR 的 CER 仅作\"有无少读/跑飞\"的内容线索，不代表音色相似度或听感优劣。"
+  },
+  "未做/约束遵守": {
+    "生产语音处理": "未改动",
+    "服务环境变量": "未改动",
+    "kill任何任务": "无",
+    "GPU影响": "无（仅文件上传与静态资源热更新）",
+    "重启服务": "无",
+    "git提交": "无"
+  },
+  "禁止性声明": "12 条候选人音频均为机器产出、未经人工试听；本次部署只完成题库上线，不构成任何方案胜出、听感通过或可交付的结论。ASR 的 CER 仅为「有无少读/跑飞」的内容线索，不代表音色相似度或听感优劣。方案取舍须由员工盲听决定。",
+  "结果摘要": {
+    "成功": [
+      "12 条统一编码（192k/单声道/44100，无归一化）",
+      "有效性检查 12/12 通过",
+      "线上完整备份（65 文件 + UI + sha256 台账）",
+      "13 个新文件写入（无重名、无覆盖、无删除）",
+      "items.json 原子热更新（未重启）",
+      "UI tip 改为通用措辞（diagnostic 分支保留）",
+      "部署后 8 项验证全部通过"
+    ],
+    "失败": [],
+    "旧资产是否完好": "完好：64/65 个旧文件 sha256 与备份前完全一致（items.json 为本次预期变更）；votes.jsonl 内容与备份完全一致、未被截断或覆盖"
+  }
+}
