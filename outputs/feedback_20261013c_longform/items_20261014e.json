@@ -1,0 +1,52 @@
+{
+ "items": [
+  {"id": "ctrl_pitch_20261014e", "dim": "热身", "title": "先热个身：两段声音，音调一样高吗",
+   "desc": "依次听第 1 段和第 2 段。\n\n🎯 哪一段的**声音更高**（更尖）？\n\n✅ 凭耳朵，不用想太多。",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": "k10_c1.mp3", "label": "第 1 段更高"},
+    {"key": "B", "file": "k10_c2.mp3", "label": "第 2 段更高"},
+    {"key": "C", "file": null, "label": "两段一样高"},
+    {"key": "D", "file": null, "label": "没听清"}]},
+
+  {"id": "m_method_ab_20261014e", "dim": "男声·做法对比", "title": "男声：两段做法，哪段更像真人",
+   "desc": "两段男声，念的是**同一句话**。\n\n🎯 哪一段**更像真人在说话**？",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": "k10_old.mp3", "label": "第 1 段更像真人"},
+    {"key": "B", "file": "k10_new.mp3", "label": "第 2 段更像真人"},
+    {"key": "C", "file": null, "label": "两段都像真人"},
+    {"key": "D", "file": null, "label": "两段都不像真人"},
+    {"key": "E", "file": null, "label": "没听清"}]},
+
+  {"id": "m_vs_el_20261014e", "dim": "男声·对标", "title": "男声：跟标杆比，哪段更像真人",
+   "desc": "换两段男声，还是**同一句话**。\n\n🎯 哪一段**更像真人在说话**？",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": "k10_new.mp3", "label": "第 1 段更像真人"},
+    {"key": "B", "file": "k10_el.mp3", "label": "第 2 段更像真人"},
+    {"key": "C", "file": null, "label": "两段都像真人"},
+    {"key": "D", "file": null, "label": "两段都不像真人"},
+    {"key": "E", "file": null, "label": "没听清"}]},
+
+  {"id": "m_problem_20261014e", "dim": "男声·问题定位", "title": "男声：跟标杆比，最不像的地方是哪一个",
+   "desc": "先听**标杆**，再听**我们**。\n\n🎯 我们这段跟标杆比，**最不像真人**的是哪一点？\n（选一个最明显的，这题最重要）",
+   "ref": {"file": "k10_el.mp3", "label": "标杆（先听这个）"},
+   "options": [
+    {"key": "A", "file": "k10_new.mp3", "label": "语速不对（太快或太慢）"},
+    {"key": "B", "file": null, "label": "停顿的位置或长度怪"},
+    {"key": "C", "file": null, "label": "声音本身不像真人（音色、腔调、年龄感）"},
+    {"key": "D", "file": null, "label": "有杂音、怪音或咔哒声"},
+    {"key": "E", "file": null, "label": "咬字含混、像在赶"},
+    {"key": "F", "file": null, "label": "说不出具体哪里，就是不像"}]},
+
+  {"id": "m_ship_20261014e", "dim": "男声·能不能用", "title": "男声：这段能直接交给客户吗",
+   "desc": "🎯 这段男声**拿来直接交给客户**行不行？",
+   "ref": {"file": "k10_new.mp3", "label": "听这一段（就是上面那几题的「我们」）"},
+   "options": [
+    {"key": "A", "file": null, "label": "可以直接用"},
+    {"key": "B", "file": null, "label": "还差一点，但接近了"},
+    {"key": "C", "file": null, "label": "还是不行"},
+    {"key": "D", "file": null, "label": "没听清"}]}
+ ]
+}

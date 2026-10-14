@@ -47,9 +47,19 @@ DEFAULT_RATE = {"f": 8.5, "m": 8.9}
 #   男声成品 9.17 字/秒 vs EL 8.37，快了 9.6%，员工直接判「不像真人」。
 #   老脚本没出事，是因为它们拿**同一篇文案的 EL** 逐窗对齐，量纲差互相抵消；
 #   一旦换成固定常数，音节核/秒 ≠ 字/秒 的差异就暴露了。
-DEFAULT_CPS = {"f": 7.45, "m": 8.37}
+# 🔴 女声 2026-10-14 复核：4 条 EL 案例实测 7.45 / 7.622 / 7.507 / 7.612 → 均值 7.573。
+#   之前锚在单条案例的 7.45，等于我们比 EL 快 1.6%，员工连续两轮点名「女声太快」。
+DEFAULT_CPS = {"f": 7.57, "m": 8.37}
 # EL 实测响度：女 -22.6 / 男 -25.0
 DEFAULT_LUFS = {"f": -22.6, "m": -25.0}
+DEFAULT_F0 = {"f": 276.0, "m": 197.7}
+# 🔴 变调会把整个频谱搬上去：男声升 1.21 倍后 >4kHz 能量占比 0.0185，
+#    而 EL 只有 0.0104（高 78%，听感发尖）。10*log10(0.0104/0.0185) = -2.5dB，
+#    所以变调后高频要压到 -6.5dB。未变调时保持默认 -4dB。
+#    ❌ rubberband 的 formant=preserved（只升基频不动声道）**不可用**：
+#       频谱平坦度 0.050 → 0.015（EL 0.042），声音发闷发假。
+EQ_MALE_DB = -4.0
+EQ_MALE = "highshelf=f=4000:g=-4,lowpass=f=14000"
 # EL 实测 F0 中位（librosa.pyin / 16k 口径，与 tools 里的诊断同口径，不可换算法）：
 #   男（13 条 EL 案例）190.5~205.3 → 均值 197.7
 #   女（5 条 SOLA 案例）271.0~282.1 → 均值 276.0
@@ -137,6 +147,8 @@ def main():
                     help="目标 F0 中位(Hz)。默认男 197.7 / 女 276.0（EL 案例实测均值）")
     ap.add_argument("--no-pitch", action="store_true",
                     help="跳过 F0 对齐（对照组用）")
+    ap.add_argument("--eq-db", type=float, default=None,
+                    help="覆盖男声 highshelf 增益(dB)。默认：变调时 -6.5，否则 -4")
     ap.add_argument("--no-clean", action="store_true")
     a = ap.parse_args()
 
@@ -224,8 +236,21 @@ def main():
             a.pitch = 1.0
     if a.pitch and abs(a.pitch - 1.0) > 1e-6:
         tp = os.path.join(tmpd, "pitch.wav")
+        # 🔴 变调用 asetrate+aresample，**不用 rubberband**：
+        #    rubberband 会把频谱平坦度压掉（0.050 → 0.035，而 EL 是 0.042），
+        #    声音变"过净"、发假 —— 2026-10-14 员工在 F0 已对齐(198.3=EL)的情况下
+        #    仍判「EL 更像真人」，怀疑就是这个副作用。
+        #    asetrate 只是重采样（等价磁带变速 + 恢复时长），波形结构保得住：
+        #      flat 0.049（EL 0.042）、发声段数 110（EL 110）、段长 0.291（EL 0.277）
+        #    🔴 顺序必须是 asetrate → aresample → atempo(1/R)，**三步缺一不可**：
+        #      asetrate=sr*R 改标记（音高×R，时长/R）→ aresample=sr 重采样（点数 N→N/R，
+        #      时长仍 /R）→ atempo=1/R 放慢才把时长补回来。
+        #      2026-10-14 踩坑：漏了 atempo，成品 440.9s 而应为 534.8s（短了 17.6%），
+        #      字/秒直接飙到 10.2。
         subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", t3, "-af",
-                        "rubberband=pitch=%.4f" % a.pitch, tp], check=True)
+                        "asetrate=%d,aresample=%d,atempo=%.6f"
+                        % (int(round(sr * a.pitch)), sr, 1.0 / a.pitch),
+                        tp], check=True)
         t3 = tp
         # 🔴 必须把变调结果读回 buf：后面停顿清洗用的是 buf，不是 t3。
         #    2026-10-14 踩坑：漏了这一行，变调白做（日志显示变调成功，
@@ -248,10 +273,14 @@ def main():
         verify_pauses(t4, "清洗后")
         cur = t4
 
+#    🔴 变调后高频需要额外回压（默认 -2.5dB，见 EQ_MALE_DB 注释）。
+    eq_db = a.eq_db if a.eq_db is not None else (
+        EQ_MALE_DB + (-2.5 if a.pitch and a.pitch > 1.02 else 0.0))
+    eq_m = "highshelf=f=4000:g=%g,lowpass=f=14000" % eq_db
     gain = round(lufs_t - lufs(cur), 1)
     # 🔴 二次校正：EQ 会改变响度，按 EQ 前的响度算出来的增益是错的
     #   （实测男声目标 -25.0 结果落到 -25.4）。所以先粗调、再实测补一次。
-    af = (EQ_MALE + "," if g == "m" else "") + "volume=%gdB" % gain
+    af = (eq_m + "," if g == "m" else "") + "volume=%gdB" % gain
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", cur, "-af", af, a.out],
                    check=True)
     delta = round(lufs_t - lufs(a.out), 2)
