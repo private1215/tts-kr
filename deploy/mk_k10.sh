@@ -6,7 +6,7 @@ OUT=/mnt/tts/data/tone-ab
 S=40; T=35
 
 cut() { ffmpeg -y -v error -ss $S -t $T -i "$1" -ar 44100 -b:a 128k /tmp/$2.mp3; \
-        echo 'a19910119' | sudo -S cp /tmp/$2.mp3 "$OUT/$2.mp3" >/dev/null 2>&1 || \
+        echo "${TTS_SUDO_PW:?需要设置 TTS_SUDO_PW}" | sudo -S -p "" cp /tmp/$2.mp3 "$OUT/$2.mp3" >/dev/null 2>&1 || \
         sudo cp /tmp/$2.mp3 "$OUT/$2.mp3"; }
 
 cut x8197/m_f0.wav  k10_old

@@ -9,13 +9,21 @@ import sys
 import librosa
 import numpy as np
 
-TARGET = {"male": (194.3, 3.3), "female": (278.8, 6.05)}   # 清洗后 EL 基线
+# 🔴 生产口径 vs 诊断口径不是一回事（2026-10-14 晚发现）：
+#    fix_chain.f0_median 用的是 frame_length=**1024** + **前 60s**；
+#    我这套工具默认 2048 + 全篇。两个数差好几 Hz，跨口径比会得出假结论。
+#    判「要不要补音高」必须用生产的那把尺子，所以加 --prod 切换。
+FL = 1024 if "--prod" in sys.argv else 2048
+WIN = 60.0 if "--prod" in sys.argv else 0.0
+TARGET = {"male": (194.3, 3.3), "female": (278.8, 6.05)}   # 清洗后 EL 基线（诊断口径）
 
 
 def f0_median(path):
     y, sr = librosa.load(path, sr=16000, mono=True)
+    if WIN and len(y) > int(WIN * sr):
+        y = y[:int(WIN * sr)]
     f0, voiced, _ = librosa.pyin(y, fmin=60, fmax=400, sr=sr,
-                                 frame_length=2048, hop_length=256)
+                                 frame_length=FL, hop_length=256)
     v = f0[voiced] if voiced is not None else f0
     v = np.array([x for x in (v if v is not None else []) if not np.isnan(x)])
     if len(v) < 100:

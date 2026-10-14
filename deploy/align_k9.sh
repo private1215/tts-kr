@@ -5,7 +5,7 @@ set -e
 OUT=/mnt/tts/data/tone-ab
 cd /tmp
 adj() { ffmpeg -y -v error -i "$OUT/$1.mp3" -af "volume=$2dB" /tmp/a_$1.mp3; \
-        echo 'a19910119' | sudo -S cp /tmp/a_$1.mp3 "$OUT/$1.mp3" >/dev/null 2>&1 || \
+        echo "${TTS_SUDO_PW:?需要设置 TTS_SUDO_PW}" | sudo -S -p "" cp /tmp/a_$1.mp3 "$OUT/$1.mp3" >/dev/null 2>&1 || \
         sudo cp /tmp/a_$1.mp3 "$OUT/$1.mp3"; }
 
 adj k9_old 0.5

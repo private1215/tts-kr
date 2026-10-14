@@ -14,6 +14,15 @@ import re
 import subprocess
 import tempfile
 
+def _sudo_pw():
+    """取 sudo 密码。密码绝不写进代码/注释（曾硬编码并推上 GitHub，已改用环境变量）。
+    优先用环境变量 TTS_SUDO_PW；目标目录若已可写则根本不需要 sudo。"""
+    pw = os.environ.get("TTS_SUDO_PW", "")
+    if not pw:
+        raise SystemExit("需要 TTS_SUDO_PW 环境变量（或把目标目录改成可写，就不必 sudo）")
+    return pw + "\n"
+
+
 OUT = "/mnt/tts/data/tone-ab"
 DIAG = "/mnt/tts/diag/x8197"
 EL = "/mnt/tts/data/cases/8197d9ac8a35/merged.wav"
@@ -56,7 +65,7 @@ def main():
         rc = subprocess.run(["cp", tmp2, dst]).returncode
         if rc != 0:
             subprocess.run(["sudo", "-S", "-p", "", "cp", tmp2, dst],
-                           input="a19910119\n", text=True, check=True)
+                           input=_sudo_pw(), text=True, check=True)
         print("%-14s 源 %-46s LUFS %6.2f -> 增益 %+.2f dB -> %.2f"
               % (name, os.path.basename(src), cur, gain, lufs(dst)))
         os.unlink(tmpw)
