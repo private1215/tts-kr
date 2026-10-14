@@ -1,0 +1,86 @@
+{
+ "name": "C2",
+ "route": "串联克隆-千问片段打底+Cosy整篇",
+ "engine": "cosyvoice3",
+ "case_id": "d172b8c4efb3",
+ "tag": "male",
+ "base_engine": "qwen（整篇产物开头片段，仅作参考音频，不参与混音/拼接）",
+ "text_chars": 4594,
+ "text_sha256": "db65bae8990a12b3c007cc8b0c90b01662de0c71df5e28be296b6cde95c1911d",
+ "ref_wav": "/mnt/tts/diag/b2-20261013/ref_male_head.wav",
+ "ref_wav_sha256": "630ee7eb62765b799b5dcea4e2096ac1dd57e8ef084f1819d1bba3b55b96e6ae",
+ "ref_source_wav": "/mnt/tts/diag/longsubmit-20261013/Q1.wav",
+ "ref_source_sha256": "614461a9de6c27c93c2ac43e8e2c46e9f994b3213a6603a3feabff44b99783d7",
+ "ref_interval_sec": [
+  0.0,
+  13.0
+ ],
+ "ref_seconds": 13.0,
+ "ref_text": "안녕하세요 제주반도체 주주 여러분 반갑습니다  정민철 프로입니다  자 우리 주주님들께 오늘 정말 중요한 말씀드리려고 이렇게 카메라 켰습니다  어유 지금 제주반도체 기가 막힌 자리에 와 있거든요",
+ "ref_text_len": 107,
+ "ref_text_sha256": "38f5f7928dd39a81ab838723c26004b16d4c3822b7f8a556ac8dee8e156d5f4a",
+ "ref_text_source": "Whisper-small CPU int8 转写该片段（asr_model=Systran/faster-whisper-small）",
+ "params": {
+  "instruct": "excited",
+  "speed": 1.0,
+  "seed": 42,
+  "max_chars": 320,
+  "timeout": 3600.0
+ },
+ "service_url": "http://127.0.0.1:8100",
+ "cuda_visible_devices": "0",
+ "COSY_MAX_CHARS_default": 320,
+ "service_health_before": {
+  "ok": true,
+  "info": {
+   "status": "ok",
+   "model": "/mnt/tts/models/Fun-CosyVoice3-0.5B",
+   "fp16": false,
+   "sample_rate": 24000,
+   "vram_gib": 3.33,
+   "idle_sec": 468.4,
+   "idle_unload_sec": 600.0,
+   "instruct_presets": [
+    "neutral",
+    "excited",
+    "warm",
+    "serious"
+   ]
+  }
+ },
+ "gen_seconds": 473.45,
+ "meta": {
+  "engine": "cosyvoice3",
+  "error": null,
+  "gen_seconds": 473.45,
+  "audio_seconds": 521.72,
+  "chars": 4594,
+  "audio-seconds": 521.72,
+  "gen-seconds": 473.365,
+  "chunks": 16
+ },
+ "service_health_after": {
+  "ok": true,
+  "info": {
+   "status": "ok",
+   "model": "/mnt/tts/models/Fun-CosyVoice3-0.5B",
+   "fp16": false,
+   "sample_rate": 24000,
+   "vram_gib": 3.33,
+   "idle_sec": 473.4,
+   "idle_unload_sec": 600.0,
+   "instruct_presets": [
+    "neutral",
+    "excited",
+    "warm",
+    "serious"
+   ]
+  }
+ },
+ "vram_gib_after": 3.33,
+ "status": "done",
+ "out": "/mnt/tts/diag/b2-20261013/C2.wav",
+ "sr": 24000,
+ "audio_seconds": 521.72,
+ "wav_sha256": "dda4f91442ad887d36433e3afb419c811bd4adbb53e8a4064d93457b46942ca4"
+}

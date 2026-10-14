@@ -1,0 +1,30 @@
+[
+  {
+    "path": "/Users/mac/Desktop/oulian-js/tts-kr/outputs/多模型首轮-20261013/音频/试听-男-B7.wav",
+    "sha256": "00ae2483bbe97973e124f2e8d4646de9d62d7391c4e0419a7beed64fe48a648b",
+    "bytes": 810284,
+    "frames": 405120,
+    "verified": true
+  },
+  {
+    "path": "/Users/mac/Desktop/oulian-js/tts-kr/outputs/多模型首轮-20261013/音频/试听-女-C4.wav",
+    "sha256": "b91df186f2478990a4d53e566dc0340835b5ecc78e67181b497b914a70d76975",
+    "bytes": 1098284,
+    "frames": 549120,
+    "verified": true
+  },
+  {
+    "path": "/Users/mac/Desktop/oulian-js/tts-kr/outputs/多模型首轮-20261013/音频/试听-男-A3.wav",
+    "sha256": "c4dd0606d35e09f725f5a41697fc5975b02c2b78ca7fef1a761edf988d0a6733",
+    "bytes": 775724,
+    "frames": 387840,
+    "verified": true
+  },
+  {
+    "path": "/Users/mac/Desktop/oulian-js/tts-kr/outputs/多模型首轮-20261013/音频/试听-女-D8.wav",
+    "sha256": "4d9a5b42d417de811759caec3f3623bc296672ee2fa2bc6a8e2f8f0657704619",
+    "bytes": 944684,
+    "frames": 472320,
+    "verified": true
+  }
+]

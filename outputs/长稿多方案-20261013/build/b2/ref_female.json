@@ -1,0 +1,19 @@
+{
+ "tag": "female",
+ "src_wav": "/mnt/tts/diag/longsubmit-20261013/Q2.wav",
+ "src_sha256": "f609c416268d95d56c30c56ede7c4493dc80a2bb96eb7804479fe22c1e660b0d",
+ "src_seconds": 543.403,
+ "src_sr": 24000,
+ "speech_onset_sec": 0.0,
+ "clip_start_sec": 0.0,
+ "clip_end_sec": 13.0,
+ "clip_seconds": 13.0,
+ "clip_wav": "/mnt/tts/diag/b2-20261013/ref_female_head.wav",
+ "clip_sha256": "1205a0bb537874cac3126b23fc88028b5642716b3579e5fa124e5d66e3d2f0dd",
+ "asr_model": "Systran/faster-whisper-small",
+ "asr_device": "cpu/int8",
+ "asr_seconds": 6.49,
+ "ref_text": "반갑습니다. 현대로템 주주 여러분 이민정 프로입니다.  우리 주주님들 그동안 고점에 물리셔서 맘고생 진짜 심하셨죠.  주식판이라는 게 겉보기엔 뉴스 나",
+ "ref_text_len": 84,
+ "ref_text_sha256": "2987973a76411b592155d1843ec2e2a1cf6ed78268e3eca61a3181e41dd1c844"
+}

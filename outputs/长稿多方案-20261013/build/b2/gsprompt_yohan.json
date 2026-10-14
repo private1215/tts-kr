@@ -1,0 +1,16 @@
+{
+ "voice": "yohan_male",
+ "src_wav": "/mnt/tts/data/voices/yohan_male.wav",
+ "src_sha256": "c0d2179fcc21f4fc0f080a27d6ac43edf561271a39584dc5c249cb9eb92be38c",
+ "src_seconds": 15.0,
+ "speech_onset_sec": 0.0,
+ "clip_start_sec": 0.0,
+ "clip_end_sec": 9.0,
+ "clip_seconds": 9.0,
+ "clip_wav": "/mnt/tts/diag/b2-20261013/gsprompt_yohan.wav",
+ "clip_sha256": "85469a6aea80127df4b586057f5368712e7fc4cd48d9fe3da9eab520722d8ec6",
+ "asr_model": "Systran/faster-whisper-small",
+ "asr_seconds": 6.31,
+ "ref_text": "다음 장에서 무조건 29만 7천원 고점 뚫어내는지  이것부터 쫓아보세요  그 다음이 30만 3750원 전환선인데",
+ "ref_text_len": 62
+}

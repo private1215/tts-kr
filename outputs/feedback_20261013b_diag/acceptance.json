@@ -1,0 +1,30 @@
+{
+  "version": "20261013b_diag",
+  "deployed": false,
+  "blocker": "生产 tone-ab 目录归 root 所有，当前 SSH 用户无写权限，sudo -n 要求密码；部署脚本在任何生产修改前退出",
+  "remote_bundle": "/home/zheng/feedback_20261013b_diag",
+  "tests": {
+    "audio_full_decode": 2,
+    "source_and_output_sha256": "通过",
+    "six_unique_ids_and_gender_regions": "通过",
+    "real_browser_seek_seconds": {"female": [0, 190, 385.12], "male": [0, 190, 400.72]},
+    "real_browser_timestamp_payload": "locate_f_mid_20261013b_diag，190.000秒，版本与完整源hash已进入free",
+    "real_browser_default_selection": "无默认选项；没听清独立保存为C",
+    "isolated_real_api": "热读、A/B/C/D/E独立保存、append-only、同人同题去重及free文本保存通过",
+    "production_votes_written": false,
+    "subjective_audio_acceptance": "未执行，不宣称卡顿修好或可交付",
+    "cross_version_sentence_alignment": "未执行；没有发布A/B或切片，仅单源完整上下文定位"
+  },
+  "production_unchanged": {
+    "items_sha256": "a65500a0dcd2fa19cd30c6397ec4b359974bbb8440e71d824d743b9aa9b7427e",
+    "votes_sha256": "edb0e32da290c965921b43852e5122d31e45fe379d02e7865429bfc64595880b",
+    "ui_sha256": "8eb8df7541e198726cc8654f9999d9126b7b6b52441fc7d653be43f901b56eb9",
+    "service_main_pid": 1610488,
+    "service_active": true
+  },
+  "limitations": [
+    "历史投票没有源hash；只能锁定本次实际读取的裸推理文件，不能证明历史时刻字节未变",
+    "单音频题不设置不适用的差不多或都不行；后续A/B须显式提供C差不多、D都不行、E没听清，当前生成校验拒绝任何A/B题",
+    "备份与生产HTTP/Range发布验收在部署脚本中，尚未实际执行"
+  ]
+}

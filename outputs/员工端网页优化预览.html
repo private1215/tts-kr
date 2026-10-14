@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>韩语配音工作台｜员工端优化预览</title>
+<style>
+:root{
+  --bg:#0d0f13;
+  --bg-soft:#11151c;
+  --surface:#151a22;
+  --surface-raised:#1a202a;
+  --surface-hover:#202733;
+  --line:#262d39;
+  --line-strong:#354052;
+  --text:#edf1f7;
+  --text-2:#bcc5d2;
+  --text-3:#818b99;
+  --blue:#65a6ff;
+  --blue-strong:#4d92f2;
+  --blue-soft:rgba(101,166,255,.12);
+  --green:#49c493;
+  --green-soft:rgba(73,196,147,.11);
+  --amber:#e8ac4b;
+  --amber-soft:rgba(232,172,75,.11);
+  --red:#ef7676;
+  --red-soft:rgba(239,118,118,.11);
+  --radius-lg:16px;
+  --radius-md:11px;
+  --radius-sm:8px;
+  --shadow:0 18px 48px rgba(0,0,0,.24);
+}
+*{box-sizing:border-box}
+html{color-scheme:dark;scroll-behavior:smooth}
+body{
+  margin:0;
+  color:var(--text);
+  background:
+    radial-gradient(900px 420px at 8% -8%,rgba(69,102,150,.22),transparent 64%),
+    radial-gradient(760px 360px at 94% 0%,rgba(45,73,113,.18),transparent 62%),
+    var(--bg);
+  font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI Variable","Microsoft YaHei","Malgun Gothic",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,textarea{font:inherit}
+button{color:inherit}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid rgba(101,166,255,.28);outline-offset:2px}
+svg{display:block}
+.shell{max-width:1180px;margin:0 auto;padding:24px 24px 56px}
+.topbar{display:flex;align-items:center;gap:16px;min-height:52px;margin-bottom:22px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand-mark{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;flex:none;color:#07111f;background:linear-gradient(145deg,#93c2ff,var(--blue) 55%,#4586de);box-shadow:0 5px 18px rgba(77,146,242,.26),inset 0 1px 0 rgba(255,255,255,.32)}
+.brand-mark svg{width:21px;height:21px}
+.brand h1{font-size:18px;line-height:1.25;margin:0;font-weight:680;letter-spacing:0}
+.brand p{margin:2px 0 0;color:var(--text-3);font-size:12.5px;white-space:nowrap}
+.top-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+.status-pill,.user-button,.ghost-button{height:36px;border:1px solid var(--line);background:rgba(21,26,34,.86);border-radius:9px;display:inline-flex;align-items:center;gap:8px;padding:0 12px;color:var(--text-2)}
+.status-pill{font-size:12px;cursor:default}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(73,196,147,.09)}
+.user-button,.ghost-button{cursor:pointer}
+.user-button:hover,.ghost-button:hover{background:var(--surface-hover);border-color:var(--line-strong);color:var(--text)}
+.user-button svg,.ghost-button svg{width:16px;height:16px}
+.ghost-button.primary-link{color:var(--blue)}
+
+.flow-card{border:1px solid var(--line);border-radius:var(--radius-lg);background:rgba(21,26,34,.94);box-shadow:var(--shadow);overflow:hidden}
+.flow-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px;border-bottom:1px solid var(--line);background:rgba(17,21,28,.74)}
+.flow-title{display:flex;align-items:center;gap:10px;font-weight:650}
+.flow-title .eyebrow{font-size:11px;line-height:20px;padding:0 8px;border:1px solid rgba(101,166,255,.28);border-radius:999px;color:var(--blue);background:var(--blue-soft);font-weight:650}
+.steps{display:flex;align-items:center;color:var(--text-3);font-size:12px}
+.step{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.step b{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:var(--surface-raised);border:1px solid var(--line-strong);font-size:11px;color:var(--text-2)}
+.step.current{color:var(--text-2)}
+.step.current b{border-color:var(--blue);background:var(--blue-soft);color:var(--blue)}
+.step-line{width:28px;height:1px;background:var(--line-strong);margin:0 8px}
+.workspace{display:grid;grid-template-columns:minmax(0,1fr) 330px;align-items:start}
+.composer{padding:22px 22px 24px;border-right:1px solid var(--line)}
+.action-panel{padding:20px;position:sticky;top:16px}
+.section{padding-bottom:22px;margin-bottom:22px;border-bottom:1px solid var(--line)}
+.section:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0}
+.section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.section-title{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:650}
+.section-index{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;background:var(--surface-raised);color:var(--blue);font-size:12px;border:1px solid var(--line)}
+.optional{font-size:12px;color:var(--text-3);font-weight:400}
+.field{margin-bottom:14px}
+.field:last-child{margin-bottom:0}
+label{display:flex;justify-content:space-between;gap:12px;color:var(--text-2);font-size:12.5px;margin-bottom:6px}
+input,textarea{display:block;width:100%;border:1px solid var(--line-strong);background:#1a202a;color:var(--text);border-radius:var(--radius-md);padding:11px 12px;transition:border-color .15s,background .15s,box-shadow .15s}
+input:hover,textarea:hover{border-color:#46536a}
+input:focus,textarea:focus{border-color:var(--blue);background:#1d2430;box-shadow:0 0 0 3px var(--blue-soft);outline:none}
+input::placeholder,textarea::placeholder{color:#667181}
+textarea{min-height:230px;resize:vertical;line-height:1.74;font-size:14.5px}
+.field-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px;color:var(--text-3);font-size:12px}
+.draft-state{display:flex;align-items:center;gap:6px;color:var(--text-3)}
+.draft-state svg{width:14px;height:14px;color:var(--green)}
+.voice-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.voice-card{min-height:78px;border:1px solid var(--line-strong);border-radius:var(--radius-md);background:var(--surface-raised);display:flex;align-items:center;gap:12px;padding:12px;text-align:left;cursor:pointer;transition:border-color .15s,background .15s,transform .15s}
+.voice-card:hover{border-color:#53627b;background:var(--surface-hover)}
+.voice-card:active{transform:translateY(1px)}
+.voice-card.selected{border-color:var(--blue);background:var(--blue-soft);box-shadow:inset 0 0 0 1px rgba(101,166,255,.12)}
+.voice-icon{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:#232b37;border:1px solid var(--line-strong);color:var(--text-2);flex:none}
+.voice-card.selected .voice-icon{color:var(--blue);border-color:rgba(101,166,255,.46);background:rgba(101,166,255,.1)}
+.voice-icon svg{width:21px;height:21px}
+.voice-name{font-size:14px;font-weight:650;color:var(--text)}
+.voice-note{font-size:12px;color:var(--text-3);margin-top:2px}
+.voice-check{margin-left:auto;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line-strong);color:transparent}
+.voice-card.selected .voice-check{background:var(--blue);border-color:var(--blue);color:#08111f}
+.voice-check svg{width:13px;height:13px;stroke-width:2.5}
+.admin-note{margin-top:10px;color:var(--text-3);font-size:12px}
+.admin-note a{color:var(--blue);text-decoration:none}
+.admin-note a:hover{text-decoration:underline}
+.summary-title{font-size:13px;font-weight:650;margin-bottom:12px}
+.summary{background:var(--bg-soft);border:1px solid var(--line);border-radius:var(--radius-md);padding:12px 13px;margin-bottom:14px}
+.summary-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;color:var(--text-3);font-size:12.5px}
+.summary-row+ .summary-row{border-top:1px solid rgba(53,64,82,.48)}
+.summary-row strong{color:var(--text-2);font-weight:580;text-align:right}
+.primary-button{width:100%;min-height:46px;border:0;border-radius:10px;background:linear-gradient(180deg,#8abaff,var(--blue) 58%,var(--blue-strong));color:#07111f;font-weight:700;cursor:pointer;box-shadow:0 5px 17px rgba(77,146,242,.28),inset 0 1px 0 rgba(255,255,255,.28);transition:filter .15s,transform .15s,opacity .15s}
+.primary-button:hover:not(:disabled){filter:brightness(1.05)}
+.primary-button:active:not(:disabled){transform:translateY(1px)}
+.primary-button:disabled{opacity:.42;cursor:not-allowed;box-shadow:none}
+.shortcut{text-align:center;color:var(--text-3);font-size:11.5px;margin-top:8px}
+kbd{border:1px solid var(--line-strong);background:var(--surface-raised);border-radius:5px;padding:1px 5px;color:var(--text-2);font:11px ui-monospace,SFMono-Regular,Menlo,monospace}
+.inline-state{display:none;margin-top:12px;padding:10px 11px;border-radius:9px;font-size:12.5px;align-items:flex-start;gap:8px}
+.inline-state.show{display:flex}
+.inline-state.success{color:#8ce2bd;background:var(--green-soft);border:1px solid rgba(73,196,147,.24)}
+.inline-state.error{color:#ff9d9d;background:var(--red-soft);border:1px solid rgba(239,118,118,.24)}
+.inline-state svg{width:16px;height:16px;flex:none;margin-top:1px}
+.secondary-actions{display:flex;justify-content:center;gap:12px;margin-top:14px}
+.text-button{border:0;background:transparent;color:var(--text-3);padding:5px 4px;cursor:pointer;font-size:12px}
+.text-button:hover{color:var(--text-2);text-decoration:underline}
+.safety-note{display:flex;gap:8px;margin-top:18px;padding-top:16px;border-top:1px solid var(--line);font-size:11.5px;color:var(--text-3)}
+.safety-note svg{width:15px;height:15px;flex:none;margin-top:2px}
+
+.jobs-card{margin-top:18px;border:1px solid var(--line);border-radius:var(--radius-lg);background:rgba(21,26,34,.94);overflow:hidden}
+.jobs-head{display:flex;align-items:center;gap:14px;padding:16px 18px;border-bottom:1px solid var(--line)}
+.jobs-title{font-size:14px;font-weight:650}
+.jobs-count{font-size:12px;color:var(--text-3)}
+.job-tabs{margin-left:auto;display:flex;padding:3px;background:var(--bg-soft);border:1px solid var(--line);border-radius:9px}
+.job-tab{min-height:30px;border:0;background:transparent;border-radius:6px;color:var(--text-3);padding:0 11px;font-size:12px;cursor:pointer}
+.job-tab.active{background:var(--surface-raised);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.22)}
+.jobs-toolbar{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);background:rgba(17,21,28,.45)}
+.search{position:relative;max-width:320px;flex:1}
+.search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-3)}
+.search input{height:36px;padding:7px 10px 7px 32px;border-radius:8px;font-size:12.5px}
+.toolbar-meta{margin-left:auto;color:var(--text-3);font-size:12px}
+.jobs-list{padding:4px 18px 8px}
+.job{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}
+.job:last-child{border-bottom:0}
+.job-main{min-width:0}
+.job-top{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.job-name{font-size:13.5px;font-weight:620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{display:inline-flex;align-items:center;gap:5px;line-height:22px;padding:0 8px;border-radius:999px;font-size:11px;border:1px solid var(--line)}
+.badge.running{color:var(--blue);border-color:rgba(101,166,255,.3);background:var(--blue-soft)}
+.badge.done{color:#83ddb7;border-color:rgba(73,196,147,.28);background:var(--green-soft)}
+.badge.error{color:#ff9b9b;border-color:rgba(239,118,118,.28);background:var(--red-soft)}
+.badge.queued{color:#f3c97f;border-color:rgba(232,172,75,.28);background:var(--amber-soft)}
+.job-preview{color:var(--text-3);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:8px;max-width:760px}
+.progress-line{display:flex;align-items:center;gap:10px}
+.progress-track{height:5px;background:#232a35;border-radius:999px;overflow:hidden;flex:1;max-width:420px}
+.progress-track span{display:block;height:100%;width:68%;border-radius:inherit;background:linear-gradient(90deg,var(--blue-strong),#83b8ff)}
+.job-meta{color:var(--text-3);font-size:11.5px;white-space:nowrap}
+.job-error{display:flex;align-items:center;gap:7px;color:#ff9d9d;font-size:12px;padding:7px 9px;border:1px solid rgba(239,118,118,.22);background:var(--red-soft);border-radius:8px;max-width:560px}
+.job-error svg{width:15px;height:15px;flex:none}
+.job-actions{display:flex;align-items:center;gap:7px;align-self:center}
+.small-button{height:34px;border:1px solid var(--line-strong);background:var(--surface-raised);border-radius:8px;padding:0 11px;color:var(--text-2);font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.small-button:hover{background:var(--surface-hover);border-color:#4d5b72;color:var(--text)}
+.small-button.accent{color:var(--blue);border-color:rgba(101,166,255,.32);background:var(--blue-soft)}
+.small-button svg{width:14px;height:14px}
+.player{display:flex;align-items:center;gap:9px;min-width:250px}
+.play-button{width:32px;height:32px;border-radius:50%;border:1px solid rgba(101,166,255,.34);background:var(--blue-soft);color:var(--blue);display:grid;place-items:center;cursor:pointer;flex:none}
+.play-button svg{width:14px;height:14px;margin-left:1px}
+.wave{height:26px;display:flex;align-items:center;gap:2px;flex:1}
+.wave i{display:block;width:2px;border-radius:2px;background:#3b4658}
+.wave i:nth-child(3n){height:20px}.wave i:nth-child(3n+1){height:9px}.wave i:nth-child(3n+2){height:15px}
+.wave.playing i:nth-child(-n+9){background:var(--blue)}
+.duration{font-size:11px;color:var(--text-3)}
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,18px);opacity:0;pointer-events:none;display:flex;align-items:center;gap:8px;background:#202733;border:1px solid var(--line-strong);border-radius:10px;padding:10px 14px;color:var(--text-2);box-shadow:var(--shadow);transition:.2s;z-index:20}
+.toast.show{transform:translate(-50%,0);opacity:1}
+.toast svg{width:16px;height:16px;color:var(--green)}
+.hide{display:none!important}
+
+@media(max-width:900px){
+  .shell{padding:18px 16px 40px}
+  .brand p,.status-pill{display:none}
+  .workspace{grid-template-columns:1fr}
+  .composer{border-right:0;border-bottom:1px solid var(--line)}
+  .action-panel{position:static}
+  .flow-head{align-items:flex-start}
+  .steps{display:none}
+  .job{grid-template-columns:1fr}
+  .job-actions{justify-content:flex-start;flex-wrap:wrap}
+}
+@media(max-width:600px){
+  .shell{padding:12px 12px 32px}
+  .topbar{margin-bottom:14px}
+  .ghost-button span{display:none}
+  .voice-grid{grid-template-columns:1fr}
+  .composer,.action-panel{padding:16px}
+  .field-meta{align-items:flex-start;flex-direction:column;gap:4px}
+  .jobs-head{align-items:flex-start;flex-wrap:wrap}
+  .job-tabs{margin-left:0;width:100%}
+  .job-tab{flex:1}
+  .jobs-toolbar{flex-wrap:wrap}
+  .search{max-width:none;flex-basis:100%}
+  .toolbar-meta{margin-left:0}
+  .jobs-list{padding:4px 14px 8px}
+  .player{min-width:100%}
+}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.5v-5M8 18V6m4 15V3m4 15V6m4 8.5v-5"/></svg>
+      </div>
+      <div>
+        <h1>韩语配音工作台</h1>
+        <p>粘贴文案，选择声音，生成后即可试听与下载</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <div class="status-pill" aria-label="服务运行正常"><span class="status-dot"></span>服务正常</div>
+      <button class="ghost-button primary-link" type="button" id="feedbackBtn" title="进入试听反馈">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></svg>
+        <span>试听反馈</span>
+      </button>
+      <button class="user-button" type="button" aria-label="打开用户菜单">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.6-4 2.8-6 6.5-6s5.9 2 6.5 6"/></svg>
+        <span>lin</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m8 10 4 4 4-4"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <section class="flow-card" aria-labelledby="flowTitle">
+    <div class="flow-head">
+      <div class="flow-title" id="flowTitle"><span class="eyebrow">新任务</span>生成一条韩语配音</div>
+      <div class="steps" aria-label="生成步骤">
+        <span class="step current"><b>1</b>粘贴文案</span><span class="step-line"></span>
+        <span class="step"><b>2</b>选择声音</span><span class="step-line"></span>
+        <span class="step"><b>3</b>开始生成</span>
+      </div>
+    </div>
+
+    <div class="workspace">
+      <div class="composer">
+        <section class="section">
+          <div class="section-head">
+            <div class="section-title"><span class="section-index">1</span>粘贴文案</div>
+            <span class="optional">标题可选，便于之后查找</span>
+          </div>
+          <div class="field">
+            <label for="titleInput">任务标题 <span>可选</span></label>
+            <input id="titleInput" autocomplete="off" placeholder="例如：10月14日财经早报">
+          </div>
+          <div class="field">
+            <label for="scriptInput">韩语文案</label>
+            <textarea id="scriptInput" placeholder="在这里粘贴要生成的韩语文案……">안녕하세요. 오늘의 주요 금융 소식을 전해드리겠습니다. 시장의 흐름과 주요 지표를 차분하게 살펴보겠습니다.</textarea>
+            <div class="field-meta">
+              <span id="countMeta">0 字 · 预计音频 0:00 · 预计生成 0:00</span>
+              <span class="draft-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6"/></svg>草稿已自动保存</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <div class="section-title"><span class="section-index">2</span>选择声音</div>
+            <span class="optional">系统自动使用该性别当前最佳方案</span>
+          </div>
+          <div class="voice-grid" role="radiogroup" aria-label="选择声音性别">
+            <button class="voice-card selected" type="button" data-voice="male" role="radio" aria-checked="true">
+              <span class="voice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 14a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M5 21c.7-4.1 3.1-6 7-6s6.3 1.9 7 6"/></svg></span>
+              <span><span class="voice-name">男声</span><span class="voice-note">沉稳清晰，适合财经播报</span></span>
+              <span class="voice-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m5 12 4 4L19 6"/></svg></span>
+            </button>
+            <button class="voice-card" type="button" data-voice="female" role="radio" aria-checked="false">
+              <span class="voice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 14a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M5 21c.7-4.1 3.1-6 7-6s6.3 1.9 7 6"/></svg></span>
+              <span><span class="voice-name">女声</span><span class="voice-note">自然明亮，适合资讯解说</span></span>
+              <span class="voice-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m5 12 4 4L19 6"/></svg></span>
+            </button>
+          </div>
+          <div class="admin-note">员工无需调整音色、语速或技术参数。如需变更生产方案，请联系管理员。</div>
+        </section>
+      </div>
+
+      <aside class="action-panel" aria-label="生成确认">
+        <div class="summary-title">确认后开始生成</div>
+        <div class="summary">
+          <div class="summary-row"><span>输出语言</span><strong>韩语</strong></div>
+          <div class="summary-row"><span>当前声音</span><strong id="summaryVoice">男声</strong></div>
+          <div class="summary-row"><span>预计音频</span><strong id="summaryAudio">0:00</strong></div>
+          <div class="summary-row"><span>预计等待</span><strong id="summaryWait">0:00</strong></div>
+        </div>
+        <button class="primary-button" type="button" id="generateBtn">开始生成</button>
+        <div class="shortcut">也可以按 <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>Enter</kbd></div>
+        <div class="inline-state success" id="successState">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16.5 8"/></svg>
+          <span>已加入任务队列，可继续填写下一条文案。</span>
+        </div>
+        <div class="inline-state error" id="errorState">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 4h.01"/></svg>
+          <span>请先粘贴要生成的韩语文案。</span>
+        </div>
+        <div class="secondary-actions"><button class="text-button" type="button" id="clearBtn">清空当前输入</button></div>
+        <div class="safety-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4 6v5c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6l-8-3Z"/><path d="m9 12 2 2 4-5"/></svg>
+          <span>提交失败时会保留文案；页面刷新后也会自动恢复未提交草稿。</span>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="jobs-card" id="jobsSection" aria-labelledby="jobsTitle">
+    <div class="jobs-head">
+      <div class="jobs-title" id="jobsTitle">最近任务</div>
+      <div class="jobs-count" id="jobsCount">3 条</div>
+      <div class="job-tabs" role="tablist" aria-label="筛选任务">
+        <button class="job-tab active" type="button" data-filter="all">全部</button>
+        <button class="job-tab" type="button" data-filter="active">进行中</button>
+        <button class="job-tab" type="button" data-filter="done">已完成</button>
+        <button class="job-tab" type="button" data-filter="error">失败</button>
+      </div>
+    </div>
+    <div class="jobs-toolbar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+        <input id="searchInput" placeholder="搜索标题或文案" aria-label="搜索任务">
+      </div>
+      <div class="toolbar-meta">仅显示我的任务</div>
+    </div>
+    <div class="jobs-list" id="jobsList">
+      <article class="job" data-state="active" data-search="10月14日财经早报 안녕하세요 오늘의 주요 금융 소식">
+        <div class="job-main">
+          <div class="job-top"><span class="badge running">生成中</span><span class="job-name">10月14日财经早报</span></div>
+          <div class="job-preview">안녕하세요. 오늘의 주요 금융 소식을 전해드리겠습니다…</div>
+          <div class="progress-line"><div class="progress-track"><span></span></div><span class="job-meta">正在生成 · 68% · 预计还需 1:42</span></div>
+        </div>
+        <div class="job-actions"><button class="small-button" type="button">查看详情</button></div>
+      </article>
+
+      <article class="job" data-state="done" data-search="市场收盘解读 시장 마감 주요 지수">
+        <div class="job-main">
+          <div class="job-top"><span class="badge done">已完成</span><span class="job-name">市场收盘解读</span></div>
+          <div class="job-preview">시장 마감 후 주요 지수의 움직임과 투자 심리를 정리해 드립니다…</div>
+          <div class="player">
+            <button class="play-button" type="button" aria-label="播放市场收盘解读"><svg viewBox="0 0 24 24" fill="currentColor"><path d="m8 5 11 7-11 7V5Z"/></svg></button>
+            <div class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <span class="duration">1:26</span>
+          </div>
+        </div>
+        <div class="job-actions">
+          <button class="small-button accent" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 20h14"/></svg>下载 MP3</button>
+          <button class="small-button" type="button">换个版本</button>
+        </div>
+      </article>
+
+      <article class="job" data-state="error" data-search="午间快讯 한국 증시 점심">
+        <div class="job-main">
+          <div class="job-top"><span class="badge error">生成失败</span><span class="job-name">午间快讯</span></div>
+          <div class="job-preview">한국 증시의 점심 시간 주요 변동 사항을 빠르게 전해드립니다…</div>
+          <div class="job-error"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 4h.01"/></svg>网络中断，文案已保留，可直接重试。</div>
+        </div>
+        <div class="job-actions"><button class="small-button accent retry-button" type="button">重新生成</button><button class="small-button" type="button">编辑文案</button></div>
+      </article>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16.5 8"/></svg>
+  <span id="toastText">已加入任务队列</span>
+</div>
+
+<script>
+const scriptInput = document.getElementById('scriptInput');
+const titleInput = document.getElementById('titleInput');
+const countMeta = document.getElementById('countMeta');
+const summaryAudio = document.getElementById('summaryAudio');
+const summaryWait = document.getElementById('summaryWait');
+const generateBtn = document.getElementById('generateBtn');
+const successState = document.getElementById('successState');
+const errorState = document.getElementById('errorState');
+const jobsList = document.getElementById('jobsList');
+const jobsCount = document.getElementById('jobsCount');
+let selectedVoice = 'male';
+
+function formatTime(seconds){
+  seconds = Math.max(0, Math.round(seconds || 0));
+  return Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2,'0');
+}
+function updateEstimate(){
+  const n = scriptInput.value.trim().length;
+  const audio = n / 6.15;
+  const wait = n ? 8.4 + .07374 * n : 0;
+  countMeta.textContent = `${n} 字 · 预计音频 ${formatTime(audio)} · 预计生成 ${formatTime(wait)}`;
+  summaryAudio.textContent = formatTime(audio);
+  summaryWait.textContent = formatTime(wait);
+  generateBtn.disabled = !n;
+  if(n) errorState.classList.remove('show');
+}
+function showToast(text){
+  document.getElementById('toastText').textContent = text;
+  const toast = document.getElementById('toast');
+  toast.classList.add('show');
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(()=>toast.classList.remove('show'),2200);
+}
+function escapeHtml(value){
+  return String(value || '').replace(/[&<>\"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));
+}
+function addQueuedJob(){
+  const title = titleInput.value.trim() || '未命名任务';
+  const preview = scriptInput.value.trim().slice(0,72) + (scriptInput.value.trim().length > 72 ? '…' : '');
+  const article = document.createElement('article');
+  article.className = 'job';
+  article.dataset.state = 'active';
+  article.dataset.search = `${title} ${preview}`;
+  article.innerHTML = `<div class="job-main"><div class="job-top"><span class="badge queued">排队中</span><span class="job-name">${escapeHtml(title)}</span></div><div class="job-preview">${escapeHtml(preview)}</div><div class="progress-line"><span class="job-meta">已加入队列 · 前面还有 1 个任务</span></div></div><div class="job-actions"><button class="small-button" type="button">查看详情</button></div>`;
+  jobsList.prepend(article);
+  refreshJobCount();
+}
+function refreshJobCount(){
+  const visible = [...jobsList.querySelectorAll('.job')].filter(el=>!el.classList.contains('hide')).length;
+  jobsCount.textContent = `${visible} 条`;
+}
+function runGenerate(){
+  if(!scriptInput.value.trim()){
+    errorState.classList.add('show');
+    successState.classList.remove('show');
+    scriptInput.focus();
+    return;
+  }
+  generateBtn.disabled = true;
+  generateBtn.textContent = '正在提交…';
+  successState.classList.remove('show');
+  setTimeout(()=>{
+    addQueuedJob();
+    generateBtn.textContent = '开始生成';
+    generateBtn.disabled = false;
+    successState.classList.add('show');
+    showToast('任务已加入队列');
+    document.getElementById('jobsSection').scrollIntoView({behavior:'smooth',block:'start'});
+  },700);
+}
+
+document.querySelectorAll('.voice-card').forEach(card=>{
+  card.addEventListener('click',()=>{
+    selectedVoice = card.dataset.voice;
+    document.querySelectorAll('.voice-card').forEach(item=>{
+      const on = item === card;
+      item.classList.toggle('selected',on);
+      item.setAttribute('aria-checked',String(on));
+    });
+    document.getElementById('summaryVoice').textContent = selectedVoice === 'male' ? '男声' : '女声';
+  });
+});
+scriptInput.addEventListener('input',updateEstimate);
+scriptInput.addEventListener('keydown',event=>{
+  if((event.ctrlKey || event.metaKey) && event.key === 'Enter'){
+    event.preventDefault();
+    runGenerate();
+  }
+});
+generateBtn.addEventListener('click',runGenerate);
+document.getElementById('clearBtn').addEventListener('click',()=>{
+  if((titleInput.value || scriptInput.value) && !window.confirm('清空当前标题和文案？未提交内容将被移除。')) return;
+  titleInput.value='';
+  scriptInput.value='';
+  successState.classList.remove('show');
+  errorState.classList.remove('show');
+  updateEstimate();
+  scriptInput.focus();
+});
+document.getElementById('feedbackBtn').addEventListener('click',()=>showToast('试听反馈入口保持在页头，日常生成流程不被打断'));
+document.querySelectorAll('.job-tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('.job-tab').forEach(item=>item.classList.toggle('active',item===tab));
+    const filter = tab.dataset.filter;
+    document.querySelectorAll('.job').forEach(job=>job.classList.toggle('hide',filter!=='all' && job.dataset.state!==filter));
+    refreshJobCount();
+  });
+});
+document.getElementById('searchInput').addEventListener('input',event=>{
+  const q=event.target.value.trim().toLowerCase();
+  document.querySelectorAll('.job').forEach(job=>job.classList.toggle('hide',q && !job.dataset.search.toLowerCase().includes(q)));
+  refreshJobCount();
+});
+document.querySelectorAll('.play-button').forEach(button=>{
+  button.addEventListener('click',()=>{
+    const wave=button.parentElement.querySelector('.wave');
+    const playing=wave.classList.toggle('playing');
+    button.innerHTML=playing?'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>':'<svg viewBox="0 0 24 24" fill="currentColor"><path d="m8 5 11 7-11 7V5Z"/></svg>';
+  });
+});
+document.querySelectorAll('.retry-button').forEach(button=>button.addEventListener('click',()=>{
+  const job=button.closest('.job');
+  job.dataset.state='active';
+  job.querySelector('.badge').className='badge queued';
+  job.querySelector('.badge').textContent='排队中';
+  job.querySelector('.job-error').outerHTML='<div class="progress-line"><span class="job-meta">已保留原文案，正在重新排队</span></div>';
+  button.parentElement.innerHTML='<button class="small-button" type="button">查看详情</button>';
+  showToast('已重新加入任务队列');
+}));
+updateEstimate();
+refreshJobCount();
+</script>
+</body>
+</html>

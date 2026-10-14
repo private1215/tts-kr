@@ -1,0 +1,22 @@
+{
+ "M3": {
+  "wav": "/mnt/tts/diag/longsubmit-20261013/M3.wav",
+  "case_id": "d172b8c4efb3",
+  "ref_chars": 4594,
+  "hyp_chars": 4663,
+  "hyp_head": "안녕하세요. 제주반도체 주주 여러분. 반갑습니다. 정민철 프로입니다.  자 우리 주주님들께 오늘 정말 중요한 말씀드리려고 이렇게 카메라 켰습니다.  어휴 지금 제주반도체 기가 막힌 자리에 와 있거든요.  제가 왜 이",
+  "cer": 0.1157,
+  "asr_seconds": 131.46,
+  "note": "Whisper-small CPU int8，仅作少读/跑飞的内容线索，不作音质或听感结论"
+ },
+ "M4": {
+  "wav": "/mnt/tts/diag/longsubmit-20261013/M4.wav",
+  "case_id": "ce1a3fda551a",
+  "ref_chars": 3948,
+  "hyp_chars": 3981,
+  "hyp_head": "반갑습니다.  현대로템 주주 여러분 이민정 프로 입니다.  우리 주주님들 그동안 고점에 물리 셔서 망고생 진짜 심하셨  죠.  주식판이라는 게 겉보기엔 뉴스나 삐깍 번쩍한 재료로 움직이는 것  가타도요.  결국 까고",
+  "cer": 0.0571,
+  "asr_seconds": 116.72,
+  "note": "Whisper-small CPU int8，仅作少读/跑飞的内容线索，不作音质或听感结论"
+ }
+}

@@ -1,0 +1,982 @@
+{
+ "9501d27c7fd6": {
+  "id": "9501d27c7fd6",
+  "title": "长稿多方案-M1",
+  "engine": "qwen",
+  "engine_force": "qwen",
+  "voice": "EL_male",
+  "mode": "clone",
+  "case_id": "d172b8c4efb3",
+  "seed": 42,
+  "speed": 1.0,
+  "emotion": "standard",
+  "fallback_from": null,
+  "fallback_reason": null,
+  "status": "done",
+  "created_at": 1791869223.3694425,
+  "created_at_str": "2026-10-13 05:27:03",
+  "ref_wav": "/mnt/tts/data/voices/EL_male.wav",
+  "ref_wav_sha256": "3427f3a7cf761ea9371f9724da7af61032ceb41d4c32f5337f4919e84da01d3c",
+  "ref_text_sha256": "4064fe4114208b34e46e92936fa0dcae04438081cac9b27ec855fc3019be985e",
+  "ref_text_len": 126,
+  "model_path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base (clone 模式变体)",
+  "params": {
+   "max_chars": 60,
+   "batch_size": 8,
+   "language": "Korean",
+   "enhance": true,
+   "enhanced": true,
+   "temperature": null,
+   "case_id": "d172b8c4efb3"
+  },
+  "stats": {
+   "segments": 86,
+   "chars": 4511,
+   "gen_seconds": 305.37,
+   "audio_seconds": 528.24,
+   "abnormal_segments": 0,
+   "slow_fixed": 0,
+   "voice_matched": 86,
+   "asr_skipped": 0,
+   "rtf": 0.5781,
+   "cps": 8.54,
+   "segments_detail": [
+    {
+     "chars": 38,
+     "dur": 4.14,
+     "cps": 9.18,
+     "exp": 5.43
+    },
+    {
+     "chars": 44,
+     "dur": 4.48,
+     "cps": 9.82,
+     "exp": 6.29
+    },
+    {
+     "chars": 31,
+     "dur": 3.38,
+     "cps": 9.17,
+     "exp": 4.43
+    },
+    {
+     "chars": 34,
+     "dur": 3.28,
+     "cps": 10.37,
+     "exp": 4.86
+    },
+    {
+     "chars": 83,
+     "dur": 9.4,
+     "cps": 8.83,
+     "exp": 11.86
+    },
+    {
+     "chars": 41,
+     "dur": 5.68,
+     "cps": 7.22,
+     "exp": 5.86
+    },
+    {
+     "chars": 60,
+     "dur": 7.18,
+     "cps": 8.36,
+     "exp": 8.57
+    },
+    {
+     "chars": 53,
+     "dur": 5.44,
+     "cps": 9.74,
+     "exp": 7.57
+    },
+    {
+     "chars": 51,
+     "dur": 5.92,
+     "cps": 8.61,
+     "exp": 7.29
+    },
+    {
+     "chars": 69,
+     "dur": 8.0,
+     "cps": 8.62,
+     "exp": 9.86
+    },
+    {
+     "chars": 41,
+     "dur": 5.28,
+     "cps": 7.77,
+     "exp": 5.86
+    },
+    {
+     "chars": 60,
+     "dur": 5.76,
+     "cps": 10.42,
+     "exp": 8.57
+    },
+    {
+     "chars": 42,
+     "dur": 4.4,
+     "cps": 9.55,
+     "exp": 6.0
+    },
+    {
+     "chars": 80,
+     "dur": 9.44,
+     "cps": 8.47,
+     "exp": 11.43
+    },
+    {
+     "chars": 44,
+     "dur": 4.64,
+     "cps": 9.48,
+     "exp": 6.29
+    },
+    {
+     "chars": 55,
+     "dur": 5.84,
+     "cps": 9.42,
+     "exp": 7.86
+    },
+    {
+     "chars": 65,
+     "dur": 7.54,
+     "cps": 8.62,
+     "exp": 9.29
+    },
+    {
+     "chars": 46,
+     "dur": 4.8,
+     "cps": 9.58,
+     "exp": 6.57
+    },
+    {
+     "chars": 29,
+     "dur": 3.1,
+     "cps": 9.35,
+     "exp": 4.14
+    },
+    {
+     "chars": 59,
+     "dur": 6.24,
+     "cps": 9.46,
+     "exp": 8.43
+    },
+    {
+     "chars": 56,
+     "dur": 6.08,
+     "cps": 9.21,
+     "exp": 8.0
+    },
+    {
+     "chars": 56,
+     "dur": 6.0,
+     "cps": 9.33,
+     "exp": 8.0
+    },
+    {
+     "chars": 47,
+     "dur": 4.96,
+     "cps": 9.48,
+     "exp": 6.71
+    },
+    {
+     "chars": 60,
+     "dur": 6.08,
+     "cps": 9.87,
+     "exp": 8.57
+    },
+    {
+     "chars": 56,
+     "dur": 5.68,
+     "cps": 9.86,
+     "exp": 8.0
+    },
+    {
+     "chars": 34,
+     "dur": 3.68,
+     "cps": 9.24,
+     "exp": 4.86
+    },
+    {
+     "chars": 63,
+     "dur": 6.96,
+     "cps": 9.05,
+     "exp": 9.0
+    },
+    {
+     "chars": 55,
+     "dur": 5.84,
+     "cps": 9.42,
+     "exp": 7.86
+    },
+    {
+     "chars": 65,
+     "dur": 6.98,
+     "cps": 9.31,
+     "exp": 9.29
+    },
+    {
+     "chars": 47,
+     "dur": 5.66,
+     "cps": 8.3,
+     "exp": 6.71
+    },
+    {
+     "chars": 76,
+     "dur": 7.92,
+     "cps": 9.6,
+     "exp": 10.86
+    },
+    {
+     "chars": 88,
+     "dur": 10.04,
+     "cps": 8.76,
+     "exp": 12.57
+    },
+    {
+     "chars": 25,
+     "dur": 2.88,
+     "cps": 8.68,
+     "exp": 3.57
+    },
+    {
+     "chars": 57,
+     "dur": 5.84,
+     "cps": 9.76,
+     "exp": 8.14
+    },
+    {
+     "chars": 56,
+     "dur": 5.92,
+     "cps": 9.46,
+     "exp": 8.0
+    },
+    {
+     "chars": 62,
+     "dur": 7.44,
+     "cps": 8.33,
+     "exp": 8.86
+    },
+    {
+     "chars": 71,
+     "dur": 8.0,
+     "cps": 8.88,
+     "exp": 10.14
+    },
+    {
+     "chars": 41,
+     "dur": 4.3,
+     "cps": 9.53,
+     "exp": 5.86
+    },
+    {
+     "chars": 39,
+     "dur": 4.46,
+     "cps": 8.74,
+     "exp": 5.57
+    },
+    {
+     "chars": 29,
+     "dur": 3.36,
+     "cps": 8.63,
+     "exp": 4.14
+    },
+    {
+     "chars": 58,
+     "dur": 6.16,
+     "cps": 9.42,
+     "exp": 8.29
+    },
+    {
+     "chars": 49,
+     "dur": 5.84,
+     "cps": 8.39,
+     "exp": 7.0
+    },
+    {
+     "chars": 74,
+     "dur": 7.52,
+     "cps": 9.84,
+     "exp": 10.57
+    },
+    {
+     "chars": 49,
+     "dur": 5.72,
+     "cps": 8.57,
+     "exp": 7.0
+    },
+    {
+     "chars": 67,
+     "dur": 8.32,
+     "cps": 8.05,
+     "exp": 9.57
+    },
+    {
+     "chars": 60,
+     "dur": 6.48,
+     "cps": 9.26,
+     "exp": 8.57
+    },
+    {
+     "chars": 75,
+     "dur": 9.04,
+     "cps": 8.3,
+     "exp": 10.71
+    },
+    {
+     "chars": 44,
+     "dur": 4.74,
+     "cps": 9.28,
+     "exp": 6.29
+    },
+    {
+     "chars": 58,
+     "dur": 7.34,
+     "cps": 7.9,
+     "exp": 8.29
+    },
+    {
+     "chars": 56,
+     "dur": 7.1,
+     "cps": 7.89,
+     "exp": 8.0
+    },
+    {
+     "chars": 59,
+     "dur": 6.16,
+     "cps": 9.58,
+     "exp": 8.43
+    },
+    {
+     "chars": 46,
+     "dur": 5.04,
+     "cps": 9.13,
+     "exp": 6.57
+    },
+    {
+     "chars": 42,
+     "dur": 4.88,
+     "cps": 8.61,
+     "exp": 6.0
+    },
+    {
+     "chars": 47,
+     "dur": 5.36,
+     "cps": 8.77,
+     "exp": 6.71
+    },
+    {
+     "chars": 58,
+     "dur": 6.48,
+     "cps": 8.95,
+     "exp": 8.29
+    },
+    {
+     "chars": 42,
+     "dur": 5.04,
+     "cps": 8.33,
+     "exp": 6.0
+    },
+    {
+     "chars": 35,
+     "dur": 3.84,
+     "cps": 9.11,
+     "exp": 5.0
+    },
+    {
+     "chars": 29,
+     "dur": 2.72,
+     "cps": 10.66,
+     "exp": 4.14
+    },
+    {
+     "chars": 35,
+     "dur": 3.68,
+     "cps": 9.51,
+     "exp": 5.0
+    },
+    {
+     "chars": 60,
+     "dur": 6.64,
+     "cps": 9.04,
+     "exp": 8.57
+    },
+    {
+     "chars": 60,
+     "dur": 7.08,
+     "cps": 8.47,
+     "exp": 8.57
+    },
+    {
+     "chars": 53,
+     "dur": 6.22,
+     "cps": 8.52,
+     "exp": 7.57
+    },
+    {
+     "chars": 38,
+     "dur": 4.0,
+     "cps": 9.5,
+     "exp": 5.43
+    },
+    {
+     "chars": 65,
+     "dur": 7.36,
+     "cps": 8.83,
+     "exp": 9.29
+    },
+    {
+     "chars": 58,
+     "dur": 5.92,
+     "cps": 9.8,
+     "exp": 8.29
+    },
+    {
+     "chars": 57,
+     "dur": 5.84,
+     "cps": 9.76,
+     "exp": 8.14
+    },
+    {
+     "chars": 50,
+     "dur": 5.36,
+     "cps": 9.33,
+     "exp": 7.14
+    },
+    {
+     "chars": 65,
+     "dur": 6.72,
+     "cps": 9.67,
+     "exp": 9.29
+    },
+    {
+     "chars": 41,
+     "dur": 4.56,
+     "cps": 8.99,
+     "exp": 5.86
+    },
+    {
+     "chars": 33,
+     "dur": 3.84,
+     "cps": 8.59,
+     "exp": 4.71
+    },
+    {
+     "chars": 46,
+     "dur": 4.96,
+     "cps": 9.27,
+     "exp": 6.57
+    },
+    {
+     "chars": 87,
+     "dur": 9.52,
+     "cps": 9.14,
+     "exp": 12.43
+    },
+    {
+     "chars": 43,
+     "dur": 4.4,
+     "cps": 9.77,
+     "exp": 6.14
+    },
+    {
+     "chars": 70,
+     "dur": 7.6,
+     "cps": 9.21,
+     "exp": 10.0
+    },
+    {
+     "chars": 20,
+     "dur": 2.16,
+     "cps": 9.26,
+     "exp": 2.86
+    },
+    {
+     "chars": 41,
+     "dur": 4.72,
+     "cps": 8.69,
+     "exp": 5.86
+    },
+    {
+     "chars": 42,
+     "dur": 4.86,
+     "cps": 8.64,
+     "exp": 6.0
+    },
+    {
+     "chars": 76,
+     "dur": 7.76,
+     "cps": 9.79,
+     "exp": 10.86
+    },
+    {
+     "chars": 53,
+     "dur": 5.44,
+     "cps": 9.74,
+     "exp": 7.57
+    },
+    {
+     "chars": 38,
+     "dur": 3.92,
+     "cps": 9.69,
+     "exp": 5.43
+    },
+    {
+     "chars": 31,
+     "dur": 3.28,
+     "cps": 9.45,
+     "exp": 4.43
+    },
+    {
+     "chars": 51,
+     "dur": 5.44,
+     "cps": 9.38,
+     "exp": 7.29
+    },
+    {
+     "chars": 70,
+     "dur": 7.84,
+     "cps": 8.93,
+     "exp": 10.0
+    },
+    {
+     "chars": 64,
+     "dur": 6.88,
+     "cps": 9.3,
+     "exp": 9.14
+    },
+    {
+     "chars": 36,
+     "dur": 3.68,
+     "cps": 9.78,
+     "exp": 5.14
+    },
+    {
+     "chars": 72,
+     "dur": 8.16,
+     "cps": 8.82,
+     "exp": 10.29
+    }
+   ],
+   "plan": {
+    "max_chars": 60,
+    "batch_size": 8,
+    "requested_max_chars": 60,
+    "requested_batch_size": 16,
+    "headroom_gib": 7.68,
+    "memory_scale": 1.0,
+    "seg_token_cap": 456,
+    "batch_token_budget": 3650,
+    "batch_tokens": 3648,
+    "oom_threshold_tokens": 7300,
+    "clone_prompt_tokens": 290,
+    "clone_prompt_kv_gib": 0.031,
+    "clone_prompt_kv_total_gib": 0.248,
+    "free_gib": 7.51,
+    "peak_alloc_gib": 9.1,
+    "alloc_now_gib": 3.95,
+    "batch_size_final": 8,
+    "batches": 4
+   },
+   "chunks": 3
+  },
+  "elapsed_sec": 478.1
+ },
+ "fb76065b2f27": {
+  "id": "fb76065b2f27",
+  "title": "长稿多方案-M2",
+  "engine": "qwen",
+  "engine_force": "qwen",
+  "voice": "EL_female",
+  "mode": "clone",
+  "case_id": "ce1a3fda551a",
+  "seed": 42,
+  "speed": 1.0,
+  "emotion": "standard",
+  "fallback_from": null,
+  "fallback_reason": null,
+  "status": "done",
+  "created_at": 1791869778.2244852,
+  "created_at_str": "2026-10-13 05:36:18",
+  "ref_wav": "/mnt/tts/data/voices/EL_female.wav",
+  "ref_wav_sha256": "673433f827b7f449fd264907eed3a65b07cecb1763d80695b0b6053008e889e7",
+  "ref_text_sha256": "a6f1cb6f6d71241b67a6121217f0383cdf9a149cb6e081b3666b21dccc79fd50",
+  "ref_text_len": 112,
+  "model_path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base (clone 模式变体)",
+  "params": {
+   "max_chars": 60,
+   "batch_size": 8,
+   "language": "Korean",
+   "enhance": true,
+   "enhanced": true,
+   "temperature": null,
+   "case_id": "ce1a3fda551a"
+  },
+  "stats": {
+   "segments": 55,
+   "chars": 3881,
+   "gen_seconds": 447.38,
+   "audio_seconds": 541.01,
+   "abnormal_segments": 0,
+   "slow_fixed": 0,
+   "voice_matched": 55,
+   "asr_skipped": 0,
+   "rtf": 0.8269,
+   "cps": 7.17,
+   "segments_detail": [
+    {
+     "chars": 30,
+     "dur": 4.4,
+     "cps": 6.82,
+     "exp": 4.29
+    },
+    {
+     "chars": 34,
+     "dur": 4.8,
+     "cps": 7.08,
+     "exp": 4.86
+    },
+    {
+     "chars": 88,
+     "dur": 12.0,
+     "cps": 7.33,
+     "exp": 12.57
+    },
+    {
+     "chars": 53,
+     "dur": 7.52,
+     "cps": 7.05,
+     "exp": 7.57
+    },
+    {
+     "chars": 40,
+     "dur": 6.08,
+     "cps": 6.58,
+     "exp": 5.71
+    },
+    {
+     "chars": 40,
+     "dur": 5.92,
+     "cps": 6.76,
+     "exp": 5.71
+    },
+    {
+     "chars": 66,
+     "dur": 8.88,
+     "cps": 7.43,
+     "exp": 9.43
+    },
+    {
+     "chars": 47,
+     "dur": 5.98,
+     "cps": 7.86,
+     "exp": 6.71
+    },
+    {
+     "chars": 82,
+     "dur": 11.84,
+     "cps": 6.93,
+     "exp": 11.71
+    },
+    {
+     "chars": 48,
+     "dur": 6.32,
+     "cps": 7.59,
+     "exp": 6.86
+    },
+    {
+     "chars": 55,
+     "dur": 7.58,
+     "cps": 7.26,
+     "exp": 7.86
+    },
+    {
+     "chars": 82,
+     "dur": 10.8,
+     "cps": 7.59,
+     "exp": 11.71
+    },
+    {
+     "chars": 68,
+     "dur": 8.96,
+     "cps": 7.59,
+     "exp": 9.71
+    },
+    {
+     "chars": 68,
+     "dur": 9.6,
+     "cps": 7.08,
+     "exp": 9.71
+    },
+    {
+     "chars": 41,
+     "dur": 5.52,
+     "cps": 7.43,
+     "exp": 5.86
+    },
+    {
+     "chars": 128,
+     "dur": 16.4,
+     "cps": 7.8,
+     "exp": 18.29
+    },
+    {
+     "chars": 86,
+     "dur": 10.48,
+     "cps": 8.21,
+     "exp": 12.29
+    },
+    {
+     "chars": 81,
+     "dur": 10.48,
+     "cps": 7.73,
+     "exp": 11.57
+    },
+    {
+     "chars": 227,
+     "dur": 29.24,
+     "cps": 7.76,
+     "exp": 32.43
+    },
+    {
+     "chars": 77,
+     "dur": 9.52,
+     "cps": 8.09,
+     "exp": 11.0
+    },
+    {
+     "chars": 104,
+     "dur": 13.12,
+     "cps": 7.93,
+     "exp": 14.86
+    },
+    {
+     "chars": 101,
+     "dur": 13.6,
+     "cps": 7.43,
+     "exp": 14.43
+    },
+    {
+     "chars": 111,
+     "dur": 14.96,
+     "cps": 7.42,
+     "exp": 15.86
+    },
+    {
+     "chars": 35,
+     "dur": 4.88,
+     "cps": 7.17,
+     "exp": 5.0
+    },
+    {
+     "chars": 51,
+     "dur": 6.4,
+     "cps": 7.97,
+     "exp": 7.29
+    },
+    {
+     "chars": 66,
+     "dur": 8.48,
+     "cps": 7.78,
+     "exp": 9.43
+    },
+    {
+     "chars": 59,
+     "dur": 8.0,
+     "cps": 7.38,
+     "exp": 8.43
+    },
+    {
+     "chars": 49,
+     "dur": 7.12,
+     "cps": 6.88,
+     "exp": 7.0
+    },
+    {
+     "chars": 62,
+     "dur": 8.56,
+     "cps": 7.24,
+     "exp": 8.86
+    },
+    {
+     "chars": 51,
+     "dur": 6.64,
+     "cps": 7.68,
+     "exp": 7.29
+    },
+    {
+     "chars": 43,
+     "dur": 5.92,
+     "cps": 7.26,
+     "exp": 6.14
+    },
+    {
+     "chars": 57,
+     "dur": 7.96,
+     "cps": 7.16,
+     "exp": 8.14
+    },
+    {
+     "chars": 78,
+     "dur": 10.8,
+     "cps": 7.22,
+     "exp": 11.14
+    },
+    {
+     "chars": 73,
+     "dur": 9.92,
+     "cps": 7.36,
+     "exp": 10.43
+    },
+    {
+     "chars": 87,
+     "dur": 10.94,
+     "cps": 7.95,
+     "exp": 12.43
+    },
+    {
+     "chars": 104,
+     "dur": 13.76,
+     "cps": 7.56,
+     "exp": 14.86
+    },
+    {
+     "chars": 53,
+     "dur": 7.12,
+     "cps": 7.44,
+     "exp": 7.57
+    },
+    {
+     "chars": 36,
+     "dur": 4.64,
+     "cps": 7.76,
+     "exp": 5.14
+    },
+    {
+     "chars": 77,
+     "dur": 10.32,
+     "cps": 7.46,
+     "exp": 11.0
+    },
+    {
+     "chars": 66,
+     "dur": 8.96,
+     "cps": 7.37,
+     "exp": 9.43
+    },
+    {
+     "chars": 30,
+     "dur": 4.56,
+     "cps": 6.58,
+     "exp": 4.29
+    },
+    {
+     "chars": 200,
+     "dur": 24.96,
+     "cps": 8.01,
+     "exp": 28.57
+    },
+    {
+     "chars": 65,
+     "dur": 8.48,
+     "cps": 7.67,
+     "exp": 9.29
+    },
+    {
+     "chars": 36,
+     "dur": 4.64,
+     "cps": 7.76,
+     "exp": 5.14
+    },
+    {
+     "chars": 75,
+     "dur": 9.68,
+     "cps": 7.75,
+     "exp": 10.71
+    },
+    {
+     "chars": 31,
+     "dur": 4.4,
+     "cps": 7.05,
+     "exp": 4.43
+    },
+    {
+     "chars": 74,
+     "dur": 10.48,
+     "cps": 7.06,
+     "exp": 10.57
+    },
+    {
+     "chars": 45,
+     "dur": 6.88,
+     "cps": 6.54,
+     "exp": 6.43
+    },
+    {
+     "chars": 95,
+     "dur": 13.02,
+     "cps": 7.3,
+     "exp": 13.57
+    },
+    {
+     "chars": 97,
+     "dur": 12.08,
+     "cps": 8.03,
+     "exp": 13.86
+    },
+    {
+     "chars": 34,
+     "dur": 4.8,
+     "cps": 7.08,
+     "exp": 4.86
+    },
+    {
+     "chars": 131,
+     "dur": 17.68,
+     "cps": 7.41,
+     "exp": 18.71
+    },
+    {
+     "chars": 64,
+     "dur": 8.48,
+     "cps": 7.55,
+     "exp": 9.14
+    },
+    {
+     "chars": 58,
+     "dur": 8.0,
+     "cps": 7.25,
+     "exp": 8.29
+    },
+    {
+     "chars": 42,
+     "dur": 5.6,
+     "cps": 7.5,
+     "exp": 6.0
+    }
+   ],
+   "plan": {
+    "max_chars": 60,
+    "batch_size": 8,
+    "requested_max_chars": 60,
+    "requested_batch_size": 16,
+    "headroom_gib": 7.68,
+    "memory_scale": 1.0,
+    "seg_token_cap": 456,
+    "batch_token_budget": 3650,
+    "batch_tokens": 3648,
+    "oom_threshold_tokens": 7300,
+    "clone_prompt_tokens": 283,
+    "clone_prompt_kv_gib": 0.03,
+    "clone_prompt_kv_total_gib": 0.242,
+    "free_gib": 7.51,
+    "peak_alloc_gib": 9.47,
+    "alloc_now_gib": 3.95,
+    "batch_size_final": 8,
+    "batches": 3
+   },
+   "chunks": 3
+  },
+  "elapsed_sec": 615.0
+ }
+}

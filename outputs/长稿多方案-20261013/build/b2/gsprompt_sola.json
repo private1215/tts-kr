@@ -1,0 +1,16 @@
+{
+ "voice": "SOLA_female",
+ "src_wav": "/mnt/tts/data/voices/SOLA_female.wav",
+ "src_sha256": "a1a5aef00f18d4f960cf41e9344480e313796018be3571f1b81fd8b5d6bdaec4",
+ "src_seconds": 15.0,
+ "speech_onset_sec": 0.0,
+ "clip_start_sec": 0.0,
+ "clip_end_sec": 9.0,
+ "clip_seconds": 9.0,
+ "clip_wav": "/mnt/tts/diag/b2-20261013/gsprompt_sola.wav",
+ "clip_sha256": "293ced5c0ce86e4d98b70a82dc05eebf8389da7fb3d9c018fb49cdb58f8a2c99",
+ "asr_model": "Systran/faster-whisper-small",
+ "asr_seconds": 6.43,
+ "ref_text": "다음 거래일 장이 열렸을 때 장세를 실시간으로 뜯어보며 바로바로 대응할 수 있는  군더덕이 없는 명확한 기준점을 딱 정리해드리는",
+ "ref_text_len": 71
+}

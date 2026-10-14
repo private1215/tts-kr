@@ -1,0 +1,240 @@
+{
+ "M3": {
+  "name": "M3",
+  "route": "裸推理-Cosy",
+  "engine": "cosyvoice3",
+  "case_id": "d172b8c4efb3",
+  "voice": "EL_male",
+  "text_chars": 4594,
+  "text_sha256": "db65bae8990a12b3c007cc8b0c90b01662de0c71df5e28be296b6cde95c1911d",
+  "ref_wav": "/mnt/tts/data/voices/EL_male.wav",
+  "ref_wav_sha256": "3427f3a7cf761ea9371f9724da7af61032ceb41d4c32f5337f4919e84da01d3c",
+  "ref_text_sha256": "4064fe4114208b34e46e92936fa0dcae04438081cac9b27ec855fc3019be985e",
+  "ref_text_len": 126,
+  "params": {
+   "instruct": "neutral",
+   "speed": 1.0,
+   "seed": 42,
+   "max_chars": 320,
+   "timeout": 3600.0
+  },
+  "service_url": "http://127.0.0.1:8100",
+  "cuda_visible_devices": "1",
+  "COS Y_MAX_CHARS_default": 320,
+  "service_health_before": {
+   "ok": true,
+   "info": {
+    "status": "model_not_loaded",
+    "model": "/mnt/tts/models/Fun-CosyVoice3-0.5B",
+    "fp16": false,
+    "sample_rate": 24000,
+    "vram_gib": 0.1,
+    "idle_sec": 10344.1,
+    "idle_unload_sec": 600.0,
+    "instruct_presets": [
+     "neutral",
+     "excited",
+     "warm",
+     "serious"
+    ]
+   }
+  },
+  "gen_seconds": 529.64,
+  "meta": {
+   "engine": "cosyvoice3",
+   "error": null,
+   "gen_seconds": 529.64,
+   "audio_seconds": 539.48,
+   "chars": 4594,
+   "audio-seconds": 539.48,
+   "gen-seconds": 521.477,
+   "chunks": 16
+  },
+  "service_health_after": {
+   "ok": true,
+   "info": {
+    "status": "ok",
+    "model": "/mnt/tts/models/Fun-CosyVoice3-0.5B",
+    "fp16": false,
+    "sample_rate": 24000,
+    "vram_gib": 3.32,
+    "idle_sec": 521.6,
+    "idle_unload_sec": 600.0,
+    "instruct_presets": [
+     "neutral",
+     "excited",
+     "warm",
+     "serious"
+    ]
+   }
+  },
+  "vram_gib_after": 3.32,
+  "status": "done",
+  "out": "/mnt/tts/diag/longsubmit-20261013/M3.wav",
+  "sr": 24000,
+  "audio_seconds": 539.48,
+  "wav_sha256": "fa310f2064cc7e9c001492ab1538e4e7402ede83d14debeed8a4413c529a7c9c"
+ },
+ "M4": {
+  "name": "M4",
+  "route": "裸推理-Cosy",
+  "engine": "cosyvoice3",
+  "case_id": "ce1a3fda551a",
+  "voice": "EL_female",
+  "text_chars": 3948,
+  "text_sha256": "ce64535f0c170fa9fc6e3eb3792545ac632599f7bf6ceb9c4cacb853e70ef481",
+  "ref_wav": "/mnt/tts/data/voices/EL_female.wav",
+  "ref_wav_sha256": "673433f827b7f449fd264907eed3a65b07cecb1763d80695b0b6053008e889e7",
+  "ref_text_sha256": "a6f1cb6f6d71241b67a6121217f0383cdf9a149cb6e081b3666b21dccc79fd50",
+  "ref_text_len": 112,
+  "params": {
+   "instruct": "neutral",
+   "speed": 1.0,
+   "seed": 42,
+   "max_chars": 320,
+   "timeout": 3600.0
+  },
+  "service_url": "http://127.0.0.1:8100",
+  "cuda_visible_devices": "1",
+  "COS Y_MAX_CHARS_default": 320,
+  "service_health_before": {
+   "ok": true,
+   "info": {
+    "status": "ok",
+    "model": "/mnt/tts/models/Fun-CosyVoice3-0.5B",
+    "fp16": false,
+    "sample_rate": 24000,
+    "vram_gib": 3.32,
+    "idle_sec": 585.8,
+    "idle_unload_sec": 600.0,
+    "instruct_presets": [
+     "neutral",
+     "excited",
+     "warm",
+     "serious"
+    ]
+   }
+  },
+  "gen_seconds": 483.83,
+  "meta": {
+   "engine": "cosyvoice3",
+   "error": null,
+   "gen_seconds": 483.83,
+   "audio_seconds": 507.96,
+   "chars": 3948,
+   "audio-seconds": 507.96,
+   "gen-seconds": 483.731,
+   "chunks": 14
+  },
+  "service_health_after": {
+   "ok": true,
+   "info": {
+    "status": "ok",
+    "model": "/mnt/tts/models/Fun-CosyVoice3-0.5B",
+    "fp16": false,
+    "sample_rate": 24000,
+    "vram_gib": 3.32,
+    "idle_sec": 483.8,
+    "idle_unload_sec": 600.0,
+    "instruct_presets": [
+     "neutral",
+     "excited",
+     "warm",
+     "serious"
+    ]
+   }
+  },
+  "vram_gib_after": 3.32,
+  "status": "done",
+  "out": "/mnt/tts/diag/longsubmit-20261013/M4.wav",
+  "sr": 24000,
+  "audio_seconds": 507.96,
+  "wav_sha256": "72685da839187f861d52f85d33f6591b9c74aea86664e28dff23298d528857ff"
+ },
+ "Q1": {
+  "name": "Q1",
+  "route": "裸推理-Qwen",
+  "engine": "qwen",
+  "case_id": "d172b8c4efb3",
+  "voice": "EL_male",
+  "text_chars": 4594,
+  "text_sha256": "db65bae8990a12b3c007cc8b0c90b01662de0c71df5e28be296b6cde95c1911d",
+  "ref_wav": "/mnt/tts/data/voices/EL_male.wav",
+  "ref_wav_sha256": "3427f3a7cf761ea9371f9724da7af61032ceb41d4c32f5337f4919e84da01d3c",
+  "ref_text_sha256": "4064fe4114208b34e46e92936fa0dcae04438081cac9b27ec855fc3019be985e",
+  "ref_text_len": 126,
+  "model_path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base",
+  "params": {
+   "mode": "clone",
+   "language": "Korean",
+   "seed": 42,
+   "max_chars": 60,
+   "batch_size": 16,
+   "instruct": "",
+   "speed_note": "Qwen 无 speed 入参，变速由后端 atempo 实现，本条未叠"
+  },
+  "cuda_visible_devices": "0",
+  "torch_version": "2.14.0+cu130",
+  "warmup_seconds": 6.03,
+  "gen_seconds": 264.36,
+  "vram_peak_gib": 9.47,
+  "status": "done",
+  "out": "/mnt/tts/diag/longsubmit-20261013/Q1.wav",
+  "sr": 24000,
+  "audio_seconds": 530.5,
+  "wav_sha256": "614461a9de6c27c93c2ac43e8e2c46e9f994b3213a6603a3feabff44b99783d7",
+  "synth_long_stats": {
+   "segments": 86,
+   "chars": 4511,
+   "gen_seconds": 264.36,
+   "audio_seconds": 530.5,
+   "cps": 8.5,
+   "max_chars": null,
+   "batch_size": null,
+   "clone_prompt_tokens": null
+  }
+ },
+ "Q2": {
+  "name": "Q2",
+  "route": "裸推理-Qwen",
+  "engine": "qwen",
+  "case_id": "ce1a3fda551a",
+  "voice": "EL_female",
+  "text_chars": 3948,
+  "text_sha256": "ce64535f0c170fa9fc6e3eb3792545ac632599f7bf6ceb9c4cacb853e70ef481",
+  "ref_wav": "/mnt/tts/data/voices/EL_female.wav",
+  "ref_wav_sha256": "673433f827b7f449fd264907eed3a65b07cecb1763d80695b0b6053008e889e7",
+  "ref_text_sha256": "a6f1cb6f6d71241b67a6121217f0383cdf9a149cb6e081b3666b21dccc79fd50",
+  "ref_text_len": 112,
+  "model_path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base",
+  "params": {
+   "mode": "clone",
+   "language": "Korean",
+   "seed": 42,
+   "max_chars": 60,
+   "batch_size": 16,
+   "instruct": "",
+   "speed_note": "Qwen 无 speed 入参，变速由后端 atempo 实现，本条未叠"
+  },
+  "cuda_visible_devices": "0",
+  "torch_version": "2.14.0+cu130",
+  "warmup_seconds": 6.0,
+  "gen_seconds": 282.46,
+  "vram_peak_gib": 9.471,
+  "status": "done",
+  "out": "/mnt/tts/diag/longsubmit-20261013/Q2.wav",
+  "sr": 24000,
+  "audio_seconds": 543.4,
+  "wav_sha256": "f609c416268d95d56c30c56ede7c4493dc80a2bb96eb7804479fe22c1e660b0d",
+  "synth_long_stats": {
+   "segments": 55,
+   "chars": 3881,
+   "gen_seconds": 282.46,
+   "audio_seconds": 543.4,
+   "cps": 7.14,
+   "max_chars": null,
+   "batch_size": null,
+   "clone_prompt_tokens": null
+  }
+ }
+}

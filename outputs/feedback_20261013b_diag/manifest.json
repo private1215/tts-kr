@@ -1,0 +1,85 @@
+{
+  "version": "20261013b_diag",
+  "mode": "diagnostic_only",
+  "audio": [
+    {
+      "gender": "f",
+      "source": "/mnt/tts/projects/gpt-sovits/out/cosy_full_f.wav",
+      "source_sha256": "638e629a5b2dab0257f38ec40bb3f090f021dfeb1a7868286201e5a848640ded",
+      "duration_seconds": 430.12,
+      "file": "diag_20261013b_diag_f_638e629a5b2d.mp3",
+      "sha256": "eeb9a52003f2f5d9aa85aea4fbb043f290bea10a5eaeee545cc1054418fa1940",
+      "command": [
+        "ffmpeg",
+        "-nostdin",
+        "-v",
+        "error",
+        "-n",
+        "-i",
+        "/mnt/tts/projects/gpt-sovits/out/cosy_full_f.wav",
+        "-map",
+        "0:a:0",
+        "-codec:a",
+        "libmp3lame",
+        "-b:a",
+        "192k",
+        "/home/zheng/feedback_20261013b_diag/diag_20261013b_diag_f_638e629a5b2d.mp3"
+      ]
+    },
+    {
+      "gender": "m",
+      "source": "/mnt/tts/projects/gpt-sovits/out/cosy_full_m.wav",
+      "source_sha256": "37c6fa93fc23fb475fefa8a75fb11b0a315c8a61493fc699b03b21196def17b8",
+      "duration_seconds": 445.72,
+      "file": "diag_20261013b_diag_m_37c6fa93fc23.mp3",
+      "sha256": "734c267d3b66432ac18908a1efd9b76135c84b2243da6e29f6c35f49db26cef8",
+      "command": [
+        "ffmpeg",
+        "-nostdin",
+        "-v",
+        "error",
+        "-n",
+        "-i",
+        "/mnt/tts/projects/gpt-sovits/out/cosy_full_m.wav",
+        "-map",
+        "0:a:0",
+        "-codec:a",
+        "libmp3lame",
+        "-b:a",
+        "192k",
+        "/home/zheng/feedback_20261013b_diag/diag_20261013b_diag_m_37c6fa93fc23.mp3"
+      ]
+    }
+  ],
+  "latest_feedback": {
+    "ts_utc": "2026-10-13 02:55:07",
+    "voice_f_m": "B",
+    "smooth_f_m": "B",
+    "ship_f_m": "B=勉强",
+    "free": "断句有点瑕疵，卡顿问题还在"
+  },
+  "delivery_approved": false,
+  "provenance": "沿用 mk_feedback_clips_d.py 的 B 源路径，生成时锁定实测 SHA256；历史投票未记录源 hash，无法追溯证明历史时刻字节未变化",
+  "excluded": [
+    "PBA90秒男声实验不是全链路男女回归",
+    "未经验证的修复候选",
+    "时长比例语义对齐"
+  ],
+  "ab_release_gate": {
+    "required": [
+      "男女候选分别验证完成",
+      "对应句转写一致且起止句界分别验证",
+      "源与候选hash及验证报告",
+      "非全长比例切片"
+    ],
+    "independent_options": {
+      "C": "差不多",
+      "D": "都不行",
+      "E": "没听清"
+    },
+    "default": null
+  },
+  "processing": "完整音频 MP3 转码，无切片、增益、归一化或停顿处理；不把寻址点称为语义边界",
+  "items_sha256": "36506e08c7941e8579350e0ef51833f9175fb8bd20e7461bc3015a455274d3a3",
+  "ui_sha256": "2ae0c61be4918442ca864ea3e4c67fa2b4d724f60823e3644491f3bf12c1a767"
+}

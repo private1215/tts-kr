@@ -1,0 +1,26 @@
+{
+  "核验目标": "确认 GS(GPT-SoVITS) 现役权重是否覆盖目标 yohan_male / SOLA_female 声音",
+  "核验时间": "2026-10-13",
+  "现役解析规则": {
+    "来源": "/mnt/tts/projects/gpt-sovits/serve.py:78 pick_weight(spk, epoch)",
+    "glob": "{REPO}/SoVITS_weights_v2ProPlus/{spk}_v2pro_e{epoch}_s*.pth",
+    "REPO": "/mnt/tts/projects/gpt-sovits/repo",
+    "非递归": true,
+    "默认spk": "SOLA",
+    "默认epoch": 40,
+    "服务状态": {"端口": 8200, "pid": 624477, "health": "{\"ok\":true,\"loaded\":[]}", "注": "服务存活但当前未加载任何权重"}
+  },
+  "实测解析结果": {
+    "SOLA": [],
+    "yohan": [],
+    "hh": ["hh_v2pro_e10_s160.pth", "hh_v2pro_e20_s320.pth", "hh_v2pro_e30_s480.pth", "hh_v2pro_e40_s640.pth"]
+  },
+  "权重实际存放位置": {
+    "SOLA": "仅在 /mnt/tts/projects/gpt-sovits/repo/SoVITS_weights_v2ProPlus/_bak_e40/ （备份子目录，pick_weight 检索不到）",
+    "yohan": "仅在 _bak_e40/ 与 _poisoned_1012/ 两个子目录（前者为备份、后者目录名已标记 poisoned）"
+  },
+  "附加疑点": "所有候选 .pth 文件体积完全一致（均为 172765363 字节），与预训练底座 v2ProPlus 同尺寸，训练是否真正收敛无法据此确认；未经任何生成验证。",
+  "结论": "GS 本轮不可用 — 现役权重不覆盖 yohan_male / SOLA_female",
+  "处理": "不生成 GS 方案。按用户规则『绝不把备份或未验证权重当可用』，未把 _bak_e40 / _poisoned_1012 提升为现役，未改动任何 GS 配置或服务。",
+  "未做原因归档": "GS 方案缺失：现役权重不覆盖目标声音，且用户禁止使用备份/未验证权重"
+}

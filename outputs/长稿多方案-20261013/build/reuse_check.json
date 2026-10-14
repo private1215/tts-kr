@@ -1,0 +1,263 @@
+[
+ {
+  "job_id": "35391b1f0e1f",
+  "output_dir": "/mnt/tts/output/自测-男-真实口径-d172b8c4efb3",
+  "case_id": "d172b8c4efb3",
+  "job": {
+   "title": "自测-男-真实口径-d172b8c4efb3",
+   "status": "done",
+   "engine": "cosyvoice3",
+   "engine_force": null,
+   "voice": "EL_male",
+   "mode": "clone",
+   "case_id": null,
+   "seed": 42,
+   "speed": 1.0,
+   "emotion": "standard",
+   "owner": "selftest",
+   "created_at": 1791822943.4317594,
+   "created_at_str": "2026-10-12 16:35:43"
+  },
+  "text_check": {
+   "job_text_chars": 4595,
+   "job_text_sha256": "5e01ed518d9cf0b75200cc1cc4ed5141d2c4e487389f7ec6020a86ef93991a37",
+   "case_full_txt_bytes_sha256": "005967993fa805e832d20aebb268fbf3b3d3d2c9d34563960297448ccf4ad256",
+   "case_full_txt_chars_textmode": 4594,
+   "case_full_txt_textmode_sha256": "db65bae8990a12b3c007cc8b0c90b01662de0c71df5e28be296b6cde95c1911d",
+   "identical": false,
+   "identical_after_ws_normalize": true,
+   "note": "仅差一个尾随换行符，空白归一化后一致（同一稿件，未换稿）"
+  },
+  "reference_check": {
+   "voice_key": "EL_male",
+   "voices_json_engine_field": "cosyvoice3",
+   "ref_wav": "/mnt/tts/data/voices/EL_male.wav",
+   "ref_wav_sha256": "3427f3a7cf761ea9371f9724da7af61032ceb41d4c32f5337f4919e84da01d3c",
+   "ref_wav_mtime": "2026-10-05 12:27:42",
+   "ref_wav_mtime_before_job_created": true,
+   "ref_text_len": 126,
+   "ref_text_sha256": "4064fe4114208b34e46e92936fa0dcae04438081cac9b27ec855fc3019be985e"
+  },
+  "artifacts": [
+   {
+    "file": "/mnt/tts/output/自测-男-真实口径-d172b8c4efb3/自测-男-真实口径-d172b8c4efb3-1.mp3",
+    "sha256": "03615f4d4945075fbf385a2792263507af7c05fb1d2d6cd505d9b841616a1081",
+    "dur_sec": 187.246
+   },
+   {
+    "file": "/mnt/tts/output/自测-男-真实口径-d172b8c4efb3/自测-男-真实口径-d172b8c4efb3-2.mp3",
+    "sha256": "8b140d21e85a101911ff5ea7cced1b9cc48a8d362467ea01f46fa2a357da6f40",
+    "dur_sec": 182.073
+   },
+   {
+    "file": "/mnt/tts/output/自测-男-真实口径-d172b8c4efb3/自测-男-真实口径-d172b8c4efb3-3.mp3",
+    "sha256": "5db9c8d17be74cb939e9f3e233ce0199b469fbb1e4b6ce51c07f2725bcf9e2b2",
+    "dur_sec": 187.063
+   }
+  ],
+  "total_dur_sec": 556.38,
+  "baseline_el": {
+   "file": "/mnt/tts/data/cases/d172b8c4efb3/merged.wav",
+   "sha256": "aea35c0797d3f41c3e11e408d8eef04abc3f9a827e93286afd2cdc93444725d6",
+   "dur_sec": 555.18
+  },
+  "verdict": "可复用"
+ },
+ {
+  "job_id": "159b1c5e6a66",
+  "output_dir": "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3",
+  "case_id": "d172b8c4efb3",
+  "job": {
+   "title": "AB-男-参考yohan_male-d172b8c4efb3",
+   "status": "done",
+   "engine": "cosyvoice3",
+   "engine_force": null,
+   "voice": "yohan_male",
+   "mode": "clone",
+   "case_id": null,
+   "seed": 42,
+   "speed": 1.0,
+   "emotion": "standard",
+   "owner": "selftest",
+   "created_at": 1791842328.7787402,
+   "created_at_str": "2026-10-12 21:58:48"
+  },
+  "text_check": {
+   "job_text_chars": 4595,
+   "job_text_sha256": "5e01ed518d9cf0b75200cc1cc4ed5141d2c4e487389f7ec6020a86ef93991a37",
+   "case_full_txt_bytes_sha256": "005967993fa805e832d20aebb268fbf3b3d3d2c9d34563960297448ccf4ad256",
+   "case_full_txt_chars_textmode": 4594,
+   "case_full_txt_textmode_sha256": "db65bae8990a12b3c007cc8b0c90b01662de0c71df5e28be296b6cde95c1911d",
+   "identical": false,
+   "identical_after_ws_normalize": true,
+   "note": "仅差一个尾随换行符，空白归一化后一致（同一稿件，未换稿）"
+  },
+  "reference_check": {
+   "voice_key": "yohan_male",
+   "voices_json_engine_field": "qwen",
+   "ref_wav": "/mnt/tts/data/voices/yohan_male.wav",
+   "ref_wav_sha256": "c0d2179fcc21f4fc0f080a27d6ac43edf561271a39584dc5c249cb9eb92be38c",
+   "ref_wav_mtime": "2026-10-12 02:49:53",
+   "ref_wav_mtime_before_job_created": true,
+   "ref_text_len": 160,
+   "ref_text_sha256": "9a2db2f1cedad7104ae714279df2e0bcbc167d61156db4dea89903657d82778f"
+  },
+  "artifacts": [
+   {
+    "file": "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3/AB-男-参考yohan_male-d172b8c4efb3-1.mp3",
+    "sha256": "bc1f6cb6c1213808e76150642150081390cade8141bc89d04ef9d1b88b9572d7",
+    "dur_sec": 119.301
+   },
+   {
+    "file": "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3/AB-男-参考yohan_male-d172b8c4efb3-2.mp3",
+    "sha256": "ac48dcd50e82ca3bc227eb17c86ca0d5448ab2e32c13a820bf3426622a69d7df",
+    "dur_sec": 118.596
+   },
+   {
+    "file": "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3/AB-男-参考yohan_male-d172b8c4efb3-3.mp3",
+    "sha256": "c4c7fc354511704058222d1b18db68c24c00aecd578b06db154f3b5e10df5733",
+    "dur_sec": 119.014
+   },
+   {
+    "file": "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3/AB-男-参考yohan_male-d172b8c4efb3-4.mp3",
+    "sha256": "5162c51f8534a0fdf032274afa165acc1cbdef279e8e59bcecbed396a9dd584d",
+    "dur_sec": 117.864
+   },
+   {
+    "file": "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3/AB-男-参考yohan_male-d172b8c4efb3-5.mp3",
+    "sha256": "320d792204a7ee12ec04946079bec943d2855fe946abac5f538f565212df6762",
+    "dur_sec": 81.998
+   }
+  ],
+  "total_dur_sec": 556.77,
+  "baseline_el": {
+   "file": "/mnt/tts/data/cases/d172b8c4efb3/merged.wav",
+   "sha256": "aea35c0797d3f41c3e11e408d8eef04abc3f9a827e93286afd2cdc93444725d6",
+   "dur_sec": 555.18
+  },
+  "verdict": "可复用"
+ },
+ {
+  "job_id": "bc8196e72fed",
+  "output_dir": "/mnt/tts/output/自测-女-真实口径-ce1a3fda551a",
+  "case_id": "ce1a3fda551a",
+  "job": {
+   "title": "自测-女-真实口径-ce1a3fda551a",
+   "status": "done",
+   "engine": "cosyvoice3",
+   "engine_force": null,
+   "voice": "EL_female",
+   "mode": "clone",
+   "case_id": null,
+   "seed": 42,
+   "speed": 1.0,
+   "emotion": "standard",
+   "owner": "selftest",
+   "created_at": 1791822953.0833614,
+   "created_at_str": "2026-10-12 16:35:53"
+  },
+  "text_check": {
+   "job_text_chars": 3948,
+   "job_text_sha256": "ce64535f0c170fa9fc6e3eb3792545ac632599f7bf6ceb9c4cacb853e70ef481",
+   "case_full_txt_bytes_sha256": "e804187e8885e1e753b6620abce744fd5280ce360161ef471b8499cbb668b510",
+   "case_full_txt_chars_textmode": 3948,
+   "case_full_txt_textmode_sha256": "ce64535f0c170fa9fc6e3eb3792545ac632599f7bf6ceb9c4cacb853e70ef481",
+   "identical": true,
+   "identical_after_ws_normalize": true,
+   "note": "字节级完全一致"
+  },
+  "reference_check": {
+   "voice_key": "EL_female",
+   "voices_json_engine_field": "cosyvoice3",
+   "ref_wav": "/mnt/tts/data/voices/EL_female.wav",
+   "ref_wav_sha256": "673433f827b7f449fd264907eed3a65b07cecb1763d80695b0b6053008e889e7",
+   "ref_wav_mtime": "2026-10-05 12:27:42",
+   "ref_wav_mtime_before_job_created": true,
+   "ref_text_len": 112,
+   "ref_text_sha256": "a6f1cb6f6d71241b67a6121217f0383cdf9a149cb6e081b3666b21dccc79fd50"
+  },
+  "artifacts": [
+   {
+    "file": "/mnt/tts/output/自测-女-真实口径-ce1a3fda551a/自测-女-真实口径-ce1a3fda551a-1.mp3",
+    "sha256": "dfe307c2f52ae6879d370e45f965e6d3f2046329c1b94439e4cd5abdf452d965",
+    "dur_sec": 182.936
+   },
+   {
+    "file": "/mnt/tts/output/自测-女-真实口径-ce1a3fda551a/自测-女-真实口径-ce1a3fda551a-2.mp3",
+    "sha256": "4fd9b784fcaf427db95ca3d2e35673d4fbca50addb52cfd392081c790d2deff0",
+    "dur_sec": 162.194
+   },
+   {
+    "file": "/mnt/tts/output/自测-女-真实口径-ce1a3fda551a/自测-女-真实口径-ce1a3fda551a-3.mp3",
+    "sha256": "7f06607dc5361e64315dec7295b887effba143d0a2cbcb813c7904e3b0e98c32",
+    "dur_sec": 175.517
+   }
+  ],
+  "total_dur_sec": 520.65,
+  "baseline_el": {
+   "file": "/mnt/tts/data/cases/ce1a3fda551a/merged.wav",
+   "sha256": "03951133fe8f77f10a6874fca172710af09f7547aeee9d895358d1a8ab724815",
+   "dur_sec": 525.296
+  },
+  "verdict": "可复用"
+ },
+ {
+  "job_id": "81e99d131e9b",
+  "output_dir": "/mnt/tts/output/AB-女-参考SOLA_female-ce1a3fda551a",
+  "case_id": "ce1a3fda551a",
+  "job": {
+   "title": "AB-女-参考SOLA_female-ce1a3fda551a",
+   "status": "done",
+   "engine": "cosyvoice3",
+   "engine_force": null,
+   "voice": "SOLA_female",
+   "mode": "clone",
+   "case_id": null,
+   "seed": 42,
+   "speed": 1.0,
+   "emotion": "standard",
+   "owner": "selftest",
+   "created_at": 1791842328.5211873,
+   "created_at_str": "2026-10-12 21:58:48"
+  },
+  "text_check": {
+   "job_text_chars": 3948,
+   "job_text_sha256": "ce64535f0c170fa9fc6e3eb3792545ac632599f7bf6ceb9c4cacb853e70ef481",
+   "case_full_txt_bytes_sha256": "e804187e8885e1e753b6620abce744fd5280ce360161ef471b8499cbb668b510",
+   "case_full_txt_chars_textmode": 3948,
+   "case_full_txt_textmode_sha256": "ce64535f0c170fa9fc6e3eb3792545ac632599f7bf6ceb9c4cacb853e70ef481",
+   "identical": true,
+   "identical_after_ws_normalize": true,
+   "note": "字节级完全一致"
+  },
+  "reference_check": {
+   "voice_key": "SOLA_female",
+   "voices_json_engine_field": "qwen",
+   "ref_wav": "/mnt/tts/data/voices/SOLA_female.wav",
+   "ref_wav_sha256": "a1a5aef00f18d4f960cf41e9344480e313796018be3571f1b81fd8b5d6bdaec4",
+   "ref_wav_mtime": "2026-10-12 02:49:53",
+   "ref_wav_mtime_before_job_created": true,
+   "ref_text_len": 122,
+   "ref_text_sha256": "7922290b069980d15fb264abe221f4515eb79ffde0dcb757cd9e60b0a5d3807c"
+  },
+  "artifacts": [
+   {
+    "file": "/mnt/tts/output/AB-女-参考SOLA_female-ce1a3fda551a/AB-女-参考SOLA_female-ce1a3fda551a-1.mp3",
+    "sha256": "db1094847865db3fe312b46bb3b4eab0a66d902dbd3324b0bd07fc264ab62efa",
+    "dur_sec": 255.974
+   },
+   {
+    "file": "/mnt/tts/output/AB-女-参考SOLA_female-ce1a3fda551a/AB-女-参考SOLA_female-ce1a3fda551a-2.mp3",
+    "sha256": "318d8fbc09ff1e3ff69d0a518d4c33ccc3bd21eaf7a6704d7d2b2e7b4d6cff2c",
+    "dur_sec": 264.49
+   }
+  ],
+  "total_dur_sec": 520.46,
+  "baseline_el": {
+   "file": "/mnt/tts/data/cases/ce1a3fda551a/merged.wav",
+   "sha256": "03951133fe8f77f10a6874fca172710af09f7547aeee9d895358d1a8ab724815",
+   "dur_sec": 525.296
+  },
+  "verdict": "可复用"
+ }
+]

@@ -1,0 +1,44 @@
+{
+ "cases": {
+  "ce1a3fda551a": {
+   "ref_name": "case1-ref",
+   "candidates": {
+    "case1-cand1": {
+     "dir": "/mnt/tts/output/长稿多方案-M2"
+    },
+    "case1-cand2": {
+     "dir": "/mnt/tts/output/AB-女-参考SOLA_female-ce1a3fda551a"
+    },
+    "case1-cand3": {
+     "dir": "/mnt/tts/output/自测-女-真实口径-ce1a3fda551a"
+    },
+    "case1-cand4": {
+     "wav": "/mnt/tts/diag/longsubmit-20261013/M4.wav"
+    },
+    "case1-cand5": {
+     "wav": "/mnt/tts/diag/longsubmit-20261013/Q2.wav"
+    }
+   }
+  },
+  "d172b8c4efb3": {
+   "ref_name": "case2-ref",
+   "candidates": {
+    "case2-cand1": {
+     "dir": "/mnt/tts/output/长稿多方案-M1"
+    },
+    "case2-cand2": {
+     "wav": "/mnt/tts/diag/longsubmit-20261013/Q1.wav"
+    },
+    "case2-cand3": {
+     "dir": "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3"
+    },
+    "case2-cand4": {
+     "dir": "/mnt/tts/output/自测-男-真实口径-d172b8c4efb3"
+    },
+    "case2-cand5": {
+     "wav": "/mnt/tts/diag/longsubmit-20261013/M3.wav"
+    }
+   }
+  }
+ }
+}

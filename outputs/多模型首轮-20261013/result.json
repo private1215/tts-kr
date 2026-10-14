@@ -1,0 +1,73 @@
+{
+  "status": "first_round_generated_pending_listening",
+  "success": 4,
+  "failed": 0,
+  "items": [
+    {
+      "engine": "Qwen3-TTS Base",
+      "gender": "male",
+      "blind_id": "试听-男-B7",
+      "status": "generated_valid_container",
+      "audio_seconds": 16.88,
+      "sample_rate": 24000,
+      "elapsed_seconds": 55.50872254371643,
+      "peak_allocated_gib": 4.643062591552734,
+      "sha256": "00ae2483bbe97973e124f2e8d4646de9d62d7391c4e0419a7beed64fe48a648b",
+      "valid_audio": true,
+      "asr_levenshtein_cer": 0.0
+    },
+    {
+      "engine": "Qwen3-TTS Base",
+      "gender": "female",
+      "blind_id": "试听-女-C4",
+      "status": "generated_valid_container",
+      "audio_seconds": 22.88,
+      "sample_rate": 24000,
+      "elapsed_seconds": 71.77625179290771,
+      "peak_allocated_gib": 4.643582344055176,
+      "sha256": "b91df186f2478990a4d53e566dc0340835b5ecc78e67181b497b914a70d76975",
+      "valid_audio": true,
+      "asr_levenshtein_cer": 0.03333333333333333
+    },
+    {
+      "engine": "CosyVoice3",
+      "gender": "male",
+      "blind_id": "试听-男-A3",
+      "status": "generated_valid_container",
+      "audio_seconds": 16.16,
+      "sample_rate": 24000,
+      "elapsed_seconds": 17.46044397354126,
+      "peak_allocated_gib": 3.602792739868164,
+      "sha256": "c4dd0606d35e09f725f5a41697fc5975b02c2b78ca7fef1a761edf988d0a6733",
+      "valid_audio": true,
+      "asr_levenshtein_cer": 0.0761904761904762
+    },
+    {
+      "engine": "CosyVoice3",
+      "gender": "female",
+      "blind_id": "试听-女-D8",
+      "status": "generated_valid_container",
+      "audio_seconds": 19.68,
+      "sample_rate": 24000,
+      "elapsed_seconds": 20.448891162872314,
+      "peak_allocated_gib": 3.64138126373291,
+      "sha256": "4d9a5b42d417de811759caec3f3623bc296672ee2fa2bc6a8e2f8f0657704619",
+      "valid_audio": true,
+      "asr_levenshtein_cer": 0.10833333333333334
+    }
+  ],
+  "gs": "skipped_missing_active_speaker_weights",
+  "combination": "not_run",
+  "proso": "not_run",
+  "human_listening": "not_performed",
+  "deployed": false,
+  "limitations": [
+    "仅男女各一个150/170字符短段、单seed，不代表全量效果",
+    "参考转写固定为现役配置；ASR只提供复核线索，不改写参考",
+    "未人工试听，不声明听感、音色或内容合格；不部署候选",
+    "GS对应现役权重缺失，备份与隔离权重未启用",
+    "未执行串联组合、PROSO评分或复杂后处理",
+    "实验进程每2秒检查持久化生产队列；不能排除检查间隙及未持久化直接API请求",
+    "音频目录为盲标；manifest及日志包含引擎信息，仅供后台，不能一并发给员工"
+  ]
+}

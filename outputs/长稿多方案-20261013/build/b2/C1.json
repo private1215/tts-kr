@@ -1,0 +1,86 @@
+{
+ "name": "C1",
+ "route": "串联克隆-千问片段打底+Cosy整篇",
+ "engine": "cosyvoice3",
+ "case_id": "ce1a3fda551a",
+ "tag": "female",
+ "base_engine": "qwen（整篇产物开头片段，仅作参考音频，不参与混音/拼接）",
+ "text_chars": 3948,
+ "text_sha256": "ce64535f0c170fa9fc6e3eb3792545ac632599f7bf6ceb9c4cacb853e70ef481",
+ "ref_wav": "/mnt/tts/diag/b2-20261013/ref_female_head.wav",
+ "ref_wav_sha256": "1205a0bb537874cac3126b23fc88028b5642716b3579e5fa124e5d66e3d2f0dd",
+ "ref_source_wav": "/mnt/tts/diag/longsubmit-20261013/Q2.wav",
+ "ref_source_sha256": "f609c416268d95d56c30c56ede7c4493dc80a2bb96eb7804479fe22c1e660b0d",
+ "ref_interval_sec": [
+  0.0,
+  13.0
+ ],
+ "ref_seconds": 13.0,
+ "ref_text": "반갑습니다. 현대로템 주주 여러분 이민정 프로입니다.  우리 주주님들 그동안 고점에 물리셔서 맘고생 진짜 심하셨죠.  주식판이라는 게 겉보기엔 뉴스 나",
+ "ref_text_len": 84,
+ "ref_text_sha256": "2987973a76411b592155d1843ec2e2a1cf6ed78268e3eca61a3181e41dd1c844",
+ "ref_text_source": "Whisper-small CPU int8 转写该片段（asr_model=Systran/faster-whisper-small）",
+ "params": {
+  "instruct": "excited",
+  "speed": 1.0,
+  "seed": 42,
+  "max_chars": 320,
+  "timeout": 3600.0
+ },
+ "service_url": "http://127.0.0.1:8100",
+ "cuda_visible_devices": "0",
+ "COSY_MAX_CHARS_default": 320,
+ "service_health_before": {
+  "ok": true,
+  "info": {
+   "status": "model_not_loaded",
+   "model": "/mnt/tts/models/Fun-CosyVoice3-0.5B",
+   "fp16": false,
+   "sample_rate": 24000,
+   "vram_gib": 0.1,
+   "idle_sec": 5955.6,
+   "idle_unload_sec": 600.0,
+   "instruct_presets": [
+    "neutral",
+    "excited",
+    "warm",
+    "serious"
+   ]
+  }
+ },
+ "gen_seconds": 449.62,
+ "meta": {
+  "engine": "cosyvoice3",
+  "error": null,
+  "gen_seconds": 449.62,
+  "audio_seconds": 487.0,
+  "chars": 3948,
+  "audio-seconds": 487.0,
+  "gen-seconds": 441.65,
+  "chunks": 14
+ },
+ "service_health_after": {
+  "ok": true,
+  "info": {
+   "status": "ok",
+   "model": "/mnt/tts/models/Fun-CosyVoice3-0.5B",
+   "fp16": false,
+   "sample_rate": 24000,
+   "vram_gib": 3.33,
+   "idle_sec": 441.7,
+   "idle_unload_sec": 600.0,
+   "instruct_presets": [
+    "neutral",
+    "excited",
+    "warm",
+    "serious"
+   ]
+  }
+ },
+ "vram_gib_after": 3.33,
+ "status": "done",
+ "out": "/mnt/tts/diag/b2-20261013/C1.wav",
+ "sr": 24000,
+ "audio_seconds": 487.0,
+ "wav_sha256": "dcb5370b23744ffa73cca6b7bd04cc49b4466267d3f9c9718f7e92df25b7edd1"
+}

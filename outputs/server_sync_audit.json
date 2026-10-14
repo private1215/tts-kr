@@ -1,0 +1,887 @@
+{
+  "checked_at": "2026-10-13T03:26:22.062878+00:00",
+  "git_head": "9ef9b94f4d9bbee54cc7f450c50616d332aba992",
+  "prior_agent_task_list": [
+    {"id": "2", "status": "in_progress", "subject": "核查完整后处理链与离线素材"},
+    {"id": "3", "status": "in_progress", "subject": "建立跨文案验收与反馈闭环"},
+    {"id": "6", "status": "pending", "subject": "取得生产目录权限后备份并部署定位题库", "note": "历史待办；用户说明已部署，本次不重复部署或修改历史状态"}
+  ],
+  "comparison": [
+    {
+      "name": "._analyze.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._asr_check.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._bench.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._cosy_client.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._cosy_server.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._engine_select.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._envshape.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._install_builtin_voices.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._make_builtin_voices.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._opt.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._pba.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._pipeline.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._prosody_report.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._realism.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._sweep.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._tts_engine.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._voice_match.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._voice_trim.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "._vram.py",
+      "local_sha256": null,
+      "remote_sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32",
+      "head_sha256": null,
+      "equal": false,
+      "category": "服务端独有的 AppleDouble 元数据，非应用模块",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "analyze.py",
+      "local_sha256": "df29042cc3011e5131d265f4ea9a1fda0ce54e451daa6224e6904292f0cd33dc",
+      "remote_sha256": "df29042cc3011e5131d265f4ea9a1fda0ce54e451daa6224e6904292f0cd33dc",
+      "head_sha256": "df29042cc3011e5131d265f4ea9a1fda0ce54e451daa6224e6904292f0cd33dc",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "asr_check.py",
+      "local_sha256": "aefe5ea2420c93bfb1f6bb256f4b7b6347b7c2e6be4add29d041c38fadd21156",
+      "remote_sha256": "aefe5ea2420c93bfb1f6bb256f4b7b6347b7c2e6be4add29d041c38fadd21156",
+      "head_sha256": "aefe5ea2420c93bfb1f6bb256f4b7b6347b7c2e6be4add29d041c38fadd21156",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "bench.py",
+      "local_sha256": "31b8694558b672e6496d75564fda33562906210e4e2398b73917919dcb48a83e",
+      "remote_sha256": "31b8694558b672e6496d75564fda33562906210e4e2398b73917919dcb48a83e",
+      "head_sha256": "31b8694558b672e6496d75564fda33562906210e4e2398b73917919dcb48a83e",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "breath.py",
+      "local_sha256": "93412b5c9d818357a2dbc3962d80c13f64af150bbfe818f676dcd27c710128f5",
+      "remote_sha256": "93412b5c9d818357a2dbc3962d80c13f64af150bbfe818f676dcd27c710128f5",
+      "head_sha256": "93412b5c9d818357a2dbc3962d80c13f64af150bbfe818f676dcd27c710128f5",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "cosy_client.py",
+      "local_sha256": "ac0bf2863b8276dbc2e1f9eee2eb075d1177df64dd216c9034c50e5049102da3",
+      "remote_sha256": "ac0bf2863b8276dbc2e1f9eee2eb075d1177df64dd216c9034c50e5049102da3",
+      "head_sha256": "ac0bf2863b8276dbc2e1f9eee2eb075d1177df64dd216c9034c50e5049102da3",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "cosy_server.py",
+      "local_sha256": "db72678c7c6867238bc540c170dcf7689cad71ae3e4279d91f699baaf1418ed5",
+      "remote_sha256": "db72678c7c6867238bc540c170dcf7689cad71ae3e4279d91f699baaf1418ed5",
+      "head_sha256": "db72678c7c6867238bc540c170dcf7689cad71ae3e4279d91f699baaf1418ed5",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "dyn.py",
+      "local_sha256": "6c334321b8611f5786dc76ab60f3610abcfa9a7d8f0a4af0847d24a06e5fe5f2",
+      "remote_sha256": "6c334321b8611f5786dc76ab60f3610abcfa9a7d8f0a4af0847d24a06e5fe5f2",
+      "head_sha256": "6c334321b8611f5786dc76ab60f3610abcfa9a7d8f0a4af0847d24a06e5fe5f2",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "engine_select.py",
+      "local_sha256": "1060bf3d44f2b402271d785da63ef419c98aff5d5a7ccbf8eeee90c294a92bc8",
+      "remote_sha256": "1060bf3d44f2b402271d785da63ef419c98aff5d5a7ccbf8eeee90c294a92bc8",
+      "head_sha256": "1060bf3d44f2b402271d785da63ef419c98aff5d5a7ccbf8eeee90c294a92bc8",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "envshape.py",
+      "local_sha256": "7f955dc7e121dbe60e998d9b0a7684a9005fd0efdd3c2821218dc4fc2b27f71c",
+      "remote_sha256": "7f955dc7e121dbe60e998d9b0a7684a9005fd0efdd3c2821218dc4fc2b27f71c",
+      "head_sha256": "7f955dc7e121dbe60e998d9b0a7684a9005fd0efdd3c2821218dc4fc2b27f71c",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "gs_client.py",
+      "local_sha256": "69d6e8b2c94db1a9620451a955b55e0b7d15bc661c390187fb571003ec8f2a93",
+      "remote_sha256": "69d6e8b2c94db1a9620451a955b55e0b7d15bc661c390187fb571003ec8f2a93",
+      "head_sha256": "69d6e8b2c94db1a9620451a955b55e0b7d15bc661c390187fb571003ec8f2a93",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "install_builtin_voices.py",
+      "local_sha256": "142ec44aec9e2ab494c26d3bb812e029d860429c13d64d1cb0c2a4a193f92721",
+      "remote_sha256": "142ec44aec9e2ab494c26d3bb812e029d860429c13d64d1cb0c2a4a193f92721",
+      "head_sha256": "142ec44aec9e2ab494c26d3bb812e029d860429c13d64d1cb0c2a4a193f92721",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "konum.py",
+      "local_sha256": "83c0bb8885e762f2c8c60024bc98cf1d1620d85bda15b4cfb13be0e2d5feaec0",
+      "remote_sha256": "83c0bb8885e762f2c8c60024bc98cf1d1620d85bda15b4cfb13be0e2d5feaec0",
+      "head_sha256": "83c0bb8885e762f2c8c60024bc98cf1d1620d85bda15b4cfb13be0e2d5feaec0",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "make_builtin_voices.py",
+      "local_sha256": "9ee830e8be19996cc502efd3c8349fed8474c2629c4a18e6c13ecade15333374",
+      "remote_sha256": "9ee830e8be19996cc502efd3c8349fed8474c2629c4a18e6c13ecade15333374",
+      "head_sha256": "9ee830e8be19996cc502efd3c8349fed8474c2629c4a18e6c13ecade15333374",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "opt.py",
+      "local_sha256": "3aff76241b87ff994c735f09ff1e81ad0a1c0a0741dbd6f73e4dd5e0d5e18cd3",
+      "remote_sha256": "3aff76241b87ff994c735f09ff1e81ad0a1c0a0741dbd6f73e4dd5e0d5e18cd3",
+      "head_sha256": "3aff76241b87ff994c735f09ff1e81ad0a1c0a0741dbd6f73e4dd5e0d5e18cd3",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "pba.py",
+      "local_sha256": "cceb18dabefef87d3c2dcc60498484159a4591ca21149ea3b334f9ca4e1fdf27",
+      "remote_sha256": "a44fff88146c265a1d0f66c3104a787946a0604bf29c4492aeda4277c38e497d",
+      "head_sha256": "a44fff88146c265a1d0f66c3104a787946a0604bf29c4492aeda4277c38e497d",
+      "equal": false,
+      "category": "仅本地未接入的 PBA 保边实验；去除候选函数后 AST 与生产一致",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "peakfit.py",
+      "local_sha256": "9deb58eb52e1986fbfb201cf96f3c3a4b6eae6a5a70e00dcfb4151a3f52ba97e",
+      "remote_sha256": "9deb58eb52e1986fbfb201cf96f3c3a4b6eae6a5a70e00dcfb4151a3f52ba97e",
+      "head_sha256": "9deb58eb52e1986fbfb201cf96f3c3a4b6eae6a5a70e00dcfb4151a3f52ba97e",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "pipeline.py",
+      "local_sha256": "e039635d98ff472b31e64f3ebbf2c523cd0ffd374f633715e1b79b0506952301",
+      "remote_sha256": "e039635d98ff472b31e64f3ebbf2c523cd0ffd374f633715e1b79b0506952301",
+      "head_sha256": "e31d2ebd479614dc9915168eefe8b1de41acbcd4b752a706bdc720299ac12490",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": true
+    },
+    {
+      "name": "proso.py",
+      "local_sha256": "69f5a38acc9464bdfae15f62638f42069cbac9bb7b0530a35db1f8b71b40c8ce",
+      "remote_sha256": "69f5a38acc9464bdfae15f62638f42069cbac9bb7b0530a35db1f8b71b40c8ce",
+      "head_sha256": "69f5a38acc9464bdfae15f62638f42069cbac9bb7b0530a35db1f8b71b40c8ce",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "prosody_report.py",
+      "local_sha256": "73831019c58c05ea2203aa8465ea64397ba965146648e11ef71de4f39e5e6082",
+      "remote_sha256": "73831019c58c05ea2203aa8465ea64397ba965146648e11ef71de4f39e5e6082",
+      "head_sha256": "73831019c58c05ea2203aa8465ea64397ba965146648e11ef71de4f39e5e6082",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "realism.py",
+      "local_sha256": "468284d3b0d101e360e367f5b6b32ca1aa937111851f822f8cb7ef12f7f08ff7",
+      "remote_sha256": "468284d3b0d101e360e367f5b6b32ca1aa937111851f822f8cb7ef12f7f08ff7",
+      "head_sha256": "468284d3b0d101e360e367f5b6b32ca1aa937111851f822f8cb7ef12f7f08ff7",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "roomtone.py",
+      "local_sha256": "ecde1482505c27c06b8c12f261c8603550635e13a9ff52c8eebfed4f8970a3c0",
+      "remote_sha256": "ecde1482505c27c06b8c12f261c8603550635e13a9ff52c8eebfed4f8970a3c0",
+      "head_sha256": "ecde1482505c27c06b8c12f261c8603550635e13a9ff52c8eebfed4f8970a3c0",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "server.py",
+      "local_sha256": "f1834d560d5dad241ab2c4b1869dced33142c355c7444ecb569861c076721149",
+      "remote_sha256": "f1834d560d5dad241ab2c4b1869dced33142c355c7444ecb569861c076721149",
+      "head_sha256": "f1834d560d5dad241ab2c4b1869dced33142c355c7444ecb569861c076721149",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "slowdyn.py",
+      "local_sha256": "9712a0ab39f26e3ea220d9bcae5579a0adad0f06cbc8cff80e5251e1f250f673",
+      "remote_sha256": "9712a0ab39f26e3ea220d9bcae5579a0adad0f06cbc8cff80e5251e1f250f673",
+      "head_sha256": "9712a0ab39f26e3ea220d9bcae5579a0adad0f06cbc8cff80e5251e1f250f673",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "sweep.py",
+      "local_sha256": "d8c0d926ff5ce11eb91d2aabc7b4de88ee79063e4c7e5048b3b75282d5722602",
+      "remote_sha256": "d8c0d926ff5ce11eb91d2aabc7b4de88ee79063e4c7e5048b3b75282d5722602",
+      "head_sha256": "d8c0d926ff5ce11eb91d2aabc7b4de88ee79063e4c7e5048b3b75282d5722602",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "transient.py",
+      "local_sha256": "f92513031be23f2df033dcfa9527057c7a0f8c722d13dbd1fe37eb4e44629ff2",
+      "remote_sha256": "f92513031be23f2df033dcfa9527057c7a0f8c722d13dbd1fe37eb4e44629ff2",
+      "head_sha256": "f92513031be23f2df033dcfa9527057c7a0f8c722d13dbd1fe37eb4e44629ff2",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "tts_engine.py",
+      "local_sha256": "8c0e0d97ab14b4057a85cfe8a6df1755a3b292e36a16bf174f7b7e57b379ce49",
+      "remote_sha256": "8c0e0d97ab14b4057a85cfe8a6df1755a3b292e36a16bf174f7b7e57b379ce49",
+      "head_sha256": "8c0e0d97ab14b4057a85cfe8a6df1755a3b292e36a16bf174f7b7e57b379ce49",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "voice_match.py",
+      "local_sha256": "20d71ba0b3da39972e05ea66089c17eb89e60a43e8e1ad1b33961511fb920233",
+      "remote_sha256": "20d71ba0b3da39972e05ea66089c17eb89e60a43e8e1ad1b33961511fb920233",
+      "head_sha256": "20d71ba0b3da39972e05ea66089c17eb89e60a43e8e1ad1b33961511fb920233",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "voice_trim.py",
+      "local_sha256": "fb51f8df61ee9471c10c5b49c08556c544b1c635dcb053611deea541ae1c15bf",
+      "remote_sha256": "fb51f8df61ee9471c10c5b49c08556c544b1c635dcb053611deea541ae1c15bf",
+      "head_sha256": "fb51f8df61ee9471c10c5b49c08556c544b1c635dcb053611deea541ae1c15bf",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    },
+    {
+      "name": "vram.py",
+      "local_sha256": "fd775f48febbe700e71682784cec311a9680ef5d11ae5379f1b1fd6f6b5d2356",
+      "remote_sha256": "fd775f48febbe700e71682784cec311a9680ef5d11ae5379f1b1fd6f6b5d2356",
+      "head_sha256": "fd775f48febbe700e71682784cec311a9680ef5d11ae5379f1b1fd6f6b5d2356",
+      "equal": true,
+      "category": "相同",
+      "deployed_but_uncommitted": false
+    }
+  ],
+  "summary": {
+    "local_modules": 29,
+    "same_name_equal": 28,
+    "same_name_different": [
+      "pba.py"
+    ]
+  },
+  "remote_evidence": {
+    "files": {
+      "envshape.py": {
+        "sha256": "7f955dc7e121dbe60e998d9b0a7684a9005fd0efdd3c2821218dc4fc2b27f71c"
+      },
+      "._voice_trim.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "._voice_match.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "gs_client.py": {
+        "sha256": "69d6e8b2c94db1a9620451a955b55e0b7d15bc661c390187fb571003ec8f2a93"
+      },
+      "tts_engine.py": {
+        "sha256": "8c0e0d97ab14b4057a85cfe8a6df1755a3b292e36a16bf174f7b7e57b379ce49"
+      },
+      "peakfit.py": {
+        "sha256": "9deb58eb52e1986fbfb201cf96f3c3a4b6eae6a5a70e00dcfb4151a3f52ba97e"
+      },
+      "._opt.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "._vram.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "breath.py": {
+        "sha256": "93412b5c9d818357a2dbc3962d80c13f64af150bbfe818f676dcd27c710128f5"
+      },
+      "._realism.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "sweep.py": {
+        "sha256": "d8c0d926ff5ce11eb91d2aabc7b4de88ee79063e4c7e5048b3b75282d5722602"
+      },
+      "dyn.py": {
+        "sha256": "6c334321b8611f5786dc76ab60f3610abcfa9a7d8f0a4af0847d24a06e5fe5f2"
+      },
+      "._install_builtin_voices.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "konum.py": {
+        "sha256": "83c0bb8885e762f2c8c60024bc98cf1d1620d85bda15b4cfb13be0e2d5feaec0"
+      },
+      "asr_check.py": {
+        "sha256": "aefe5ea2420c93bfb1f6bb256f4b7b6347b7c2e6be4add29d041c38fadd21156"
+      },
+      "._cosy_client.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "bench.py": {
+        "sha256": "31b8694558b672e6496d75564fda33562906210e4e2398b73917919dcb48a83e"
+      },
+      "transient.py": {
+        "sha256": "f92513031be23f2df033dcfa9527057c7a0f8c722d13dbd1fe37eb4e44629ff2"
+      },
+      "realism.py": {
+        "sha256": "468284d3b0d101e360e367f5b6b32ca1aa937111851f822f8cb7ef12f7f08ff7"
+      },
+      "opt.py": {
+        "sha256": "3aff76241b87ff994c735f09ff1e81ad0a1c0a0741dbd6f73e4dd5e0d5e18cd3"
+      },
+      "engine_select.py": {
+        "sha256": "1060bf3d44f2b402271d785da63ef419c98aff5d5a7ccbf8eeee90c294a92bc8"
+      },
+      "cosy_client.py": {
+        "sha256": "ac0bf2863b8276dbc2e1f9eee2eb075d1177df64dd216c9034c50e5049102da3"
+      },
+      "cosy_server.py": {
+        "sha256": "db72678c7c6867238bc540c170dcf7689cad71ae3e4279d91f699baaf1418ed5"
+      },
+      "._tts_engine.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "._analyze.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "prosody_report.py": {
+        "sha256": "73831019c58c05ea2203aa8465ea64397ba965146648e11ef71de4f39e5e6082"
+      },
+      "._envshape.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "voice_match.py": {
+        "sha256": "20d71ba0b3da39972e05ea66089c17eb89e60a43e8e1ad1b33961511fb920233"
+      },
+      "pba.py": {
+        "sha256": "a44fff88146c265a1d0f66c3104a787946a0604bf29c4492aeda4277c38e497d"
+      },
+      "._prosody_report.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "voice_trim.py": {
+        "sha256": "fb51f8df61ee9471c10c5b49c08556c544b1c635dcb053611deea541ae1c15bf"
+      },
+      "make_builtin_voices.py": {
+        "sha256": "9ee830e8be19996cc502efd3c8349fed8474c2629c4a18e6c13ecade15333374"
+      },
+      "._pba.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "._sweep.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "analyze.py": {
+        "sha256": "df29042cc3011e5131d265f4ea9a1fda0ce54e451daa6224e6904292f0cd33dc"
+      },
+      "slowdyn.py": {
+        "sha256": "9712a0ab39f26e3ea220d9bcae5579a0adad0f06cbc8cff80e5251e1f250f673"
+      },
+      "._asr_check.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "pipeline.py": {
+        "sha256": "e039635d98ff472b31e64f3ebbf2c523cd0ffd374f633715e1b79b0506952301"
+      },
+      "._engine_select.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "roomtone.py": {
+        "sha256": "ecde1482505c27c06b8c12f261c8603550635e13a9ff52c8eebfed4f8970a3c0"
+      },
+      "install_builtin_voices.py": {
+        "sha256": "142ec44aec9e2ab494c26d3bb812e029d860429c13d64d1cb0c2a4a193f92721"
+      },
+      "._cosy_server.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "vram.py": {
+        "sha256": "fd775f48febbe700e71682784cec311a9680ef5d11ae5379f1b1fd6f6b5d2356"
+      },
+      "proso.py": {
+        "sha256": "69f5a38acc9464bdfae15f62638f42069cbac9bb7b0530a35db1f8b71b40c8ce"
+      },
+      "._bench.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "server.py": {
+        "sha256": "f1834d560d5dad241ab2c4b1869dced33142c355c7444ecb569861c076721149"
+      },
+      "._pipeline.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      },
+      "._make_builtin_voices.py": {
+        "sha256": "d6701a4077bbb44f8df2141711a269912b1d53c984e3584685827a5d211f8e32"
+      }
+    },
+    "assets": [
+      {
+        "path": "/mnt/tts/projects/gpt-sovits/out/cosy_full_m.wav",
+        "exists": true,
+        "size": 21394604,
+        "sha256": "37c6fa93fc23fb475fefa8a75fb11b0a315c8a61493fc699b03b21196def17b8",
+        "seconds": 445.72,
+        "sr": 24000,
+        "channels": 1
+      },
+      {
+        "path": "/mnt/tts/projects/gpt-sovits/out/cosy_full_f.wav",
+        "exists": true,
+        "size": 20645804,
+        "sha256": "638e629a5b2dab0257f38ec40bb3f090f021dfeb1a7868286201e5a848640ded",
+        "seconds": 430.12,
+        "sr": 24000,
+        "channels": 1
+      },
+      {
+        "path": "/mnt/tts/projects/gpt-sovits/out/cosy_full_m_elmale.wav",
+        "exists": true,
+        "size": 22298924,
+        "sha256": "0cb240393a144cebb4bef5bb5bed6042fefaa0a6521ca30bddfbaf0b800b4746",
+        "seconds": 464.56,
+        "sr": 24000,
+        "channels": 1
+      },
+      {
+        "path": "/mnt/tts/projects/gpt-sovits/out/full_1a6c20a60481.txt",
+        "exists": true,
+        "size": 9736,
+        "sha256": "bea62536a48a07e5f1248858b3dc952274063bd3b586ad4b1ac686dd2ecfd692",
+        "chars": 4046
+      },
+      {
+        "path": "/mnt/tts/projects/gpt-sovits/out/full_00b6a45ad6aa.txt",
+        "exists": true,
+        "size": 8354,
+        "sha256": "0d78f27046fc273548261bd98719a8c29a85cc4414016958fb270486170efcd9",
+        "chars": 3416
+      }
+    ],
+    "residual": [],
+    "legacy": [
+      {
+        "path": "/tmp/pba_edge_experiment.json",
+        "size": 5179,
+        "directory": false
+      },
+      {
+        "path": "/tmp/pba_existing_90s.wav",
+        "size": 4224236,
+        "directory": false
+      },
+      {
+        "path": "/tmp/pba_candidate_90s.wav",
+        "size": 4224236,
+        "directory": false
+      },
+      {
+        "path": "/tmp/pba_edge_candidate_20261013.py",
+        "size": 19495,
+        "directory": false
+      },
+      {
+        "path": "/tmp/_selftest_upload.txt",
+        "size": 9737,
+        "directory": false
+      },
+      {
+        "path": "/tmp/selftest_score.py",
+        "size": 3872,
+        "directory": false
+      },
+      {
+        "path": "/tmp/_cj_selftest",
+        "size": 232,
+        "directory": false
+      },
+      {
+        "path": "/tmp/selftest_score_open.py",
+        "size": 2663,
+        "directory": false
+      },
+      {
+        "path": "/tmp/selftest_jobs_open.json",
+        "size": 59965,
+        "directory": false
+      },
+      {
+        "path": "/tmp/selftest_score_ab.py",
+        "size": 2675,
+        "directory": false
+      },
+      {
+        "path": "/tmp/selftest_r28.log",
+        "size": 576,
+        "directory": false
+      },
+      {
+        "path": "/tmp/selftest_jobs.json",
+        "size": 63460,
+        "directory": false
+      },
+      {
+        "path": "/tmp/selftest_noproso.log",
+        "size": 632,
+        "directory": false
+      },
+      {
+        "path": "/tmp/selftest_ab",
+        "size": 4096,
+        "directory": true
+      },
+      {
+        "path": "/tmp/selftest_open",
+        "size": 4096,
+        "directory": true
+      },
+      {
+        "path": "/tmp/selftest",
+        "size": 4096,
+        "directory": true
+      },
+      {
+        "path": "/tmp/gapscan.py",
+        "size": 2024,
+        "directory": false
+      },
+      {
+        "path": "/tmp/gapspec.json",
+        "size": 1219,
+        "directory": false
+      },
+      {
+        "path": "/tmp/gap_spec.json",
+        "size": 383,
+        "directory": false
+      },
+      {
+        "path": "/tmp/gapscan2.py",
+        "size": 2527,
+        "directory": false
+      },
+      {
+        "path": "/tmp/gap2_j6zxbipx",
+        "size": 4096,
+        "directory": true
+      },
+      {
+        "path": "/tmp/diag_gap.py",
+        "size": 2937,
+        "directory": false
+      },
+      {
+        "path": "/tmp/proso_test.py",
+        "size": 4224,
+        "directory": false
+      },
+      {
+        "path": "/tmp/selftest_noproso.log",
+        "size": 632,
+        "directory": false
+      },
+      {
+        "path": "/tmp/score_full_f5.log",
+        "size": 2057,
+        "directory": false
+      },
+      {
+        "path": "/tmp/score_full_f.log",
+        "size": 1714,
+        "directory": false
+      },
+      {
+        "path": "/tmp/score_full_m.log",
+        "size": 2066,
+        "directory": false
+      }
+    ],
+    "experiment": {
+      "source": "/mnt/tts/projects/gpt-sovits/out/cosy_full_m_elmale.wav",
+      "source_window_seconds": 90,
+      "experiment": "same raw waveform; same audible gaps; each shortened to 80%; only fitting method differs; NOT full production pipeline",
+      "gap_count": 29,
+      "output_seconds": 88.004,
+      "validation": "28 synthetic tests passed; no listening or speaker/ASR acceptance yet"
+    },
+    "processes": [
+      "   1294       1  2-02:23:37 pt_main_thread  /mnt/tts/projects/cosy/venv/bin/python /mnt/tts/projects/qwen3-tts/app/cosy_server.py",
+      " 624477       1    20:04:35 python          /mnt/tts/projects/gpt-sovits/venv/bin/python serve.py",
+      "1610488       1       53:08 python          /mnt/tts/projects/qwen3-tts/venv/bin/python -u server.py"
+    ],
+    "jobs": {
+      "count": 273,
+      "status_counts": {
+        "done": 268,
+        "error": 5
+      },
+      "latest_keys": [
+        "auto_applied",
+        "batch_size",
+        "chunk",
+        "chunks",
+        "chunks_total",
+        "created_at",
+        "effective_emotion",
+        "emotion",
+        "engine",
+        "enhanced",
+        "error",
+        "files",
+        "finished_at",
+        "folder",
+        "id",
+        "instruct",
+        "language",
+        "max_chars",
+        "mode",
+        "mp3",
+        "owner",
+        "preview",
+        "progress",
+        "seed",
+        "speaker",
+        "speed",
+        "started_at",
+        "stats",
+        "status",
+        "subtalker_temperature",
+        "text",
+        "title",
+        "voice",
+        "wav"
+      ],
+      "internal_snapshot_keys_present": []
+    }
+  },
+  "replay": {
+    "prepared_manifest": "outputs/offline_postprocess_prepare.json",
+    "full_chain_completed": false,
+    "male_completed": false,
+    "female_completed": false,
+    "audio_execution_performed": false,
+    "blockers": [
+      "所检查目录未找到线上后处理前逐块 WAV，任务 wav 字段为空，临时文件已清理",
+      "持久化 jobs 未保存内部目标参数及原始分块文本快照",
+      "既有男女 cosy_full 是整篇裸推理，不能替代线上逐块同源输入",
+      "仅完成生产后处理代码提取、语法编译及依赖清单，不是可直接执行的完整回放器"
+    ],
+    "pba_90s_is_full_chain": false
+  },
+  "boundaries": {
+    "production_modified": false,
+    "service_restarted": false,
+    "online_switch_changed": false,
+    "cancelled_scoring_started": false,
+    "git_commit_created": false,
+    "git_push_performed": false,
+    "ui_questions_memory_modified": false
+  },
+  "limitations": [
+    "文件哈希证明磁盘同步，不能独立证明在运行进程内已加载的字节完全相同",
+    "遗留搜索覆盖 /tmp、/mnt/tts/output、项目 tools；非全盘穷举",
+    "未验证主观听感、ASR、音色相似度；未得出候选优于生产的结论"
+  ],
+  "production_process_snapshot": {
+    "pid": 1610488,
+    "cwd": "/mnt/tts/projects/qwen3-tts/app",
+    "tts_environment": {
+      "TTS_BASE": "/mnt/tts",
+      "TTS_PROSO": "0",
+      "TTS_SLOWDYN": "1",
+      "TTS_PROSO_MED": "0",
+      "TTS_PEAK_FIT": "1",
+      "TTS_LOUD_TOL": "0.15",
+      "TTS_LORA_ADAPTERS": "",
+      "TTS_LORA_ALIAS": "",
+      "TTS_KO_NUM": "1",
+      "TTS_PROSO_TAIL_DROP": "0",
+      "TTS_PROSO_TAIL_DROP_MAX": "4.0",
+      "TTS_BREATH_SYN": "1",
+      "TTS_BREATH_PER_MIN": "10.0",
+      "TTS_BREATH_GAIN_DB": "-25.0",
+      "TTS_BREATH_MIN_GAP_MS": "380"
+    },
+    "method": "sudo 经 stdin 授权只读；密码未落文件",
+    "checked_at": "2026-10-13T03:26:45.003043+00:00"
+  }
+}

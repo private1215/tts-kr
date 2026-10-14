@@ -1,0 +1,19 @@
+{
+ "tag": "male",
+ "src_wav": "/mnt/tts/diag/longsubmit-20261013/Q1.wav",
+ "src_sha256": "614461a9de6c27c93c2ac43e8e2c46e9f994b3213a6603a3feabff44b99783d7",
+ "src_seconds": 530.498,
+ "src_sr": 24000,
+ "speech_onset_sec": 0.08,
+ "clip_start_sec": 0.0,
+ "clip_end_sec": 13.0,
+ "clip_seconds": 13.0,
+ "clip_wav": "/mnt/tts/diag/b2-20261013/ref_male_head.wav",
+ "clip_sha256": "630ee7eb62765b799b5dcea4e2096ac1dd57e8ef084f1819d1bba3b55b96e6ae",
+ "asr_model": "Systran/faster-whisper-small",
+ "asr_device": "cpu/int8",
+ "asr_seconds": 6.52,
+ "ref_text": "안녕하세요 제주반도체 주주 여러분 반갑습니다  정민철 프로입니다  자 우리 주주님들께 오늘 정말 중요한 말씀드리려고 이렇게 카메라 켰습니다  어유 지금 제주반도체 기가 막힌 자리에 와 있거든요",
+ "ref_text_len": 107,
+ "ref_text_sha256": "38f5f7928dd39a81ab838723c26004b16d4c3822b7f8a556ac8dee8e156d5f4a"
+}

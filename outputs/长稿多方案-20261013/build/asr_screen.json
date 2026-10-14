@@ -1,0 +1,122 @@
+{
+ "case1-cand1": {
+  "wav": "/mnt/tts/diag/longsubmit-20261013/deliver/case1-cand1.wav",
+  "case_id": "ce1a3fda551a",
+  "ref_chars": 3948,
+  "hyp_chars": 3954,
+  "hyp_head": "반갑습니다. 현대롯템 주주 여러분 이민정 프로입니다.  우리 주주님들 그동안 고점에 물리셔서 맘고생 진짜 심하셨죠.  주식판이라는 게 겉보기엔 뉴스나 삐깝 번쩍한 재료로 움직이는 것 같아도요.  결국 까고 보면 그 ",
+  "cer": 0.0483,
+  "asr_seconds": 120.96,
+  "note": "Whisper-small CPU int8，仅作少读/跑飞的内容线索，不作音质或听感结论"
+ },
+ "case1-cand2": {
+  "wav": "/mnt/tts/diag/longsubmit-20261013/deliver/case1-cand2.wav",
+  "case_id": "ce1a3fda551a",
+  "ref_chars": 3948,
+  "hyp_chars": 4183,
+  "hyp_head": "끊이면서 캔들 위아래로 반갑습니다.  현대로템 주주 여러분 이민정 프로입니다.  우리 주주님들 그동안 고점에 물리셔서  맘고생 진짜 심하셨죠.  주식판이라는 게 겉보기엔  뉴스나 삐깍 번쩍한 재료로 움직이는 것 같다",
+  "cer": 0.077,
+  "asr_seconds": 129.92,
+  "note": "Whisper-small CPU int8，仅作少读/跑飞的内容线索，不作音质或听感结论"
+ },
+ "case1-cand3": {
+  "wav": "/mnt/tts/diag/longsubmit-20261013/deliver/case1-cand3.wav",
+  "case_id": "ce1a3fda551a",
+  "ref_chars": 3948,
+  "hyp_chars": 3887,
+  "hyp_head": "반갑습니다. 현대로템 주주 여러분 이민정 프로입니다.  우리 주주님들 그동안 고점에 물리셔서 망고생 진짜 심하셨죠.  주식판이라는 게 겉보기엔 뉴스나 삐깝번적한 재료로 움직이는 것 같아도요.  결국 까고 보면 그 이",
+  "cer": 0.0795,
+  "asr_seconds": 114.19,
+  "note": "Whisper-small CPU int8，仅作少读/跑飞的内容线索，不作音质或听感结论"
+ },
+ "case1-cand4": {
+  "wav": "/mnt/tts/diag/longsubmit-20261013/deliver/case1-cand4.wav",
+  "case_id": "ce1a3fda551a",
+  "ref_chars": 3948,
+  "hyp_chars": 3981,
+  "hyp_head": "반갑습니다.  현대로템 주주 여러분 이민정 프로 입니다.  우리 주주님들 그동안 고점에 물리 셔서 망고생 진짜 심하셨  죠.  주식판이라는 게 겉보기엔 뉴스나 삐깍 번쩍한 재료로 움직이는 것  가타도요.  결국 까고",
+  "cer": 0.0571,
+  "asr_seconds": 115.3,
+  "note": "Whisper-small CPU int8，仅作少读/跑飞的内容线索，不作音质或听感结论"
+ },
+ "case1-cand5": {
+  "wav": "/mnt/tts/diag/longsubmit-20261013/deliver/case1-cand5.wav",
+  "case_id": "ce1a3fda551a",
+  "ref_chars": 3948,
+  "hyp_chars": 3916,
+  "hyp_head": "반갑습니다. 현대로템 주주 여러분 이민정 프로입니다.  우리 주주님들 그동안 고점에 물리셔서 맘고생 진짜 심하셨죠.  주식판이라는 게 겉보기엔 뉴스나 삐깍 번쩍한 재료로 움직이는 것 같아도요.  결국 까고 보면 그 ",
+  "cer": 0.041,
+  "asr_seconds": 120.73,
+  "note": "Whisper-small CPU int8，仅作少读/跑飞的内容线索，不作音质或听感结论"
+ },
+ "case2-cand1": {
+  "wav": "/mnt/tts/diag/longsubmit-20261013/deliver/case2-cand1.wav",
+  "case_id": "d172b8c4efb3",
+  "ref_chars": 4594,
+  "hyp_chars": 4414,
+  "hyp_head": "안녕하세요 제주반도체 주주 여러분 반갑니다  정민철 프로입니다  자 우리 주주님들께 오늘 정말 중요한 말씀드리려고 이렇게 카메라입니다  어휴 지금 제주반도체 기가 막힌 자리에 와 있거든요  제가 왜 이렇게까지 강조해",
+  "cer": 0.1331,
+  "asr_seconds": 123.23,
+  "note": "Whisper-small CPU int8，仅作少读/跑飞的内容线索，不作音质或听感结论"
+ },
+ "case2-cand2": {
+  "wav": "/mnt/tts/diag/longsubmit-20261013/deliver/case2-cand2.wav",
+  "case_id": "d172b8c4efb3",
+  "ref_chars": 4594,
+  "hyp_chars": 4529,
+  "hyp_head": "안녕하세요 제주반도체 주주 여러분 반갑습니다  정민철 프로입니다  자 우리 주주님들께 오늘 정말 중요한 말씀드리려고 이렇게 카메라 켰습니다  어휴 지금 제주반도체 기가 막힌 자리에 와 있거든요  제가 왜 이렇게까지 ",
+  "cer": 0.1054,
+  "asr_seconds": 119.54,
+  "note": "Whisper-small CPU int8，仅作少读/跑飞的内容线索，不作音质或听感结论"
+ },
+ "case2-cand3": {
+  "wav": "/mnt/tts/diag/longsubmit-20261013/deliver/case2-cand3.wav",
+  "case_id": "d172b8c4efb3",
+  "ref_chars": 4594,
+  "hyp_chars": 5431,
+  "hyp_head": "전원 깨지면 비중 축소부터 생각하셔야 돼요  고점 근처라고 불나방처럼 뇌동매매 하지 마시고요  안녕하세요 제주반도체 주제 여러분 반갑습니다 정로임아  자 우리 주주님들께 오늘 정말  중요한 말씀드리라고 이렇게 카메라",
+  "cer": 0.2421,
+  "asr_seconds": 133.46,
+  "note": "Whisper-small CPU int8，仅作少读/跑飞的内容线索，不作音质或听感结论"
+ },
+ "case2-cand4": {
+  "wav": "/mnt/tts/diag/longsubmit-20261013/deliver/case2-cand4.wav",
+  "case_id": "d172b8c4efb3",
+  "ref_chars": 4594,
+  "hyp_chars": 4446,
+  "hyp_head": "안녕하세요 제주반도체 주주 여러분 반갑습니다 정민철 프로입니다  자 우리 주주님들께 오늘 정말 중요한 말씀드리려고 이렇게 카메라입니다  어휴 지금 제주반도체 기가 막힌 자리에 와 있거든요  제가 왜 이렇게까지 강조해",
+  "cer": 0.1387,
+  "asr_seconds": 121.07,
+  "note": "Whisper-small CPU int8，仅作少读/跑飞的内容线索，不作音质或听感结论"
+ },
+ "case2-cand5": {
+  "wav": "/mnt/tts/diag/longsubmit-20261013/deliver/case2-cand5.wav",
+  "case_id": "d172b8c4efb3",
+  "ref_chars": 4594,
+  "hyp_chars": 4663,
+  "hyp_head": "안녕하세요. 제주반도체 주주 여러분. 반갑습니다. 정민철 프로입니다.  자 우리 주주님들께 오늘 정말 중요한 말씀드리려고 이렇게 카메라 켰습니다.  어휴 지금 제주반도체 기가 막힌 자리에 와 있거든요.  제가 왜 이",
+  "cer": 0.1157,
+  "asr_seconds": 123.69,
+  "note": "Whisper-small CPU int8，仅作少读/跑飞的内容线索，不作音质或听感结论"
+ },
+ "case1-ref": {
+  "wav": "/mnt/tts/diag/longsubmit-20261013/deliver/case1-ref.wav",
+  "case_id": "ce1a3fda551a",
+  "ref_chars": 3948,
+  "hyp_chars": 3913,
+  "hyp_head": "반갑습니다. 현대로템 주주 여러분 이민정 프로입니다.  우리 주주님들 그동안 고점에 물리셔서 맘고생 진짜 심하셨죠?  주식판이라는 게 겉보기엔 뉴스나 삐깝번적한 재료로 움직이는 것 같아도요.  결국 까고 보면 그 이",
+  "cer": 0.0429,
+  "asr_seconds": 116.3,
+  "note": "Whisper-small CPU int8，仅作少读/跑飞的内容线索，不作音质或听感结论"
+ },
+ "case2-ref": {
+  "wav": "/mnt/tts/diag/longsubmit-20261013/deliver/case2-ref.wav",
+  "case_id": "d172b8c4efb3",
+  "ref_chars": 4594,
+  "hyp_chars": 4514,
+  "hyp_head": "안녕하세요 제주반도체 주주 여러분 반갑습니다 정민철 프로입니다  자 우리 주주님들께 오늘 정말 중요한 말씀 드리려고 이렇게 카메라 켰습니다  어휴 지금 제주반도체 기가 막힌 자리에 와 있거든요  제가 왜 이렇게까지 ",
+  "cer": 0.0997,
+  "asr_seconds": 122.0,
+  "note": "Whisper-small CPU int8，仅作少读/跑飞的内容线索，不作音质或听感结论"
+ }
+}

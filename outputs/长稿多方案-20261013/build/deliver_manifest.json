@@ -1,0 +1,202 @@
+{
+ "cases": {
+  "ce1a3fda551a": {
+   "ref": {
+    "blind_name": "case1-ref",
+    "file": "/mnt/tts/diag/longsubmit-20261013/deliver/case1-ref.wav",
+    "source": "/mnt/tts/data/cases/ce1a3fda551a/merged.wav",
+    "sha256": "56c7caa7af77c271cf2c7d7c2b6f4f64fd122ced57e29d4cabab3255729fdaca",
+    "dur_sec": 525.296
+   },
+   "candidates": [
+    {
+     "blind_name": "case1-cand1",
+     "status": "ok",
+     "file": "/mnt/tts/diag/longsubmit-20261013/deliver/case1-cand1.wav",
+     "sha256": "8aed27199b160237e6702a876df9156a627d2bfc346ff7d69fb8519c6b27d815",
+     "dur_sec": 520.51,
+     "size_bytes": 24984582,
+     "source_files": [
+      "/mnt/tts/output/长稿多方案-M2/长稿多方案-M2-1.mp3",
+      "/mnt/tts/output/长稿多方案-M2/长稿多方案-M2-2.mp3",
+      "/mnt/tts/output/长稿多方案-M2/长稿多方案-M2-3.mp3"
+     ],
+     "source_file_sha256": [
+      "d41eea8ea3428ebf66dbd55b74c854ed1f1d7c24981af4ce4c19dfeb0712a30e",
+      "57a4f08cbc6e83b8ae680b08f8d872174b12645f872a59c11ed06cc66d82df74",
+      "bf2fca7b5927b06f80d602ab162c52b7b625e1408a3aa8a566255a53c7646008"
+     ],
+     "source_count": 3
+    },
+    {
+     "blind_name": "case1-cand2",
+     "status": "ok",
+     "file": "/mnt/tts/diag/longsubmit-20261013/deliver/case1-cand2.wav",
+     "sha256": "dee8bb2d698a9254519e2145840b6b2acabd805426108841c41e8319cf34b6a9",
+     "dur_sec": 520.39,
+     "size_bytes": 24978792,
+     "source_files": [
+      "/mnt/tts/output/AB-女-参考SOLA_female-ce1a3fda551a/AB-女-参考SOLA_female-ce1a3fda551a-1.mp3",
+      "/mnt/tts/output/AB-女-参考SOLA_female-ce1a3fda551a/AB-女-参考SOLA_female-ce1a3fda551a-2.mp3"
+     ],
+     "source_file_sha256": [
+      "db1094847865db3fe312b46bb3b4eab0a66d902dbd3324b0bd07fc264ab62efa",
+      "318d8fbc09ff1e3ff69d0a518d4c33ccc3bd21eaf7a6704d7d2b2e7b4d6cff2c"
+     ],
+     "source_count": 2
+    },
+    {
+     "blind_name": "case1-cand3",
+     "status": "ok",
+     "file": "/mnt/tts/diag/longsubmit-20261013/deliver/case1-cand3.wav",
+     "sha256": "47d6884d0b83cb0f26c00a0717108d7b806985ecbecca379d1b64ee5314aefb1",
+     "dur_sec": 520.526,
+     "size_bytes": 24985336,
+     "source_files": [
+      "/mnt/tts/output/自测-女-真实口径-ce1a3fda551a/自测-女-真实口径-ce1a3fda551a-1.mp3",
+      "/mnt/tts/output/自测-女-真实口径-ce1a3fda551a/自测-女-真实口径-ce1a3fda551a-2.mp3",
+      "/mnt/tts/output/自测-女-真实口径-ce1a3fda551a/自测-女-真实口径-ce1a3fda551a-3.mp3"
+     ],
+     "source_file_sha256": [
+      "dfe307c2f52ae6879d370e45f965e6d3f2046329c1b94439e4cd5abdf452d965",
+      "4fd9b784fcaf427db95ca3d2e35673d4fbca50addb52cfd392081c790d2deff0",
+      "7f06607dc5361e64315dec7295b887effba143d0a2cbcb813c7904e3b0e98c32"
+     ],
+     "source_count": 3
+    },
+    {
+     "blind_name": "case1-cand4",
+     "status": "ok",
+     "file": "/mnt/tts/diag/longsubmit-20261013/deliver/case1-cand4.wav",
+     "sha256": "dac2236aa7085b295d7b73b5b712e2f514a34b08f2895291a9038c9a4e7f121c",
+     "dur_sec": 507.96,
+     "size_bytes": 24382158,
+     "source_files": [
+      "/mnt/tts/diag/longsubmit-20261013/M4.wav"
+     ],
+     "source_file_sha256": [
+      "72685da839187f861d52f85d33f6591b9c74aea86664e28dff23298d528857ff"
+     ],
+     "source_count": 1
+    },
+    {
+     "blind_name": "case1-cand5",
+     "status": "ok",
+     "file": "/mnt/tts/diag/longsubmit-20261013/deliver/case1-cand5.wav",
+     "sha256": "f1579da0c0be3c7339c2f40b54f599ee2382d0fdf56883c4e2c4f292319cf46e",
+     "dur_sec": 543.403,
+     "size_bytes": 26083410,
+     "source_files": [
+      "/mnt/tts/diag/longsubmit-20261013/Q2.wav"
+     ],
+     "source_file_sha256": [
+      "f609c416268d95d56c30c56ede7c4493dc80a2bb96eb7804479fe22c1e660b0d"
+     ],
+     "source_count": 1
+    }
+   ]
+  },
+  "d172b8c4efb3": {
+   "ref": {
+    "blind_name": "case2-ref",
+    "file": "/mnt/tts/diag/longsubmit-20261013/deliver/case2-ref.wav",
+    "source": "/mnt/tts/data/cases/d172b8c4efb3/merged.wav",
+    "sha256": "28fe6b04052b5ed83831baad25dc744afc99848d068e91b60543d25b8b9d7997",
+    "dur_sec": 555.18
+   },
+   "candidates": [
+    {
+     "blind_name": "case2-cand1",
+     "status": "ok",
+     "file": "/mnt/tts/diag/longsubmit-20261013/deliver/case2-cand1.wav",
+     "sha256": "cfc6580ae0c4b56a5f09c97f2636b178fd0be9e870714c4125095910d3798b16",
+     "dur_sec": 556.695,
+     "size_bytes": 26721460,
+     "source_files": [
+      "/mnt/tts/output/长稿多方案-M1/长稿多方案-M1-1.mp3",
+      "/mnt/tts/output/长稿多方案-M1/长稿多方案-M1-2.mp3",
+      "/mnt/tts/output/长稿多方案-M1/长稿多方案-M1-3.mp3"
+     ],
+     "source_file_sha256": [
+      "57d53ca34b37d12534b7ad329a3c4359acb770ca1c315265f7216bbfe76957f5",
+      "5c0732d0b692bb49ae5ca9e9ae765a778469e4c4f7616585a623007fa8f0c2b5",
+      "7c0afc8af940ca195f3dab737befc3adf6d3e3bcaf85119fd0e56dcbfbb4cafd"
+     ],
+     "source_count": 3
+    },
+    {
+     "blind_name": "case2-cand2",
+     "status": "ok",
+     "file": "/mnt/tts/diag/longsubmit-20261013/deliver/case2-cand2.wav",
+     "sha256": "4e55049a9adaa7650402707ae23a03399c716e614fd335182c91dc69aa389040",
+     "dur_sec": 530.498,
+     "size_bytes": 25463964,
+     "source_files": [
+      "/mnt/tts/diag/longsubmit-20261013/Q1.wav"
+     ],
+     "source_file_sha256": [
+      "614461a9de6c27c93c2ac43e8e2c46e9f994b3213a6603a3feabff44b99783d7"
+     ],
+     "source_count": 1
+    },
+    {
+     "blind_name": "case2-cand3",
+     "status": "ok",
+     "file": "/mnt/tts/diag/longsubmit-20261013/deliver/case2-cand3.wav",
+     "sha256": "17b273c442c452ab70f8673cb2bab2f0fbf65c0e77397f5d978670a9fb5a84cb",
+     "dur_sec": 556.554,
+     "size_bytes": 26714648,
+     "source_files": [
+      "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3/AB-男-参考yohan_male-d172b8c4efb3-1.mp3",
+      "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3/AB-男-参考yohan_male-d172b8c4efb3-2.mp3",
+      "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3/AB-男-参考yohan_male-d172b8c4efb3-3.mp3",
+      "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3/AB-男-参考yohan_male-d172b8c4efb3-4.mp3",
+      "/mnt/tts/output/AB-男-参考yohan_male-d172b8c4efb3/AB-男-参考yohan_male-d172b8c4efb3-5.mp3"
+     ],
+     "source_file_sha256": [
+      "bc1f6cb6c1213808e76150642150081390cade8141bc89d04ef9d1b88b9572d7",
+      "ac48dcd50e82ca3bc227eb17c86ca0d5448ab2e32c13a820bf3426622a69d7df",
+      "c4c7fc354511704058222d1b18db68c24c00aecd578b06db154f3b5e10df5733",
+      "5162c51f8534a0fdf032274afa165acc1cbdef279e8e59bcecbed396a9dd584d",
+      "320d792204a7ee12ec04946079bec943d2855fe946abac5f538f565212df6762"
+     ],
+     "source_count": 5
+    },
+    {
+     "blind_name": "case2-cand4",
+     "status": "ok",
+     "file": "/mnt/tts/diag/longsubmit-20261013/deliver/case2-cand4.wav",
+     "sha256": "f8afaefd3525b7f711ba90ea85faf0110824fa1fb4be56ef3665e30838f86758",
+     "dur_sec": 556.289,
+     "size_bytes": 26701958,
+     "source_files": [
+      "/mnt/tts/output/自测-男-真实口径-d172b8c4efb3/自测-男-真实口径-d172b8c4efb3-1.mp3",
+      "/mnt/tts/output/自测-男-真实口径-d172b8c4efb3/自测-男-真实口径-d172b8c4efb3-2.mp3",
+      "/mnt/tts/output/自测-男-真实口径-d172b8c4efb3/自测-男-真实口径-d172b8c4efb3-3.mp3"
+     ],
+     "source_file_sha256": [
+      "03615f4d4945075fbf385a2792263507af7c05fb1d2d6cd505d9b841616a1081",
+      "8b140d21e85a101911ff5ea7cced1b9cc48a8d362467ea01f46fa2a357da6f40",
+      "5db9c8d17be74cb939e9f3e233ce0199b469fbb1e4b6ce51c07f2725bcf9e2b2"
+     ],
+     "source_count": 3
+    },
+    {
+     "blind_name": "case2-cand5",
+     "status": "ok",
+     "file": "/mnt/tts/diag/longsubmit-20261013/deliver/case2-cand5.wav",
+     "sha256": "267b0aed6247a2e05ea4b2654e6bde1f56247e2591a5e009e25f8f5a8bae7d24",
+     "dur_sec": 539.48,
+     "size_bytes": 25895118,
+     "source_files": [
+      "/mnt/tts/diag/longsubmit-20261013/M3.wav"
+     ],
+     "source_file_sha256": [
+      "fa310f2064cc7e9c001492ab1538e4e7402ede83d14debeed8a4413c529a7c9c"
+     ],
+     "source_count": 1
+    }
+   ]
+  }
+ }
+}

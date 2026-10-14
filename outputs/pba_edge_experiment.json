@@ -1,0 +1,213 @@
+{
+  "source": "/mnt/tts/projects/gpt-sovits/out/cosy_full_m_elmale.wav",
+  "source_window_seconds": 90,
+  "experiment": "same raw waveform; same audible gaps; each shortened to 80%; only fitting method differs; NOT full production pipeline",
+  "gap_count": 29,
+  "output_seconds": 88.004,
+  "rows": [
+    {
+      "start_s": 3.82,
+      "original_s": 0.34,
+      "target_s": 0.272,
+      "old_edge_change": 0.00335693359375,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 9.24,
+      "original_s": 0.32,
+      "target_s": 0.256,
+      "old_edge_change": 0.009796142578125,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 10.62,
+      "original_s": 0.4,
+      "target_s": 0.32,
+      "old_edge_change": 0.00994873046875,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 13.02,
+      "original_s": 0.3,
+      "target_s": 0.24,
+      "old_edge_change": 0.0125732421875,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 14.92,
+      "original_s": 0.28,
+      "target_s": 0.224,
+      "old_edge_change": 0.00079345703125,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 25.66,
+      "original_s": 0.32,
+      "target_s": 0.256,
+      "old_edge_change": 0.000946044921875,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 28.54,
+      "original_s": 0.26,
+      "target_s": 0.208,
+      "old_edge_change": 0.003509521484375,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 30.64,
+      "original_s": 0.34,
+      "target_s": 0.272,
+      "old_edge_change": 0.001495361328125,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 32.62,
+      "original_s": 0.38,
+      "target_s": 0.304,
+      "old_edge_change": 0.00274658203125,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 35.64,
+      "original_s": 0.3,
+      "target_s": 0.24,
+      "old_edge_change": 0.011627197265625,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 39.76,
+      "original_s": 0.36,
+      "target_s": 0.288,
+      "old_edge_change": 0.01104736328125,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 41.54,
+      "original_s": 0.44,
+      "target_s": 0.352,
+      "old_edge_change": 0.003082275390625,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 44.6,
+      "original_s": 0.36,
+      "target_s": 0.288,
+      "old_edge_change": 0.00445556640625,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 46.22,
+      "original_s": 0.26,
+      "target_s": 0.208,
+      "old_edge_change": 0.006072998046875,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 48.88,
+      "original_s": 0.28,
+      "target_s": 0.224,
+      "old_edge_change": 0.0120849609375,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 53.34,
+      "original_s": 0.34,
+      "target_s": 0.272,
+      "old_edge_change": 0.0087890625,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 55.8,
+      "original_s": 0.38,
+      "target_s": 0.304,
+      "old_edge_change": 0.006103515625,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 60.58,
+      "original_s": 0.34,
+      "target_s": 0.272,
+      "old_edge_change": 0.02734375,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 62.14,
+      "original_s": 0.34,
+      "target_s": 0.272,
+      "old_edge_change": 0.0074462890625,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 65.2,
+      "original_s": 0.36,
+      "target_s": 0.288,
+      "old_edge_change": 0.013214111328125,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 67.34,
+      "original_s": 0.3,
+      "target_s": 0.24,
+      "old_edge_change": 0.0042724609375,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 69.64,
+      "original_s": 0.5,
+      "target_s": 0.4,
+      "old_edge_change": 0.00567626953125,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 74.08,
+      "original_s": 0.4,
+      "target_s": 0.32,
+      "old_edge_change": 0.00079345703125,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 74.9,
+      "original_s": 0.38,
+      "target_s": 0.304,
+      "old_edge_change": 0.0089111328125,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 77.78,
+      "original_s": 0.3,
+      "target_s": 0.24,
+      "old_edge_change": 0.002288818359375,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 79.52,
+      "original_s": 0.32,
+      "target_s": 0.256,
+      "old_edge_change": 0.000885009765625,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 83.04,
+      "original_s": 0.4,
+      "target_s": 0.32,
+      "old_edge_change": 0.005401611328125,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 86.32,
+      "original_s": 0.3,
+      "target_s": 0.24,
+      "old_edge_change": 0.009368896484375,
+      "candidate_edge_change": 0.0
+    },
+    {
+      "start_s": 88.18,
+      "original_s": 0.38,
+      "target_s": 0.304,
+      "old_edge_change": 0.020416259765625,
+      "candidate_edge_change": 0.0
+    }
+  ],
+  "validation": "28 synthetic tests passed; no listening or speaker/ASR acceptance yet"
+}

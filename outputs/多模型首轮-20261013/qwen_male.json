@@ -1,0 +1,382 @@
+{
+  "engine": "Qwen3-TTS Base",
+  "backend": "独立离线裸推理进程，非生产/api/jobs",
+  "gender": "male",
+  "case_id": "d172b8c4efb3",
+  "blind_id": "试听-男-B7",
+  "text": "안녕하세요. 제주반도체 주주 여러분, 반갑습니다. 정민철 프로입니다.\n자, 우리 주주님들께 오늘 정말, 중요한 말씀 드리려고 이렇게 카메라 켰습니다.\n어유, 지금 제주반도체, 기가 막힌 자리에 와 있거든요. 제가 왜 이렇게까지 강조해서 말씀드리는지, 감이 좀 오시나요?",
+  "reference": {
+    "path": "/mnt/tts/data/voices/EL_male.wav",
+    "ref_text": "투매 끝났다, 세력 매집 끝났다 이렇게 확정 지을 순 없습니다. 수급창 한번 보실까요? 11시 5분 기준, 외인창구 마이너스 67 찍혀 있죠. 개인이랑 기관은 블라인드 처리되어 있는데 이거 0이라고 단정하시면 큰 코 다칩니다.",
+    "gender": "male",
+    "bench_case": "1a6c20a60481",
+    "dur": 14.98,
+    "sr": 24000,
+    "sha256": "3427f3a7cf761ea9371f9724da7af61032ceb41d4c32f5337f4919e84da01d3c",
+    "ref_text_sha256": "4064fe4114208b34e46e92936fa0dcae04438081cac9b27ec855fc3019be985e"
+  },
+  "model_path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base",
+  "model_inventory": [
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/generation_config.json",
+      "bytes": 245,
+      "mtime": 1791198241.6544483
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/model.safetensors",
+      "bytes": 3857413744,
+      "mtime": 1791199980.756019
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/preprocessor_config.json",
+      "bytes": 127,
+      "mtime": 1791198241.708442
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.gitattributes",
+      "bytes": 1519,
+      "mtime": 1791198241.6534483
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/vocab.json",
+      "bytes": 2776833,
+      "mtime": 1791198241.7304392
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/merges.txt",
+      "bytes": 1671839,
+      "mtime": 1791198241.6784453
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/config.json",
+      "bytes": 4494,
+      "mtime": 1791198241.6544483
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/README.md",
+      "bytes": 57817,
+      "mtime": 1791198241.6534483
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/tokenizer_config.json",
+      "bytes": 7344,
+      "mtime": 1791198241.7094417
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/speech_tokenizer/model.safetensors",
+      "bytes": 682293092,
+      "mtime": 1791200026.0538487
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/speech_tokenizer/preprocessor_config.json",
+      "bytes": 234,
+      "mtime": 1791198241.7094417
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/speech_tokenizer/configuration.json",
+      "bytes": 76,
+      "mtime": 1791198241.7094417
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/speech_tokenizer/config.json",
+      "bytes": 2336,
+      "mtime": 1791198241.7094417
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/shallow",
+      "bytes": 41,
+      "mtime": 1791198239.2097385
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/description",
+      "bytes": 73,
+      "mtime": 1791198237.6049316
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/packed-refs",
+      "bytes": 112,
+      "mtime": 1791198241.6494489
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/config",
+      "bytes": 313,
+      "mtime": 1791198241.6964433
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/HEAD",
+      "bytes": 21,
+      "mtime": 1791198241.6504488
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/info/exclude",
+      "bytes": 240,
+      "mtime": 1791198237.6039317
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/logs/HEAD",
+      "bytes": 190,
+      "mtime": 1791198241.6514485
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/update.sample",
+      "bytes": 3650,
+      "mtime": 1791198237.6039317
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/post-commit",
+      "bytes": 347,
+      "mtime": 1791198241.7054422
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/post-update.sample",
+      "bytes": 189,
+      "mtime": 1791198237.6049316
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/pre-push",
+      "bytes": 341,
+      "mtime": 1791198241.7054422
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/sendemail-validate.sample",
+      "bytes": 2308,
+      "mtime": 1791198237.6049316
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/commit-msg.sample",
+      "bytes": 896,
+      "mtime": 1791198237.6049316
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/pre-commit.sample",
+      "bytes": 1643,
+      "mtime": 1791198237.6049316
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/pre-receive.sample",
+      "bytes": 544,
+      "mtime": 1791198237.6049316
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/pre-rebase.sample",
+      "bytes": 4898,
+      "mtime": 1791198237.6049316
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/pre-merge-commit.sample",
+      "bytes": 416,
+      "mtime": 1791198237.6049316
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/post-checkout",
+      "bytes": 351,
+      "mtime": 1791198241.7054422
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/post-merge",
+      "bytes": 345,
+      "mtime": 1791198241.7054422
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/pre-applypatch.sample",
+      "bytes": 424,
+      "mtime": 1791198237.6049316
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/fsmonitor-watchman.sample",
+      "bytes": 4726,
+      "mtime": 1791198237.6049316
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/prepare-commit-msg.sample",
+      "bytes": 1492,
+      "mtime": 1791198237.6039317
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/pre-push.sample",
+      "bytes": 1374,
+      "mtime": 1791198237.6049316
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/push-to-checkout.sample",
+      "bytes": 2783,
+      "mtime": 1791198237.6039317
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/hooks/applypatch-msg.sample",
+      "bytes": 478,
+      "mtime": 1791198237.6049316
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/refs/heads/main",
+      "bytes": 41,
+      "mtime": 1791198241.6514485
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/refs/remotes/origin/HEAD",
+      "bytes": 30,
+      "mtime": 1791198241.6504488
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/lfs/logs/20261005T110524.758344854.log",
+      "bytes": 6401,
+      "mtime": 1791198324.7577977
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/lfs/incomplete/836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258.part",
+      "bytes": 0,
+      "mtime": 1791198243.5422268
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/lfs/incomplete/38fc7fc51c5e776e840414b6fd443962e9411b9654888fd7913e4da643cb857c.part",
+      "bytes": 0,
+      "mtime": 1791198243.531228
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/logs/refs/heads/main",
+      "bytes": 190,
+      "mtime": 1791198241.6514485
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/logs/refs/remotes/origin/HEAD",
+      "bytes": 190,
+      "mtime": 1791198241.6504488
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/objects/pack/pack-ca70c0b9d865ee886de00717d1e6562225e5328b.rev",
+      "bytes": 116,
+      "mtime": 1791198241.6384501
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/objects/pack/pack-ca70c0b9d865ee886de00717d1e6562225e5328b.idx",
+      "bytes": 1520,
+      "mtime": 1791198241.6364503
+    },
+    {
+      "path": "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/.git/objects/pack/pack-ca70c0b9d865ee886de00717d1e6562225e5328b.pack",
+      "bytes": 1811905,
+      "mtime": 1791198241.6364503
+    }
+  ],
+  "model_config_sha256": {
+    "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/generation_config.json": "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa",
+    "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/preprocessor_config.json": "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119",
+    "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/vocab.json": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+    "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/config.json": "b4f01752d15a488abde3e1ab44723ae4f4b9e68a4037257b098b3737893cc1f9",
+    "/mnt/tts/models/Qwen3-TTS-12Hz-1.7B-Base/tokenizer_config.json": "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670"
+  },
+  "source_code_sha256": {
+    "/mnt/tts/projects/qwen3-tts/app/tts_engine.py": "8c0e0d97ab14b4057a85cfe8a6df1755a3b292e36a16bf174f7b7e57b379ce49",
+    "/mnt/tts/projects/qwen3-tts/app/cosy_server.py": "db72678c7c6867238bc540c170dcf7689cad71ae3e4279d91f699baaf1418ed5",
+    "/mnt/tts/projects/gpt-sovits/serve.py": "c98c97e2d7791e8e6d2b0bb32f6b171f821de89db7341c255ea407d9ce4cb500"
+  },
+  "versions": {
+    "torch": "2.14.0+cu130",
+    "torchaudio": "2.11.0+cu130",
+    "transformers": "4.57.3",
+    "qwen-tts": "0.1.1",
+    "numpy": "2.5.3",
+    "soundfile": "0.14.0"
+  },
+  "params": {
+    "language": "Korean",
+    "non_streaming_mode": true,
+    "x_vector_only_mode": false,
+    "do_sample": true,
+    "temperature": 0.9,
+    "top_k": 50,
+    "top_p": 1.0,
+    "repetition_penalty": 1.1,
+    "subtalker_dosample": true,
+    "subtalker_temperature": 0.9,
+    "subtalker_top_k": 50,
+    "subtalker_top_p": 1.0,
+    "seed": 42,
+    "batch_size": 1,
+    "dtype": "bfloat16",
+    "attention": "sdpa",
+    "lora": false,
+    "max_new_tokens": 567
+  },
+  "load_seconds": 6.895943641662598,
+  "gpu": "RTX3090 GPU-b67eee2c-c672-6915-910d-617c62abebee",
+  "status": "generated_valid_container",
+  "started_at": "2026-10-13T04:05:23+0000",
+  "resources_before": {
+    "gpu": {
+      "returncode": 0,
+      "stdout": "Tue Oct 13 04:05:23 2026       \n+-----------------------------------------------------------------------------------------+\n| NVIDIA-SMI 595.99.02              Driver Version: 595.99.02      CUDA Version: 13.2     |\n+-----------------------------------------+------------------------+----------------------+\n| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |\n| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\n|                                         |                        |               MIG M. |\n|=========================================+========================+======================|\n|   0  NVIDIA GeForce RTX 3060        Off |   00000000:03:00.0 Off |                  N/A |\n|  0%   51C    P8             18W /  170W |    4241MiB /  12288MiB |      0%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n|   1  NVIDIA GeForce RTX 3090        Off |   00000000:04:00.0  On |                  N/A |\n|  0%   53C    P2            149W /  250W |    5692MiB /  24576MiB |      0%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n\n+-----------------------------------------------------------------------------------------+\n| Processes:                                                                              |\n|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |\n|        ID   ID                                                               Usage      |\n|=========================================================================================|\n|    0   N/A  N/A         1610488      C   ...cts/qwen3-tts/venv/bin/python       4232MiB |\n|    1   N/A  N/A            1294      C   ...projects/cosy/venv/bin/python        580MiB |\n|    1   N/A  N/A          624477      C   ...ts/gpt-sovits/venv/bin/python        652MiB |\n|    1   N/A  N/A         1616058      C   ...cts/qwen3-tts/venv/bin/python       4432MiB |\n+-----------------------------------------------------------------------------------------+\n",
+      "stderr": ""
+    },
+    "memory": {
+      "returncode": 0,
+      "stdout": "               total        used        free      shared  buff/cache   available\nMem:            62Gi        14Gi       2.0Gi        53Mi        46Gi        48Gi\nSwap:          8.0Gi          0B       8.0Gi\n",
+      "stderr": ""
+    },
+    "disk": {
+      "returncode": 0,
+      "stdout": "Filesystem                  Size  Used Avail Use% Mounted on\n/dev/mapper/ubuntu--vg-tts  688G  137G  517G  21% /mnt/tts\n",
+      "stderr": ""
+    },
+    "processes": {
+      "returncode": 0,
+      "stdout": "    PID ELAPSED %CPU %MEM COMMAND\n      1  183769  0.0  0.0 /sbin/init\n      2  183769  0.0  0.0 [kthreadd]\n      3  183769  0.0  0.0 [pool_workqueue_release]\n      4  183769  0.0  0.0 [kworker/R-rcu_g]\n      5  183769  0.0  0.0 [kworker/R-rcu_p]\n      6  183769  0.0  0.0 [kworker/R-slub_]\n      7  183769  0.0  0.0 [kworker/R-netns]\n      9  183769  0.0  0.0 [kworker/0:0H-events_highpri]\n     12  183769  0.0  0.0 [kworker/R-mm_pe]\n     13  183769  0.0  0.0 [rcu_tasks_kthread]\n     14  183769  0.0  0.0 [rcu_tasks_rude_kthread]\n     15  183769  0.0  0.0 [rcu_tasks_trace_kthread]\n     16  183769  0.0  0.0 [ksoftirqd/0]\n     17  183769  0.0  0.0 [rcu_preempt]\n     18  183769  0.0  0.0 [migration/0]\n     19  183769  0.0  0.0 [idle_inject/0]\n     20  183769  0.0  0.0 [cpuhp/0]\n     21  183769  0.0  0.0 [cpuhp/1]\n     22  183769  0.0  0.0 [idle_inject/1]\n     23  183769  0.0  0.0 [migration/1]\n     24  183769  0.0  0.0 [ksoftirqd/1]\n     26  183769  0.0  0.0 [kworker/1:0H-events_highpri]\n     27  183769  0.0  0.0 [cpuhp/2]\n     28  183769  0.0  0.0 [idle_inject/2]\n     29  183769  0.0  0.0 [migration/2]\n     30  183769  0.0  0.0 [ksoftirqd/2]\n     32  183769  0.0  0.0 [kworker/2:0H-events_highpri]\n     33  183769  0.0  0.0 [cpuhp/3]\n     34  183769  0.0  0.0 [idle_inject/3]\n     35  183769  0.0  0.0 [migration/3]\n     36  183769  0.0  0.0 [ksoftirqd/3]\n     38  183769  0.0  0.0 [kworker/3:0H-events_highpri]\n     39  183769  0.0  0.0 [cpuhp/4]\n     40  183769  0.0  0.0 [idle_inject/4]\n     41  183769  0.0  0.0 [migration/4]\n     42  183769  0.0  0.0 [ksoftirqd/4]\n     44  183769  0.0  0.0 [kworker/4:0H-events_highpri]\n     45  183769  0.0  0.0 [cpuhp/5]\n     46  183769  0.0  0.0 [idle_inject/5]\n     47  183769  0.0  0.0 [migration/5]\n     48  183769  0.0  0.0 [ksoftirqd/5]\n     50  183769  0.0  0.0 [kworker/5:0H-events_highpri]\n     51  183769  0.0  0.0 [cpuhp/6]\n     52  183769  0.0  0.0 [idle_inject/6]\n     53  183769  0.0  0.0 [migration/6]\n     54  183769  0.0  0.0 [ksoftirqd/6]\n     56  183769  0.0  0.0 [kworker/6:0H-events_highpri]\n     57  183769  0.0  0.0 [cpuhp/7]\n     58  183769  0.0  0.0 [idle_inject/7]\n     59  183769  0.0  0.0 [migration/7]\n     60  183769  0.0  0.0 [ksoftirqd/7]\n     62  183769  0.0  0.0 [kworker/7:0H-events_highpri]\n     63  183769  0.0  0.0 [cpuhp/8]\n     64  183769  0.0  0.0 [idle_inject/8]\n     65  183769  0.0  0.0 [migration/8]\n     66  183769  0.0  0.0 [ksoftirqd/8]\n     68  183769  0.0  0.0 [kworker/8:0H-events_highpri]\n     69  183769  0.0  0.0 [cpuhp/9]\n     70  183769  0.0  0.0 [idle_inject/9]\n     71  183769  0.0  0.0 [migration/9]\n     72  183769  0.0  0.0 [ksoftirqd/9]\n     74  183769  0.0  0.0 [kworker/9:0H-events_highpri]\n     75  183769  0.0  0.0 [cpuhp/10]\n     76  183769  0.0  0.0 [idle_inject/10]\n     77  183769  0.0  0.0 [migration/10]\n     78  183769  0.0  0.0 [ksoftirqd/10]\n     80  183769  0.0  0.0 [kworker/10:0H-events_highpri]\n     81  183769  0.0  0.0 [cpuhp/11]\n     82  183769  0.0  0.0 [idle_inject/11]\n     83  183769  0.0  0.0 [migration/11]\n     84  183769  0.0  0.0 [ksoftirqd/11]\n     86  183769  0.0  0.0 [kworker/11:0H-events_highpri]\n     87  183769  0.0  0.0 [cpuhp/12]\n     88  183769  0.0  0.0 [idle_inject/12]\n     89  183769  0.0  0.0 [migration/12]\n     90  183769  0.0  0.0 [ksoftirqd/12]\n     92  183769  0.0  0.0 [kworker/12:0H-events_highpri]\n     93  183769  0.0  0.0 [cpuhp/13]\n     94  183769  0.0  0.0 [idle_inject/13]\n     95  183769  0.0  0.0 [migration/13]\n     96  183769  0.0  0.0 [ksoftirqd/13]\n     98  183769  0.0  0.0 [kworker/13:0H-events_highpri]\n     99  183769  0.0  0.0 [cpuhp/14]\n    100  183769  0.0  0.0 [idle_inject/14]\n    101  183769  0.0  0.0 [migration/14]\n    102  183769  0.0  0.0 [ksoftirqd/14]\n    104  183769  0.0  0.0 [kworker/14:0H-events_highpri]\n    105  183769  0.0  0.0 [cpuhp/15]\n    106  183769  0.0  0.0 [idle_inject/15]\n    107  183769  0.0  0.0 [migration/15]\n    108  183769  0.0  0.0 [ksoftirqd/15]\n    110  183769  0.0  0.0 [kworker/15:0H-events_highpri]\n    111  183769  0.0  0.0 [cpuhp/16]\n    112  183769  0.0  0.0 [idle_inject/16]\n    113  183769  0.0  0.0 [migration/16]\n    114  183769  0.0  0.0 [ksoftirqd/16]\n    116  183769  0.0  0.0 [kworker/16:0H-events_highpri]\n    117  183769  0.0  0.0 [cpuhp/17]\n    118  183769  0.0  0.0 [idle_inject/17]\n    119  183769  0.0  0.0 [migration/17]\n    120  183769  0.0  0.0 [ksoftirqd/17]\n    122  183769  0.0  0.0 [kworker/17:0H-events_highpri]\n    123  183769  0.0  0.0 [cpuhp/18]\n    124  183769  0.0  0.0 [idle_inject/18]\n    125  183769  0.0  0.0 [migration/18]\n    126  183769  0.0  0.0 [ksoftirqd/18]\n    128  183769  0.0  0.0 [kworker/18:0H-events_highpri]\n    129  183769  0.0  0.0 [cpuhp/19]\n    130  183769  0.0  0.0 [idle_inject/19]\n    131  183769  0.0  0.0 [migration/19]\n    132  183769  0.0  0.0 [ksoftirqd/19]\n    134  183769  0.0  0.0 [kworker/19:0H-events_highpri]\n    135  183769  0.0  0.0 [cpuhp/20]\n    136  183769  0.0  0.0 [idle_inject/20]\n    137  183769  0.0  0.0 [migration/20]\n    138  183769  0.0  0.0 [ksoftirqd/20]\n    140  183769  0.0  0.0 [kworker/20:0H-events_highpri]\n    141  183769  0.0  0.0 [cpuhp/21]\n    142  183769  0.0  0.0 [idle_inject/21]\n    143  183769  0.0  0.0 [migration/21]\n    144  183769  0.0  0.0 [ksoftirqd/21]\n    146  183769  0.0  0.0 [kworker/21:0H-events_highpri]\n    147  183769  0.0  0.0 [cpuhp/22]\n    148  183769  0.0  0.0 [idle_inject/22]\n    149  183769  0.0  0.0 [migration/22]\n    150  183769  0.0  0.0 [ksoftirqd/22]\n    152  183769  0.0  0.0 [kworker/22:0H-events_highpri]\n    153  183769  0.0  0.0 [cpuhp/23]\n    154  183769  0.0  0.0 [idle_inject/23]\n    155  183769  0.0  0.0 [migration/23]\n    156  183769  0.0  0.0 [ksoftirqd/23]\n    158  183769  0.0  0.0 [kworker/23:0H-events_highpri]\n    159  183769  0.0  0.0 [kdevtmpfs]\n    160  183769  0.0  0.0 [kworker/R-inet_]\n    161  183769  0.0  0.0 [kauditd]\n    163  183769  0.0  0.0 [khungtaskd]\n    165  183769  0.0  0.0 [oom_reaper]\n    167  183769  0.0  0.0 [kworker/R-write]\n    168  183769  0.0  0.0 [kcompactd0]\n    169  183769  0.0  0.0 [ksmd]\n    170  183769  0.0  0.0 [khugepaged]\n    171  183769  0.0  0.0 [kworker/R-kinte]\n    172  183769  0.0  0.0 [kworker/R-kbloc]\n    173  183769  0.0  0.0 [kworker/R-blkcg]\n    174  183769  0.0  0.0 [irq/9-acpi]\n    176  183769  0.0  0.0 [kworker/R-tpm_d]\n    177  183769  0.0  0.0 [kworker/R-ata_s]\n    178  183769  0.0  0.0 [kworker/R-md]\n    179  183769  0.0  0.0 [kworker/R-md_bi]\n    180  183769  0.0  0.0 [kworker/R-edac-]\n    181  183769  0.0  0.0 [kworker/R-devfr]\n    182  183769  0.0  0.0 [watchdogd]\n    184  183769  0.0  0.0 [kworker/R-quota]\n    185  183769  0.0  0.0 [kworker/0:1H-kblockd]\n    187  183769  0.0  0.0 [kswapd0]\n    188  183769  0.0  0.0 [ecryptfs-kthread]\n    190  183769  0.0  0.0 [kworker/R-kthro]\n    191  183769  0.0  0.0 [irq/25-aerdrv]\n    192  183769  0.0  0.0 [irq/26-aerdrv]\n    193  183769  0.0  0.0 [irq/28-aerdrv]\n    194  183769  0.0  0.0 [irq/30-aerdrv]\n    195  183769  0.0  0.0 [irq/31-pciehp]\n    215  183769  0.0  0.0 [kworker/R-acpi_]\n    221  183769  0.0  0.0 [kworker/R-mld]\n    222  183769  0.0  0.0 [kworker/23:1H-kblockd]\n    223  183769  0.0  0.0 [kworker/R-ipv6_]\n    230  183769  0.0  0.0 [kworker/R-kstrp]\n    232  183769  0.0  0.0 [kworker/u49:0]\n    237  183769  0.0  0.0 [kworker/R-crypt]\n    252  183769  0.0  0.0 [kworker/R-charg]\n    278  183768  0.0  0.0 [kworker/12:1H-kblockd]\n    282  183768  0.0  0.0 [kworker/16:1H-kblockd]\n    283  183768  0.0  0.0 [kworker/1:1H-kblockd]\n    295  183768  0.0  0.0 [kworker/3:1H-kblockd]\n    296  183768  0.0  0.0 [kworker/18:1H-kblockd]\n    321  183768  0.0  0.0 [kworker/8:1H-kblockd]\n    322  183768  0.0  0.0 [kworker/17:1H-kblockd]\n    323  183768  0.0  0.0 [kworker/21:1H-kblockd]\n    324  183768  0.0  0.0 [kworker/19:1H-kblockd]\n    325  183768  0.0  0.0 [kworker/22:1H-kblockd]\n    326  183768  0.0  0.0 [kworker/7:1H-kblockd]\n    327  183768  0.0  0.0 [kworker/2:1H-kblockd]\n    328  183768  0.0  0.0 [kworker/9:1H-kblockd]\n    329  183768  0.0  0.0 [kworker/11:1H-kblockd]\n    330  183768  0.0  0.0 [kworker/5:1H-kblockd]\n    331  183768  0.0  0.0 [kworker/20:1H-kblockd]\n    332  183768  0.0  0.0 [kworker/6:1H-kblockd]\n    333  183768  0.0  0.0 [kworker/10:1H-kblockd]\n    334  183768  0.0  0.0 [kworker/14:1H-kblockd]\n    335  183768  0.0  0.0 [kworker/4:1H-kblockd]\n    336  183768  0.0  0.0 [kworker/15:1H-kblockd]\n    364  183768  0.0  0.0 [kworker/13:1H-kblockd]\n    365  183768  0.0  0.0 [scsi_eh_0]\n    366  183768  0.0  0.0 [kworker/R-scsi_]\n    367  183768  0.0  0.0 [scsi_eh_1]\n    368  183768  0.0  0.0 [kworker/R-scsi_]\n    369  183768  0.0  0.0 [scsi_eh_2]\n    371  183768  0.0  0.0 [kworker/R-scsi_]\n    372  183768  0.0  0.0 [scsi_eh_3]\n    373  183768  0.0  0.0 [kworker/R-scsi_]\n    374  183768  0.0  0.0 [scsi_eh_4]\n    375  183768  0.0  0.0 [kworker/R-scsi_]\n    376  183768  0.0  0.0 [scsi_eh_5]\n    377  183768  0.0  0.0 [kworker/R-scsi_]\n    399  183767  0.0  0.0 [kworker/R-kdmfl]\n    400  183767  0.0  0.0 [kworker/R-kdmfl]\n    451  183766  0.0  0.0 [kworker/R-raid5]\n    495  183765  0.0  0.0 [jbd2/dm-0-8]\n    496  183765  0.0  0.0 [kworker/R-ext4-]\n    563  183764  0.0  0.0 /usr/lib/systemd/systemd-journald\n    590  183764  0.0  0.0 [kworker/R-kmpat]\n    591  183764  0.0  0.0 [kworker/R-kmpat]\n    600  183764  0.0  0.0 /sbin/multipathd -d -s\n    639  183764  0.0  0.0 /usr/lib/systemd/systemd-udevd\n    643  183764  0.0  0.0 [psimon]\n    864  183764  0.0  0.0 [jbd2/dm-1-8]\n    865  183764  0.0  0.0 [kworker/R-ext4-]\n    875  183763  0.0  0.0 [nv_queue]\n    876  183763  0.0  0.0 [nv_mem_pool_scrubber_queue]\n    877  183763  0.0  0.0 [nv_mem_pool_scrubber_queue]\n    878  183763  0.0  0.0 [nv_mem_pool_scrubber_queue]\n    879  183763  0.0  0.0 [nv_queue]\n    880  183763  0.0  0.0 [nv_open_q]\n    884  183763  0.0  0.0 [jbd2/sda2-8]\n    885  183763  0.0  0.0 [kworker/R-ext4-]\n    891  183763  0.0  0.0 [nv_open_q]\n    920  183763  0.0  0.0 /usr/lib/systemd/systemd-networkd\n   1019  183763  0.0  0.0 [nvidia-modeset/kthread_q]\n   1020  183763  0.0  0.0 [nvidia-modeset/deferred_close_kthread_q]\n   1022  183763  0.0  0.0 [irq/38-nvidia]\n   1023  183763  0.0  0.0 [nvidia]\n   1024  183763  0.0  0.0 [nv_queue]\n   1026  183763  0.0  0.0 /usr/lib/systemd/systemd-resolved\n   1028  183763  0.0  0.0 /usr/lib/systemd/systemd-timesyncd\n   1051  183763  0.0  0.0 [kworker/R-cfg80]\n   1056  183763  0.0  0.0 @dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only\n   1062  183763  0.0  0.0 /usr/lib/polkit-1/polkitd --no-debug\n   1067  183763  0.0  0.0 /usr/lib/systemd/systemd-logind\n   1069  183763  0.1  0.0 /usr/sbin/tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/run/tailscale/tailscaled.sock --port=41641\n   1071  183763  0.0  0.0 /usr/libexec/udisks2/udisksd\n   1111  183763  0.0  0.0 /usr/bin/python3 /usr/share/unattended-upgrades/unattended-upgrade-shutdown --wait-for-signal\n   1114  183763  0.0  0.0 /usr/sbin/rsyslogd -n -iNONE\n   1146  183763  0.0  0.0 /usr/sbin/ModemManager\n   1285  183761  0.0  0.0 [irq/39-nvidia]\n   1286  183761  0.0  0.0 [nvidia]\n   1287  183761  0.0  0.0 [nv_queue]\n   1289  183760  0.0  0.0 [UVM global queue]\n   1290  183760  0.0  0.0 [UVM deferred release queue]\n   1291  183760  0.0  0.0 [UVM Tools Event Queue]\n   1294  183760  4.9 12.4 /mnt/tts/projects/cosy/venv/bin/python /mnt/tts/projects/qwen3-tts/app/cosy_server.py\n   1379  183759  0.0  0.0 /usr/bin/nvidia-persistenced --user nvidia-persistenced --no-persistence-mode --verbose\n   1472  183756  0.0  0.0 /usr/sbin/cron -f -P\n   1482  183756  0.0  0.0 sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups\n   1485  183756  0.0  0.0 /bin/login -p --\n   1722  183745  0.0  0.0 /usr/lib/systemd/systemd --user\n   1723  183745  0.0  0.0 (sd-pam)\n   1732  183745  0.0  0.0 -bash\n   1842  181686  0.0  0.0 /usr/libexec/fwupd/fwupd\n   1850  181686  0.0  0.0 /usr/libexec/upowerd\n   2002  175961  0.0  0.0 [kworker/R-tls-s]\n   4129   97254  0.0  0.0 [vidmem lazy free]\n   4130   97254  0.0  0.0 [UVM GPU2 BH]\n   4131   97254  0.0  0.0 [UVM GPU2 KC]\n  15465   89063  0.0  0.0 [jbd2/sdb3-8]\n  15466   89063  0.0  0.0 [kworker/R-ext4-]\n  15467   89063  0.0  0.0 [ext4lazyinit]\n 624477   74618  0.2  5.2 /mnt/tts/projects/gpt-sovits/venv/bin/python serve.py\n 636260   67042  0.0  0.0 [kworker/18:2-mm_percpu_wq]\n 637185   65292  0.0  0.0 [kworker/7:1-mm_percpu_wq]\n 795550   62830  0.0  0.0 [kworker/15:1-mm_percpu_wq]\n1050673   61960  0.0  0.0 [kworker/11:0-mm_percpu_wq]\n1097011   61803  0.0  0.0 bash -c while ! grep -qE 'ALL_DONE|TRAIN_FAILED' /tmp/gs_fulltrain_all.log 2>/dev/null; do sleep 60; done; echo '=== 训练链结束标记出现 ==='; grep -E 'ALL_DONE|TRAIN_FAILED|训练完成|失败' /tmp/gs_fulltrain_all.log | tail -6; echo '=== 权重产物 ==='; ls -la /mnt/tts/projects/gpt-sovits/repo/SoVITS_weights_v2ProPlus/ | grep -E 'yohan|SOLA'\n1180897   61511  0.0  0.0 [kworker/23:1-mm_percpu_wq]\n1201128   61443  0.0  0.0 [kworker/6:0-mm_percpu_wq]\n1456358   60558  0.0  0.0 [kworker/16:1-mm_percpu_wq]\n1564009   58136  0.0  0.0 [kworker/5:2-mm_percpu_wq]\n1564916   57534  0.0  0.0 [kworker/13:2-mm_percpu_wq]\n1567006   56702  0.0  0.0 [kworker/16:2-cgroup_release]\n1572673   54015  0.0  0.0 [kworker/10:1-mm_percpu_wq]\n1577353   49768  0.0  0.0 [kworker/23:2-cgroup_free]\n1579372   41606  0.0  0.0 [kworker/17:3-mm_percpu_wq]\n1587330   38908  0.0  0.0 [kworker/8:0-cgroup_release]\n1588724   38144  0.0  0.0 [kworker/19:3-mm_percpu_wq]\n1589493   29106  0.0  0.0 [kworker/7:0]\n1589736   24426  0.0  0.0 [kworker/15:0-rcu_par_gp]\n1590094   23273  0.0  0.0 [kworker/2:0-mm_percpu_wq]\n1595114   22039  0.0  0.0 [kworker/12:0-mm_percpu_wq]\n1595173   22010  0.0  0.0 [kworker/19:0]\n1598108   20109  0.0  0.0 [kworker/14:0-cgroup_free]\n1598361   19785  0.0  0.0 [kworker/18:0-rcu_par_gp]\n1598967   19509  0.0  0.0 [kworker/8:2-mm_percpu_wq]\n1600217   14706  0.0  0.0 [kworker/9:0-mm_percpu_wq]\n1600446   10592  0.0  0.0 [kworker/9:1-cgroup_free]\n1605844    7866  0.0  0.0 [kworker/21:0-cgroup_free]\n1606682    7648  0.0  0.0 [kworker/1:2-mm_percpu_wq]\n1607299    7184  0.0  0.0 [kworker/20:3-mm_percpu_wq]\n1607986    7052  0.0  0.0 [kworker/14:1-mm_percpu_wq]\n1608351    6985  0.0  0.0 [kworker/12:1-inode_switch_wbs]\n1609215    6314  0.0  0.0 [kworker/22:3]\n1610142    5706  0.0  0.0 [kworker/21:2-mm_percpu_wq]\n1610483    5532  0.0  0.0 [kworker/1:0-cgwb_release]\n1610484    5531  0.0  0.0 [psimon]\n1610488    5531  4.8  3.4 /mnt/tts/projects/qwen3-tts/venv/bin/python -u server.py\n1610543    5524  0.0  0.0 [vidmem lazy free]\n1610544    5524  0.0  0.0 [UVM GPU1 BH]\n1610545    5524  0.0  0.0 [UVM GPU1 KC]\n1610565    5519  0.0  0.0 [kworker/22:0-mm_percpu_wq]\n1611325    5106  0.0  0.0 [kworker/2:3-cgroup_free]\n1612097    4927  0.0  0.0 [kworker/3:3-cgroup_free]\n1612334    4893  0.0  0.0 [kworker/20:0]\n1612816    4651  0.0  0.0 [kworker/17:0]\n1612879    4608  0.0  0.0 [kworker/3:1-mm_percpu_wq]\n1613540    4347  0.0  0.0 [kworker/0:2-cgroup_free]\n1614109    3432  0.0  0.0 [kworker/4:2-events]\n1614363    3270  0.0  0.0 [kworker/10:0-mm_percpu_wq]\n1614897    2816  0.0  0.0 [kworker/0:1-events]\n1614961    2736  0.0  0.0 [kworker/11:2]\n1615191    2586  0.0  0.0 [kworker/5:0-rcu_par_gp]\n1615196    2586  0.0  0.0 [kworker/6:1]\n1615485    2318  0.0  0.0 [kworker/13:1-cgroup_free]\n1615486    2317  0.0  0.0 [kworker/u48:2-events_power_efficient]\n1615505    1957  0.0  0.0 [kworker/u48:1-events_power_efficient]\n1615522    1597  0.0  0.0 [kworker/u48:0-flush-252:0]\n1615582     397  0.0  0.0 [kworker/u48:3-flush-252:1]\n1615588     319  0.0  0.0 [kworker/4:3]\n1615776     172  0.0  0.0 [kworker/13:0]\n1615937      59  0.0  0.0 sleep 60\n1616000      10  0.0  0.0 [kworker/0:0]\n1616001      10  0.0  0.0 [kworker/0:3]\n1616002      10  0.1  0.0 sshd: zheng [priv]\n1616050       9  0.0  0.0 sshd: zheng@notty\n1616051       9  0.0  0.0 bash -c python3 /mnt/tts/diag/multimodel_first_20261013/run_round.py prepare && /mnt/tts/projects/qwen3-tts/venv/bin/python -u /mnt/tts/diag/multimodel_first_20261013/run_round.py qwen > /mnt/tts/diag/multimodel_first_20261013/qwen.log 2>&1\n1616058       8  159  1.9 /mnt/tts/projects/qwen3-tts/venv/bin/python -u /mnt/tts/diag/multimodel_first_20261013/run_round.py qwen\n1616130       0  100  0.0 ps -eo pid,etimes,pcpu,pmem,args\n",
+      "stderr": ""
+    }
+  },
+  "output": "/mnt/tts/diag/multimodel_first_20261013/audio/试听-男-B7.wav",
+  "human_listening": "not_performed",
+  "asr": {
+    "status": "completed",
+    "model": "Systran/faster-whisper-small",
+    "device": "cpu",
+    "compute_type": "int8",
+    "local_files_only": true,
+    "hypothesis": "안녕하세요 제주반도체 주주 여러분 반갑습니다  정민철 프로입니다  자 우리 주주님들께 오늘 정말 중요한 말씀드리려고 이렇게 카메라 켰습니다  어유 지금 제주반도체 기가 막힌 자리에 와 있거든요  제가 왜 이렇게까지 강조해서 말씀드리는지 감이 좀 오시나요?",
+    "normalized_reference": "안녕하세요제주반도체주주여러분반갑습니다정민철프로입니다자우리주주님들께오늘정말중요한말씀드리려고이렇게카메라켰습니다어유지금제주반도체기가막힌자리에와있거든요제가왜이렇게까지강조해서말씀드리는지감이좀오시나요",
+    "normalized_hypothesis": "안녕하세요제주반도체주주여러분반갑습니다정민철프로입니다자우리주주님들께오늘정말중요한말씀드리려고이렇게카메라켰습니다어유지금제주반도체기가막힌자리에와있거든요제가왜이렇게까지강조해서말씀드리는지감이좀오시나요",
+    "levenshtein_cer": 0.0,
+    "existing_approx_cer": 0.0,
+    "elapsed_seconds": 4.474421739578247,
+    "note": "ASR是粗筛，非人工听验；数字格式和专有名词可能造成识别差异"
+  },
+  "sha256": "00ae2483bbe97973e124f2e8d4646de9d62d7391c4e0419a7beed64fe48a648b",
+  "bytes": 810284,
+  "sample_rate": 24000,
+  "channels": 1,
+  "audio_seconds": 16.88,
+  "peak": 0.34765625,
+  "rms": 0.04706280678510666,
+  "clipped_fraction": 0.0,
+  "finite": true,
+  "chars_per_second": 8.886255924170616,
+  "valid_audio": true,
+  "content_pass": null,
+  "listening_pass": null,
+  "elapsed_seconds": 55.50872254371643,
+  "finished_at": "2026-10-13T04:06:19+0000",
+  "peak_allocated_gib": 4.643062591552734,
+  "peak_reserved_gib": 5.041015625,
+  "resources_after": {
+    "gpu": {
+      "returncode": 0,
+      "stdout": "Tue Oct 13 04:06:19 2026       \n+-----------------------------------------------------------------------------------------+\n| NVIDIA-SMI 595.99.02              Driver Version: 595.99.02      CUDA Version: 13.2     |\n+-----------------------------------------+------------------------+----------------------+\n| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |\n| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\n|                                         |                        |               MIG M. |\n|=========================================+========================+======================|\n|   0  NVIDIA GeForce RTX 3060        Off |   00000000:03:00.0 Off |                  N/A |\n|  0%   50C    P8             18W /  170W |    4241MiB /  12288MiB |      0%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n|   1  NVIDIA GeForce RTX 3090        Off |   00000000:04:00.0  On |                  N/A |\n| 53%   59C    P2            148W /  250W |    6742MiB /  24576MiB |     40%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n\n+-----------------------------------------------------------------------------------------+\n| Processes:                                                                              |\n|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |\n|        ID   ID                                                               Usage      |\n|=========================================================================================|\n|    0   N/A  N/A         1610488      C   ...cts/qwen3-tts/venv/bin/python       4232MiB |\n|    1   N/A  N/A            1294      C   ...projects/cosy/venv/bin/python        580MiB |\n|    1   N/A  N/A          624477      C   ...ts/gpt-sovits/venv/bin/python        652MiB |\n|    1   N/A  N/A         1616058      C   ...cts/qwen3-tts/venv/bin/python       5482MiB |\n+-----------------------------------------------------------------------------------------+\n",
+      "stderr": ""
+    },
+    "memory": {
+      "returncode": 0,
+      "stdout": "               total        used        free      shared  buff/cache   available\nMem:            62Gi        15Gi       1.2Gi        59Mi        46Gi        47Gi\nSwap:          8.0Gi          0B       8.0Gi\n",
+      "stderr": ""
+    },
+    "disk": {
+      "returncode": 0,
+      "stdout": "Filesystem                  Size  Used Avail Use% Mounted on\n/dev/mapper/ubuntu--vg-tts  688G  137G  517G  21% /mnt/tts\n",
+      "stderr": ""
+    },
+    "processes": {
+      "returncode": 0,
+      "stdout": "    PID ELAPSED %CPU %MEM COMMAND\n      1  183825  0.0  0.0 /sbin/init\n      2  183825  0.0  0.0 [kthreadd]\n      3  183825  0.0  0.0 [pool_workqueue_release]\n      4  183825  0.0  0.0 [kworker/R-rcu_g]\n      5  183825  0.0  0.0 [kworker/R-rcu_p]\n      6  183825  0.0  0.0 [kworker/R-slub_]\n      7  183825  0.0  0.0 [kworker/R-netns]\n      9  183825  0.0  0.0 [kworker/0:0H-events_highpri]\n     12  183825  0.0  0.0 [kworker/R-mm_pe]\n     13  183825  0.0  0.0 [rcu_tasks_kthread]\n     14  183825  0.0  0.0 [rcu_tasks_rude_kthread]\n     15  183825  0.0  0.0 [rcu_tasks_trace_kthread]\n     16  183825  0.0  0.0 [ksoftirqd/0]\n     17  183825  0.0  0.0 [rcu_preempt]\n     18  183825  0.0  0.0 [migration/0]\n     19  183825  0.0  0.0 [idle_inject/0]\n     20  183825  0.0  0.0 [cpuhp/0]\n     21  183825  0.0  0.0 [cpuhp/1]\n     22  183825  0.0  0.0 [idle_inject/1]\n     23  183825  0.0  0.0 [migration/1]\n     24  183825  0.0  0.0 [ksoftirqd/1]\n     26  183825  0.0  0.0 [kworker/1:0H-events_highpri]\n     27  183825  0.0  0.0 [cpuhp/2]\n     28  183825  0.0  0.0 [idle_inject/2]\n     29  183825  0.0  0.0 [migration/2]\n     30  183825  0.0  0.0 [ksoftirqd/2]\n     32  183825  0.0  0.0 [kworker/2:0H-events_highpri]\n     33  183825  0.0  0.0 [cpuhp/3]\n     34  183825  0.0  0.0 [idle_inject/3]\n     35  183825  0.0  0.0 [migration/3]\n     36  183825  0.0  0.0 [ksoftirqd/3]\n     38  183825  0.0  0.0 [kworker/3:0H-events_highpri]\n     39  183825  0.0  0.0 [cpuhp/4]\n     40  183825  0.0  0.0 [idle_inject/4]\n     41  183825  0.0  0.0 [migration/4]\n     42  183825  0.0  0.0 [ksoftirqd/4]\n     44  183825  0.0  0.0 [kworker/4:0H-events_highpri]\n     45  183825  0.0  0.0 [cpuhp/5]\n     46  183825  0.0  0.0 [idle_inject/5]\n     47  183825  0.0  0.0 [migration/5]\n     48  183825  0.0  0.0 [ksoftirqd/5]\n     50  183825  0.0  0.0 [kworker/5:0H-events_highpri]\n     51  183825  0.0  0.0 [cpuhp/6]\n     52  183825  0.0  0.0 [idle_inject/6]\n     53  183825  0.0  0.0 [migration/6]\n     54  183825  0.0  0.0 [ksoftirqd/6]\n     56  183825  0.0  0.0 [kworker/6:0H-events_highpri]\n     57  183825  0.0  0.0 [cpuhp/7]\n     58  183825  0.0  0.0 [idle_inject/7]\n     59  183825  0.0  0.0 [migration/7]\n     60  183825  0.0  0.0 [ksoftirqd/7]\n     62  183825  0.0  0.0 [kworker/7:0H-events_highpri]\n     63  183825  0.0  0.0 [cpuhp/8]\n     64  183825  0.0  0.0 [idle_inject/8]\n     65  183825  0.0  0.0 [migration/8]\n     66  183825  0.0  0.0 [ksoftirqd/8]\n     68  183825  0.0  0.0 [kworker/8:0H-events_highpri]\n     69  183825  0.0  0.0 [cpuhp/9]\n     70  183825  0.0  0.0 [idle_inject/9]\n     71  183825  0.0  0.0 [migration/9]\n     72  183825  0.0  0.0 [ksoftirqd/9]\n     74  183825  0.0  0.0 [kworker/9:0H-events_highpri]\n     75  183825  0.0  0.0 [cpuhp/10]\n     76  183825  0.0  0.0 [idle_inject/10]\n     77  183825  0.0  0.0 [migration/10]\n     78  183825  0.0  0.0 [ksoftirqd/10]\n     80  183825  0.0  0.0 [kworker/10:0H-events_highpri]\n     81  183825  0.0  0.0 [cpuhp/11]\n     82  183825  0.0  0.0 [idle_inject/11]\n     83  183825  0.0  0.0 [migration/11]\n     84  183825  0.0  0.0 [ksoftirqd/11]\n     86  183825  0.0  0.0 [kworker/11:0H-events_highpri]\n     87  183825  0.0  0.0 [cpuhp/12]\n     88  183825  0.0  0.0 [idle_inject/12]\n     89  183825  0.0  0.0 [migration/12]\n     90  183825  0.0  0.0 [ksoftirqd/12]\n     92  183825  0.0  0.0 [kworker/12:0H-events_highpri]\n     93  183825  0.0  0.0 [cpuhp/13]\n     94  183825  0.0  0.0 [idle_inject/13]\n     95  183825  0.0  0.0 [migration/13]\n     96  183825  0.0  0.0 [ksoftirqd/13]\n     98  183825  0.0  0.0 [kworker/13:0H-events_highpri]\n     99  183825  0.0  0.0 [cpuhp/14]\n    100  183825  0.0  0.0 [idle_inject/14]\n    101  183825  0.0  0.0 [migration/14]\n    102  183825  0.0  0.0 [ksoftirqd/14]\n    104  183825  0.0  0.0 [kworker/14:0H-events_highpri]\n    105  183825  0.0  0.0 [cpuhp/15]\n    106  183825  0.0  0.0 [idle_inject/15]\n    107  183825  0.0  0.0 [migration/15]\n    108  183825  0.0  0.0 [ksoftirqd/15]\n    110  183825  0.0  0.0 [kworker/15:0H-events_highpri]\n    111  183825  0.0  0.0 [cpuhp/16]\n    112  183825  0.0  0.0 [idle_inject/16]\n    113  183825  0.0  0.0 [migration/16]\n    114  183825  0.0  0.0 [ksoftirqd/16]\n    116  183825  0.0  0.0 [kworker/16:0H-events_highpri]\n    117  183825  0.0  0.0 [cpuhp/17]\n    118  183825  0.0  0.0 [idle_inject/17]\n    119  183825  0.0  0.0 [migration/17]\n    120  183825  0.0  0.0 [ksoftirqd/17]\n    122  183825  0.0  0.0 [kworker/17:0H-events_highpri]\n    123  183825  0.0  0.0 [cpuhp/18]\n    124  183825  0.0  0.0 [idle_inject/18]\n    125  183825  0.0  0.0 [migration/18]\n    126  183825  0.0  0.0 [ksoftirqd/18]\n    128  183825  0.0  0.0 [kworker/18:0H-events_highpri]\n    129  183825  0.0  0.0 [cpuhp/19]\n    130  183825  0.0  0.0 [idle_inject/19]\n    131  183825  0.0  0.0 [migration/19]\n    132  183825  0.0  0.0 [ksoftirqd/19]\n    134  183825  0.0  0.0 [kworker/19:0H-events_highpri]\n    135  183825  0.0  0.0 [cpuhp/20]\n    136  183825  0.0  0.0 [idle_inject/20]\n    137  183825  0.0  0.0 [migration/20]\n    138  183825  0.0  0.0 [ksoftirqd/20]\n    140  183825  0.0  0.0 [kworker/20:0H-events_highpri]\n    141  183825  0.0  0.0 [cpuhp/21]\n    142  183825  0.0  0.0 [idle_inject/21]\n    143  183825  0.0  0.0 [migration/21]\n    144  183825  0.0  0.0 [ksoftirqd/21]\n    146  183825  0.0  0.0 [kworker/21:0H-events_highpri]\n    147  183825  0.0  0.0 [cpuhp/22]\n    148  183825  0.0  0.0 [idle_inject/22]\n    149  183825  0.0  0.0 [migration/22]\n    150  183825  0.0  0.0 [ksoftirqd/22]\n    152  183825  0.0  0.0 [kworker/22:0H-events_highpri]\n    153  183825  0.0  0.0 [cpuhp/23]\n    154  183825  0.0  0.0 [idle_inject/23]\n    155  183825  0.0  0.0 [migration/23]\n    156  183825  0.0  0.0 [ksoftirqd/23]\n    158  183825  0.0  0.0 [kworker/23:0H-events_highpri]\n    159  183825  0.0  0.0 [kdevtmpfs]\n    160  183825  0.0  0.0 [kworker/R-inet_]\n    161  183825  0.0  0.0 [kauditd]\n    163  183825  0.0  0.0 [khungtaskd]\n    165  183825  0.0  0.0 [oom_reaper]\n    167  183825  0.0  0.0 [kworker/R-write]\n    168  183825  0.0  0.0 [kcompactd0]\n    169  183825  0.0  0.0 [ksmd]\n    170  183825  0.0  0.0 [khugepaged]\n    171  183825  0.0  0.0 [kworker/R-kinte]\n    172  183825  0.0  0.0 [kworker/R-kbloc]\n    173  183825  0.0  0.0 [kworker/R-blkcg]\n    174  183825  0.0  0.0 [irq/9-acpi]\n    176  183825  0.0  0.0 [kworker/R-tpm_d]\n    177  183825  0.0  0.0 [kworker/R-ata_s]\n    178  183825  0.0  0.0 [kworker/R-md]\n    179  183825  0.0  0.0 [kworker/R-md_bi]\n    180  183825  0.0  0.0 [kworker/R-edac-]\n    181  183825  0.0  0.0 [kworker/R-devfr]\n    182  183825  0.0  0.0 [watchdogd]\n    184  183825  0.0  0.0 [kworker/R-quota]\n    185  183825  0.0  0.0 [kworker/0:1H-kblockd]\n    187  183824  0.0  0.0 [kswapd0]\n    188  183824  0.0  0.0 [ecryptfs-kthread]\n    190  183824  0.0  0.0 [kworker/R-kthro]\n    191  183824  0.0  0.0 [irq/25-aerdrv]\n    192  183824  0.0  0.0 [irq/26-aerdrv]\n    193  183824  0.0  0.0 [irq/28-aerdrv]\n    194  183824  0.0  0.0 [irq/30-aerdrv]\n    195  183824  0.0  0.0 [irq/31-pciehp]\n    215  183824  0.0  0.0 [kworker/R-acpi_]\n    221  183824  0.0  0.0 [kworker/R-mld]\n    222  183824  0.0  0.0 [kworker/23:1H-kblockd]\n    223  183824  0.0  0.0 [kworker/R-ipv6_]\n    230  183824  0.0  0.0 [kworker/R-kstrp]\n    232  183824  0.0  0.0 [kworker/u49:0]\n    237  183824  0.0  0.0 [kworker/R-crypt]\n    252  183824  0.0  0.0 [kworker/R-charg]\n    278  183824  0.0  0.0 [kworker/12:1H-kblockd]\n    282  183824  0.0  0.0 [kworker/16:1H-kblockd]\n    283  183824  0.0  0.0 [kworker/1:1H-kblockd]\n    295  183824  0.0  0.0 [kworker/3:1H-kblockd]\n    296  183824  0.0  0.0 [kworker/18:1H-kblockd]\n    321  183824  0.0  0.0 [kworker/8:1H-kblockd]\n    322  183824  0.0  0.0 [kworker/17:1H-kblockd]\n    323  183824  0.0  0.0 [kworker/21:1H-kblockd]\n    324  183824  0.0  0.0 [kworker/19:1H-kblockd]\n    325  183824  0.0  0.0 [kworker/22:1H-kblockd]\n    326  183824  0.0  0.0 [kworker/7:1H-kblockd]\n    327  183824  0.0  0.0 [kworker/2:1H-kblockd]\n    328  183824  0.0  0.0 [kworker/9:1H-kblockd]\n    329  183824  0.0  0.0 [kworker/11:1H-kblockd]\n    330  183824  0.0  0.0 [kworker/5:1H-kblockd]\n    331  183824  0.0  0.0 [kworker/20:1H-kblockd]\n    332  183824  0.0  0.0 [kworker/6:1H-kblockd]\n    333  183824  0.0  0.0 [kworker/10:1H-kblockd]\n    334  183824  0.0  0.0 [kworker/14:1H-kblockd]\n    335  183824  0.0  0.0 [kworker/4:1H-kblockd]\n    336  183824  0.0  0.0 [kworker/15:1H-kblockd]\n    364  183824  0.0  0.0 [kworker/13:1H-kblockd]\n    365  183824  0.0  0.0 [scsi_eh_0]\n    366  183824  0.0  0.0 [kworker/R-scsi_]\n    367  183824  0.0  0.0 [scsi_eh_1]\n    368  183824  0.0  0.0 [kworker/R-scsi_]\n    369  183824  0.0  0.0 [scsi_eh_2]\n    371  183824  0.0  0.0 [kworker/R-scsi_]\n    372  183824  0.0  0.0 [scsi_eh_3]\n    373  183824  0.0  0.0 [kworker/R-scsi_]\n    374  183824  0.0  0.0 [scsi_eh_4]\n    375  183824  0.0  0.0 [kworker/R-scsi_]\n    376  183824  0.0  0.0 [scsi_eh_5]\n    377  183824  0.0  0.0 [kworker/R-scsi_]\n    399  183822  0.0  0.0 [kworker/R-kdmfl]\n    400  183822  0.0  0.0 [kworker/R-kdmfl]\n    451  183822  0.0  0.0 [kworker/R-raid5]\n    495  183821  0.0  0.0 [jbd2/dm-0-8]\n    496  183821  0.0  0.0 [kworker/R-ext4-]\n    563  183820  0.0  0.0 /usr/lib/systemd/systemd-journald\n    590  183820  0.0  0.0 [kworker/R-kmpat]\n    591  183820  0.0  0.0 [kworker/R-kmpat]\n    600  183820  0.0  0.0 /sbin/multipathd -d -s\n    639  183820  0.0  0.0 /usr/lib/systemd/systemd-udevd\n    643  183820  0.0  0.0 [psimon]\n    864  183819  0.0  0.0 [jbd2/dm-1-8]\n    865  183819  0.0  0.0 [kworker/R-ext4-]\n    875  183819  0.0  0.0 [nv_queue]\n    876  183819  0.0  0.0 [nv_mem_pool_scrubber_queue]\n    877  183819  0.0  0.0 [nv_mem_pool_scrubber_queue]\n    878  183819  0.0  0.0 [nv_mem_pool_scrubber_queue]\n    879  183819  0.0  0.0 [nv_queue]\n    880  183819  0.0  0.0 [nv_open_q]\n    884  183819  0.0  0.0 [jbd2/sda2-8]\n    885  183819  0.0  0.0 [kworker/R-ext4-]\n    891  183819  0.0  0.0 [nv_open_q]\n    920  183819  0.0  0.0 /usr/lib/systemd/systemd-networkd\n   1019  183819  0.0  0.0 [nvidia-modeset/kthread_q]\n   1020  183819  0.0  0.0 [nvidia-modeset/deferred_close_kthread_q]\n   1022  183819  0.0  0.0 [irq/38-nvidia]\n   1023  183819  0.0  0.0 [nvidia]\n   1024  183819  0.0  0.0 [nv_queue]\n   1026  183819  0.0  0.0 /usr/lib/systemd/systemd-resolved\n   1028  183819  0.0  0.0 /usr/lib/systemd/systemd-timesyncd\n   1051  183818  0.0  0.0 [kworker/R-cfg80]\n   1056  183818  0.0  0.0 @dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only\n   1062  183818  0.0  0.0 /usr/lib/polkit-1/polkitd --no-debug\n   1067  183818  0.0  0.0 /usr/lib/systemd/systemd-logind\n   1069  183818  0.1  0.0 /usr/sbin/tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/run/tailscale/tailscaled.sock --port=41641\n   1071  183818  0.0  0.0 /usr/libexec/udisks2/udisksd\n   1111  183818  0.0  0.0 /usr/bin/python3 /usr/share/unattended-upgrades/unattended-upgrade-shutdown --wait-for-signal\n   1114  183818  0.0  0.0 /usr/sbin/rsyslogd -n -iNONE\n   1146  183818  0.0  0.0 /usr/sbin/ModemManager\n   1285  183817  0.0  0.0 [irq/39-nvidia]\n   1286  183817  0.0  0.0 [nvidia]\n   1287  183817  0.0  0.0 [nv_queue]\n   1289  183815  0.0  0.0 [UVM global queue]\n   1290  183815  0.0  0.0 [UVM deferred release queue]\n   1291  183815  0.0  0.0 [UVM Tools Event Queue]\n   1294  183815  4.9 12.4 /mnt/tts/projects/cosy/venv/bin/python /mnt/tts/projects/qwen3-tts/app/cosy_server.py\n   1379  183815  0.0  0.0 /usr/bin/nvidia-persistenced --user nvidia-persistenced --no-persistence-mode --verbose\n   1472  183812  0.0  0.0 /usr/sbin/cron -f -P\n   1482  183812  0.0  0.0 sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups\n   1485  183812  0.0  0.0 /bin/login -p --\n   1722  183801  0.0  0.0 /usr/lib/systemd/systemd --user\n   1723  183801  0.0  0.0 (sd-pam)\n   1732  183801  0.0  0.0 -bash\n   1842  181741  0.0  0.0 /usr/libexec/fwupd/fwupd\n   1850  181741  0.0  0.0 /usr/libexec/upowerd\n   2002  176017  0.0  0.0 [kworker/R-tls-s]\n   4129   97310  0.0  0.0 [vidmem lazy free]\n   4130   97310  0.0  0.0 [UVM GPU2 BH]\n   4131   97310  0.0  0.0 [UVM GPU2 KC]\n  15465   89118  0.0  0.0 [jbd2/sdb3-8]\n  15466   89118  0.0  0.0 [kworker/R-ext4-]\n  15467   89118  0.0  0.0 [ext4lazyinit]\n 624477   74674  0.2  5.2 /mnt/tts/projects/gpt-sovits/venv/bin/python serve.py\n 636260   67098  0.0  0.0 [kworker/18:2-mm_percpu_wq]\n 637185   65347  0.0  0.0 [kworker/7:1-mm_percpu_wq]\n 795550   62886  0.0  0.0 [kworker/15:1-mm_percpu_wq]\n1050673   62016  0.0  0.0 [kworker/11:0-events]\n1097011   61859  0.0  0.0 bash -c while ! grep -qE 'ALL_DONE|TRAIN_FAILED' /tmp/gs_fulltrain_all.log 2>/dev/null; do sleep 60; done; echo '=== 训练链结束标记出现 ==='; grep -E 'ALL_DONE|TRAIN_FAILED|训练完成|失败' /tmp/gs_fulltrain_all.log | tail -6; echo '=== 权重产物 ==='; ls -la /mnt/tts/projects/gpt-sovits/repo/SoVITS_weights_v2ProPlus/ | grep -E 'yohan|SOLA'\n1180897   61566  0.0  0.0 [kworker/23:1-events]\n1201128   61499  0.0  0.0 [kworker/6:0-events]\n1456358   60613  0.0  0.0 [kworker/16:1-mm_percpu_wq]\n1564009   58191  0.0  0.0 [kworker/5:2-events]\n1564916   57590  0.0  0.0 [kworker/13:2-kdmflush/252:1]\n1567006   56757  0.0  0.0 [kworker/16:2-cgroup_release]\n1572673   54070  0.0  0.0 [kworker/10:1-events]\n1577353   49823  0.0  0.0 [kworker/23:2-cgroup_free]\n1579372   41662  0.0  0.0 [kworker/17:3-mm_percpu_wq]\n1587330   38964  0.0  0.0 [kworker/8:0-cgroup_release]\n1588724   38200  0.0  0.0 [kworker/19:3-mm_percpu_wq]\n1589493   29161  0.0  0.0 [kworker/7:0]\n1589736   24482  0.0  0.0 [kworker/15:0-rcu_par_gp]\n1590094   23329  0.0  0.0 [kworker/2:0-mm_percpu_wq]\n1595114   22095  0.0  0.0 [kworker/12:0-mm_percpu_wq]\n1595173   22066  0.0  0.0 [kworker/19:0]\n1598108   20165  0.0  0.0 [kworker/14:0-cgroup_free]\n1598361   19841  0.0  0.0 [kworker/18:0-rcu_par_gp]\n1598967   19564  0.0  0.0 [kworker/8:2-mm_percpu_wq]\n1600217   14761  0.0  0.0 [kworker/9:0-mm_percpu_wq]\n1600446   10648  0.0  0.0 [kworker/9:1-cgroup_free]\n1605844    7922  0.0  0.0 [kworker/21:0-cgroup_free]\n1606682    7704  0.0  0.0 [kworker/1:2-events]\n1607299    7240  0.0  0.0 [kworker/20:3-mm_percpu_wq]\n1607986    7107  0.0  0.0 [kworker/14:1-events]\n1608351    7041  0.0  0.0 [kworker/12:1-inode_switch_wbs]\n1609215    6370  0.0  0.0 [kworker/22:3]\n1610142    5761  0.0  0.0 [kworker/21:2-mm_percpu_wq]\n1610483    5587  0.0  0.0 [kworker/1:0-cgwb_release]\n1610484    5587  0.0  0.0 [psimon]\n1610488    5587  4.7  3.4 /mnt/tts/projects/qwen3-tts/venv/bin/python -u server.py\n1610543    5580  0.0  0.0 [vidmem lazy free]\n1610544    5580  0.0  0.0 [UVM GPU1 BH]\n1610545    5580  0.0  0.0 [UVM GPU1 KC]\n1610565    5574  0.0  0.0 [kworker/22:0-mm_percpu_wq]\n1611325    5161  0.0  0.0 [kworker/2:3-cgroup_free]\n1612097    4982  0.0  0.0 [kworker/3:3-cgroup_free]\n1612334    4949  0.0  0.0 [kworker/20:0]\n1612816    4707  0.0  0.0 [kworker/17:0]\n1612879    4664  0.0  0.0 [kworker/3:1-mm_percpu_wq]\n1613540    4402  0.0  0.0 [kworker/0:2-cgroup_free]\n1614109    3488  0.0  0.0 [kworker/4:2-mm_percpu_wq]\n1614363    3326  0.0  0.0 [kworker/10:0-mm_percpu_wq]\n1614897    2871  0.0  0.0 [kworker/0:1-events]\n1614961    2792  0.0  0.0 [kworker/11:2]\n1615191    2642  0.0  0.0 [kworker/5:0-rcu_par_gp]\n1615196    2641  0.0  0.0 [kworker/6:1]\n1615485    2374  0.0  0.0 [kworker/13:1-cgroup_free]\n1615486    2373  0.0  0.0 [kworker/u48:2-events_power_efficient]\n1615505    2013  0.0  0.0 [kworker/u48:1-ext4-rsv-conversion]\n1615522    1653  0.0  0.0 [kworker/u48:0-events_power_efficient]\n1615582     453  0.0  0.0 [kworker/u48:3-flush-252:0]\n1615588     374  0.0  0.0 [kworker/4:3]\n1615776     227  0.0  0.0 [kworker/13:0]\n1616000      65  0.0  0.0 [kworker/0:0]\n1616001      65  0.0  0.0 [kworker/0:3]\n1616002      65  0.0  0.0 sshd: zheng [priv]\n1616050      64  0.0  0.0 sshd: zheng@notty\n1616051      64  0.0  0.0 bash -c python3 /mnt/tts/diag/multimodel_first_20261013/run_round.py prepare && /mnt/tts/projects/qwen3-tts/venv/bin/python -u /mnt/tts/diag/multimodel_first_20261013/run_round.py qwen > /mnt/tts/diag/multimodel_first_20261013/qwen.log 2>&1\n1616058      64  108  3.5 /mnt/tts/projects/qwen3-tts/venv/bin/python -u /mnt/tts/diag/multimodel_first_20261013/run_round.py qwen\n1616134      54  0.0  0.0 sleep 60\n1616174       0  0.0  0.0 ps -eo pid,etimes,pcpu,pmem,args\n",
+      "stderr": ""
+    }
+  }
+}
