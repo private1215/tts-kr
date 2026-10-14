@@ -1,0 +1,41 @@
+{
+ "items": [
+  {"id": "ctrl_pitch_20261014d", "dim": "热身", "title": "先热个身：两段声音，音调一样高吗",
+   "desc": "依次听第 1 段和第 2 段。\n\n🎯 哪一段的**声音更高**（更尖）？\n\n✅ 凭耳朵，不用想太多。",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": "k9_c1.mp3", "label": "第 1 段更高"},
+    {"key": "B", "file": "k9_c2.mp3", "label": "第 2 段更高"},
+    {"key": "C", "file": null, "label": "两段一样高"},
+    {"key": "D", "file": null, "label": "没听清"}]},
+
+  {"id": "m_pitch_ab_20261014d", "dim": "男声·音色", "title": "男声：哪一段更像真人在说话",
+   "desc": "两段男声，念的是**同一句话**。\n\n🎯 哪一段**更像真人在说话**？",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": "k9_old.mp3", "label": "第 1 段更像真人"},
+    {"key": "B", "file": "k9_new.mp3", "label": "第 2 段更像真人"},
+    {"key": "C", "file": null, "label": "两段都像真人"},
+    {"key": "D", "file": null, "label": "两段都不像真人"},
+    {"key": "E", "file": null, "label": "没听清"}]},
+
+  {"id": "m_vs_el_20261014d", "dim": "男声·对标", "title": "男声：这回跟标杆比，哪段更像真人",
+   "desc": "换两段男声，还是**同一句话**。\n\n🎯 哪一段**更像真人在说话**？",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": "k9_new.mp3", "label": "第 1 段更像真人"},
+    {"key": "B", "file": "k9_el.mp3", "label": "第 2 段更像真人"},
+    {"key": "C", "file": null, "label": "两段都像真人"},
+    {"key": "D", "file": null, "label": "两段都不像真人"},
+    {"key": "E", "file": null, "label": "没听清"}]},
+
+  {"id": "m_ship_20261014d", "dim": "男声·能不能用", "title": "男声：这段能直接交给客户吗",
+   "desc": "🎯 这段男声**拿来直接交给客户**行不行？",
+   "ref": {"file": "k9_new.mp3", "label": "听这一段（就是上一题的第 1 段）"},
+   "options": [
+    {"key": "A", "file": null, "label": "可以直接用"},
+    {"key": "B", "file": null, "label": "还差一点，但接近了"},
+    {"key": "C", "file": null, "label": "还是不行"},
+    {"key": "D", "file": null, "label": "没听清"}]}
+ ]
+}

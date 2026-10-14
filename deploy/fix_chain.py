@@ -50,7 +50,32 @@ DEFAULT_RATE = {"f": 8.5, "m": 8.9}
 DEFAULT_CPS = {"f": 7.45, "m": 8.37}
 # EL 实测响度：女 -22.6 / 男 -25.0
 DEFAULT_LUFS = {"f": -22.6, "m": -25.0}
+# EL 实测 F0 中位（librosa.pyin / 16k 口径，与 tools 里的诊断同口径，不可换算法）：
+#   男（13 条 EL 案例）190.5~205.3 → 均值 197.7
+#   女（5 条 SOLA 案例）271.0~282.1 → 均值 276.0
+DEFAULT_F0 = {"f": 276.0, "m": 197.7}
 EQ_MALE = "highshelf=f=4000:g=-4,lowpass=f=14000"
+
+
+def f0_median(y, sr, win=60.0):
+    """F0 中位。必须与 EL 基准值同口径：pyin / 16k / fmin60 fmax400 / **前 60s**。
+    🔴 2026-10-14 踩坑：这里取整篇、而 DEFAULT_F0 是前 60s 口径，
+       全篇 F0 比开头高约 13Hz（185.1 vs 171.7），导致变调只做了 1.14 半音
+       （应该 2.5 半音），音高根本没补够。跨口径数字害死人。"""
+    n = int(win * sr)
+    if len(y) > n:
+        y = y[:n]
+    try:
+        import librosa
+        f0, vo, _ = librosa.pyin(y, fmin=60, fmax=400, sr=sr,
+                                 frame_length=1024, hop_length=256)
+        m = (vo if vo is not None else np.zeros(len(f0), dtype=bool))
+        m = m & np.isfinite(f0)
+        v = f0[m]
+        return float(np.median(v)) if len(v) > 50 else None
+    except Exception as e:
+        print("F0 测量失败（缺 librosa？）: %r" % (e,), flush=True)
+        return None
 
 
 def load16(path):
@@ -106,6 +131,12 @@ def main():
     ap.add_argument("--chars", type=int, default=0,
                     help="raw 对应的正文字数，--target-cps 模式下必填")
     ap.add_argument("--lufs", type=float, default=None)
+    ap.add_argument("--pitch", type=float, default=0.0,
+                    help="手动频率比（不是半音）：>1 升调。留空则按 --target-f0 自动算")
+    ap.add_argument("--target-f0", type=float, default=None,
+                    help="目标 F0 中位(Hz)。默认男 197.7 / 女 276.0（EL 案例实测均值）")
+    ap.add_argument("--no-pitch", action="store_true",
+                    help="跳过 F0 对齐（对照组用）")
     ap.add_argument("--no-clean", action="store_true")
     a = ap.parse_args()
 
@@ -170,6 +201,39 @@ def main():
     print("分段拉伸后 %.1fs" % (len(buf) / sr), flush=True)
     t3 = os.path.join(tmpd, "st.wav")
     sf.write(t3, buf, sr)
+
+    # ---- ② 变调：就地按实测 F0 算比例（只升音高、不改时长）----
+    #    🔴 2026-10-14 实测：VoxCPM2 / Qwen 男声 F0 系统性偏低
+    #      —— EL 男声 13 条案例 F0 中位 190.5~205.3（均值 ~198），
+    #         我们只有 168~172，低约 15%。女声（OmniVoice 277 vs EL 271~282）没问题。
+    #      🔴 必须在 atempo **之后**就地测：atempo 改了时间轴，
+    #        「前 60s」覆盖的文本变了，拿 raw 的 F0 算会少补 3.4%。
+    #      🔴 ffmpeg rubberband 的 pitch 是**频率比**，不是半音！
+    #        （踩坑：填 2.85 以为是半音，实际升了 17 个半音，声音变花栗鼠）
+    tf = a.target_f0 if a.target_f0 else DEFAULT_F0[g]
+    if a.no_pitch:
+        a.pitch = 1.0
+    elif not a.pitch:
+        yv, _ = load16(t3)
+        f0r = f0_median(yv, sr)
+        if f0r and f0r > 0:
+            a.pitch = min(max(tf / f0r, 0.90), 1.30)
+            print("F0 实测(拉伸后前60s) %.1fHz → 目标 %.1fHz，变调 ×%.4f（%.2f 半音）"
+                  % (f0r, tf, a.pitch, 12 * np.log2(a.pitch)), flush=True)
+        else:
+            a.pitch = 1.0
+    if a.pitch and abs(a.pitch - 1.0) > 1e-6:
+        tp = os.path.join(tmpd, "pitch.wav")
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", t3, "-af",
+                        "rubberband=pitch=%.4f" % a.pitch, tp], check=True)
+        t3 = tp
+        # 🔴 必须把变调结果读回 buf：后面停顿清洗用的是 buf，不是 t3。
+        #    2026-10-14 踩坑：漏了这一行，变调白做（日志显示变调成功，
+        #    但成品 F0 仍是 171.7 没变），因为清洗直接拿未变调的 buf 覆盖了。
+        buf, _ = sf.read(t3, dtype="float32")
+        # 半音 = 12 * log2(频率比)，别写成 17.31
+        print("变调 ×%.4f（%.2f 半音）" % (a.pitch, 12 * np.log2(a.pitch)),
+              flush=True)
 
     if a.no_clean:
         cur = t3
