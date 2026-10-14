@@ -186,6 +186,20 @@ CHUNK_MIN_TAIL_RATIO = 0.30  # 尾块短于上限的这个比例时，改为均�
 #      男 2573/1472（第一段 298s，比案例长 20%）
 #      女 2580/836 （第一段 352s，比案例长 40%）
 #    段太长正是「前半段跟吵架似的」的嫌疑之一：长上下文里语气更容易漂。
+# ⚠️ 2026-10-13 实测：**这个改动无效，已回退到 250，别再试。**
+#    实测（同一条男声案例 1a6c20a60481、同一参照、同一参考音频）：
+#      裸推理（整篇一次提交给 cosy）          音色 0.9539
+#      线上成品（切成 2 块各自独立跑）r27      音色 0.8444
+#      线上成品（改成 1 块一次成型）  r28      音色 0.8569
+#    即：分块只值 **+0.0125**，而单次测量波动就有 0.01~0.02 —— **在噪声里**。
+#    更硬的证据：r28 成品 vs r27 成品互相似 **0.9947**（几乎同一条音频），
+#    而裸推理 vs 线上成品互相似只有 0.8912。
+#    → **分块不是瓶颈，真正的 0.097 在后处理链**。方向错了，别再改这里。
+#    回退到 250 还因为：2 块交付是员工在 EL 上养成的习惯，不该为噪声级收益去改。
+#
+# ⭐ 2026-10-05 案例拆解结论：ElevenLabs 是按「音频时长」分块，不是按字数。
+#    实测两个案例：男 4091 字 483.8s 切在第 2157 字 = 258 秒；
+#    女 3429 字 459.1s 切在第 1879 字 = 250 秒。字数差 15%，时长却都落在 250~258 秒。
 CHUNK_MAX_SECONDS = float(os.environ.get("TTS_CHUNK_MAX_SECONDS", "250"))
 # 韩语实测 7.3~8.7 字/秒（男快女慢）。没历史数据时用这个起步，跑过几单后
 # 由 server.py 按该音色的实测值自校准（写回 voices.json 的 cps 字段）。
@@ -225,6 +239,18 @@ CHUNK_SLIVER_RATIO = float(os.environ.get("TTS_CHUNK_SLIVER_RATIO", "0.05"))
 #    5% 既能吸收这个抖动，又能在换音色/换语速时及时跟上。
 CHUNK_CPS_LOCK_RATIO = float(os.environ.get("TTS_CHUNK_CPS_LOCK_RATIO", "0.05"))
 
+# 🔴 2026-10-13 r27：语速**合理性钳位**。
+#    cps 是每单滑动平均写回 voices.json 的，一次坏测量就会把它带偏，而分块块数
+#    完全由它决定 —— 实测 `yohan_male` 被写成 cps=4.618 / cps_lock=4.01
+#    （韩语财经配音真实区间是 7.0~8.6），于是 4595 字的稿子被切成 **5 段**
+#    （每段 ~140 秒），而同一篇用 EL_male（cps 8.477）只切 3 段。
+#    员工拿到的是被无故多切的文件，段间还要多两处衔接。
+#    → 加钳位：超出区间就当作数据脏，回落到 DEFAULT_CPS 并强制写回，
+#      让下一单的正常测量把它拉回来。区间留得比实测宽（6.0~10.0），
+#      避免误伤真的慢速/快速音色。
+CHUNK_CPS_MIN = float(os.environ.get("TTS_CHUNK_CPS_MIN", "6.0"))
+CHUNK_CPS_MAX = float(os.environ.get("TTS_CHUNK_CPS_MAX", "10.0"))
+
 
 def chunk_cps(voice_meta: dict, cps=None) -> tuple:
     """分块专用语速（锁定值），返回 `(值, 是否需要写回)`。
@@ -232,9 +258,14 @@ def chunk_cps(voice_meta: dict, cps=None) -> tuple:
     ⚠️ 别拿 `cps` 直接分块：它每单都在动，会让段数不可复现。
     """
     m = voice_meta or {}
-    c = float(cps if cps is not None else m.get("cps") or 0) or DEFAULT_CPS
+    raw = float(cps if cps is not None else m.get("cps") or 0) or DEFAULT_CPS
+    if not (CHUNK_CPS_MIN <= raw <= CHUNK_CPS_MAX):
+        # 脏数据：不拿它分块，也不让它继续污染 lock
+        return round(DEFAULT_CPS, 3), True
+    c = raw
     lock = float(m.get("cps_lock") or 0.0)
-    if not lock or abs(c - lock) / max(lock, 1e-9) > CHUNK_CPS_LOCK_RATIO:
+    if not lock or not (CHUNK_CPS_MIN <= lock <= CHUNK_CPS_MAX) \
+            or abs(c - lock) / max(lock, 1e-9) > CHUNK_CPS_LOCK_RATIO:
         return round(c, 3), True
     return lock, False
 

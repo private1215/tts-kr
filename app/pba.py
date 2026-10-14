@@ -142,6 +142,47 @@ def _fit_seg(seg, need):
     return np.tile(unit, reps)[:need]
 
 
+def _fit_seg_preserve_edges(seg, need, sr):
+    """离线候选：保留停顿两端，仅在内部裁补并交叉淡化。
+
+    不接入生产调用；需要同源音频盲听和完整回归后才能启用。
+    极短输出不足以保留过渡，明确拒绝，不静默改动边缘。
+    """
+    x = np.asarray(seg)
+    need = int(need)
+    if sr <= 0 or need < 0 or x.ndim != 1:
+        raise ValueError("expected mono segment, positive sr and nonnegative need")
+    n = len(x)
+    if need == n:
+        return x.copy()
+    if need == 0:
+        return x[:0].copy()
+    if n == 0:
+        return np.zeros(need, dtype=x.dtype)
+    if min(n, need) < 4:
+        raise ValueError("segment too short to preserve both edges")
+    fade = min(max(1, int(sr * 0.005)), min(n, need) // 4)
+    weights = np.linspace(0.0, 1.0, fade, dtype=np.float64)
+    if need < n:
+        # 两个原始窗口重叠淡化，样本总数严格为 need。
+        left_n = (need + fade) // 2
+        right_n = need + fade - left_n
+        left, right = x[:left_n], x[n - right_n:]
+        blend = left[-fade:] * (1.0 - weights) + right[:fade] * weights
+        return np.concatenate((left[:-fade], blend, right[fade:])).astype(x.dtype)
+    # 扩长只在中部插入低能量核心，原始首尾仍逐样本保留。
+    mid = n // 2
+    core_n = min(max(1, int(sr * 0.02)), n)
+    energy = np.concatenate(([0.0], np.cumsum(x.astype(np.float64) ** 2)))
+    start = int(np.argmin(energy[core_n:] - energy[:-core_n]))
+    insert_n = need - n + 2 * fade
+    fill = np.resize(x[start:start + core_n], insert_n)
+    a = x[mid - fade:mid] * (1.0 - weights) + fill[:fade] * weights
+    b = fill[-fade:] * (1.0 - weights) + x[mid:mid + fade] * weights
+    return np.concatenate((x[:mid - fade], a, fill[fade:-fade], b,
+                           x[mid + fade:])).astype(x.dtype)
+
+
 _SR_HINT = 44100
 
 

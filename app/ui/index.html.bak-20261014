@@ -1,0 +1,2687 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title id="appTitle">Qwen3-TTS</title>
+<style>
+:root{
+  --bg:#0D0F13; --bg2:#11141A;
+  --panel:#151920; --panel2:#1B2029; --panel3:#212734;
+  --line:#232935; --line2:#2D3543;
+  --txt:#EAEDF2; --txt2:#B7BFCB; --dim:#79828F;
+  --accent:#5B9FFF; --accent-h:#82B6FF; --accent-soft:rgba(91,159,255,.12);
+  --ok:#3FB98A; --warn:#E5A23C; --err:#EC6C6C;
+  --r:14px; --r-sm:9px; --r-xs:7px;
+  --shadow:0 1px 2px rgba(0,0,0,.28), 0 8px 28px rgba(0,0,0,.16);
+  --shadow-lg:0 24px 64px rgba(0,0,0,.55);
+  --ease:cubic-bezier(.22,.61,.36,1);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;color:var(--txt);
+  background:var(--bg);
+  background-image:
+    radial-gradient(1100px 520px at 12% -8%, #1A2130 0%, transparent 62%),
+    radial-gradient(900px 480px at 92% 4%, #171E2B 0%, transparent 58%);
+  background-attachment:fixed;
+  font:14px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI Variable","Segoe UI","Microsoft YaHei",
+       "Malgun Gothic","Hiragino Sans",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:rgba(91,159,255,.28)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#232B38;border-radius:6px;border:2px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:#313B4C}
+
+.wrap{max-width:1180px;margin:0 auto;padding:28px 24px 48px}
+.head{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:22px;flex-wrap:wrap}
+.head-left{display:flex;align-items:center;gap:13px}
+.logo{width:38px;height:38px;border-radius:11px;flex:none;display:grid;place-items:center;
+  background:linear-gradient(145deg,var(--accent-h),var(--accent) 55%,#3F7FD6);
+  box-shadow:0 4px 14px rgba(91,159,255,.34), inset 0 1px 0 rgba(255,255,255,.28)}
+.logo svg{width:20px;height:20px;display:block}
+h1{font-size:19px;font-weight:600;margin:0;letter-spacing:-.015em}
+.sub{color:var(--dim);font-size:12.5px;margin-top:2px}
+.head-right{display:flex;gap:9px;align-items:center;flex:none}
+
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+.employee-main,.employee-side{min-width:0}
+.employee-side .sticky-action{position:sticky;top:18px}
+@media(max-width:900px){
+  .grid{grid-template-columns:1fr}
+  .employee-side .sticky-action{position:static}
+}
+.card{background:linear-gradient(180deg,var(--panel) 0%,#131720 100%);
+  border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin-bottom:16px;
+  box-shadow:var(--shadow)}
+.card h2{font-size:11px;font-weight:600;margin:0 0 14px;color:var(--dim);
+  text-transform:uppercase;letter-spacing:.09em}
+label{display:block;font-size:11.5px;font-weight:500;color:var(--txt2);margin:12px 0 5px;letter-spacing:.01em}
+textarea,input,select{width:100%;background:var(--panel2);border:1px solid var(--line2);color:var(--txt);
+  border-radius:var(--r-sm);padding:9px 12px;font:14px/1.55 inherit;outline:none;
+  transition:border-color .16s var(--ease), box-shadow .16s var(--ease), background .16s var(--ease)}
+textarea{min-height:170px;resize:vertical;line-height:1.72}
+textarea#instruct{min-height:52px}
+input::placeholder,textarea::placeholder{color:#5E6672}
+textarea:hover,input:hover,select:hover{border-color:#38414F}
+textarea:focus,input:focus,select:focus{border-color:var(--accent);background:#1D2330;
+  box-shadow:0 0 0 3px var(--accent-soft)}
+select{appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%2379828F' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;cursor:pointer}
+select option{background:var(--panel2);color:var(--txt)}
+button{background:var(--panel2);border:1px solid var(--line2);color:var(--txt);border-radius:var(--r-sm);
+  padding:9px 17px;font:14px/1 inherit;font-weight:500;cursor:pointer;
+  transition:all .16s var(--ease)}
+button:hover{border-color:#414B5C;background:var(--panel3)}
+button:active{transform:translateY(.5px)}
+button.primary{background:linear-gradient(180deg,var(--accent-h),var(--accent) 60%,#4C90F0);
+  border-color:transparent;color:#071019;font-weight:600;
+  box-shadow:0 3px 12px rgba(91,159,255,.30), inset 0 1px 0 rgba(255,255,255,.25)}
+button.primary:hover{box-shadow:0 5px 18px rgba(91,159,255,.42);filter:none;background:linear-gradient(180deg,#93C0FF,var(--accent) 60%,#4C90F0)}
+button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+button.danger{color:var(--err)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+.tabs{display:flex;gap:4px;margin-bottom:14px;background:var(--panel2);padding:4px;
+  border-radius:11px;border:1px solid var(--line)}
+.tab{padding:7px 15px;border-radius:8px;border:none;cursor:pointer;color:var(--dim);
+  font-size:13px;font-weight:500;background:transparent;transition:all .16s var(--ease)}
+.tab:hover{color:var(--txt2)}
+.tab.on{background:var(--panel3);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.3)}
+/* 性别二选一：员工日常只碰这两个按钮，其余全部收进管理员设置 */
+.gsel{display:flex;gap:10px;margin:2px 0 10px}
+.gbtn{flex:1;min-height:72px;padding:12px;border-radius:11px;border:1px solid var(--line2);
+  background:var(--panel2);color:var(--txt2);cursor:pointer;text-align:left;
+  font-size:15px;transition:.15s}
+.gbtn:hover{color:var(--txt);border-color:#46556d;background:var(--panel3)}
+.gbtn.on{background:var(--accent-soft);color:var(--txt);border-color:var(--accent);font-weight:600;
+  box-shadow:inset 0 0 0 1px rgba(91,159,255,.10)}
+.gbtn .gsub{display:block;font-size:11.5px;color:var(--dim);font-weight:400;margin-top:4px}
+.gbtn.on .gsub{color:var(--accent-h)}
+.adv{margin-top:10px;font-size:12px;color:var(--dim);cursor:pointer;user-select:none}
+.adv:hover{color:var(--txt2)}
+.advbody{margin-top:8px;padding-top:10px;border-top:1px dashed var(--line)}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}
+.chip{font-size:12px;padding:5px 11px;border:1px solid var(--line2);border-radius:20px;
+  cursor:pointer;color:var(--txt2);background:var(--panel2);transition:all .16s var(--ease)}
+.chip:hover{border-color:var(--accent);color:var(--txt);background:rgba(91,159,255,.10)}
+.chip.on{border-color:var(--accent);color:var(--accent);background:rgba(91,159,255,.14);font-weight:600}
+/* 案例反馈：星级 + 案例行 */
+.stars{display:flex;gap:6px;margin-top:6px}
+.star{font-size:20px;line-height:1;cursor:pointer;color:var(--line2);transition:color .12s var(--ease)}
+.star.on{color:#f5b83d}
+.crow{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--line);
+  border-radius:9px;margin-bottom:7px;cursor:pointer;transition:all .16s var(--ease)}
+.crow:hover{border-color:var(--line2);background:var(--panel2)}
+.crow.on{border-color:var(--accent);background:rgba(91,159,255,.08)}
+.crow .nm{font-size:13.5px;font-weight:500}
+.crow .mt{font-size:11.5px;color:var(--dim);margin-top:2px}
+.crow .rt{margin-left:auto;text-align:right;font-size:12px;color:var(--dim);white-space:nowrap}
+.casehdr{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px}
+.fbtags{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.fbtag{font-size:11px;padding:2px 8px;border-radius:11px;background:var(--panel3);color:var(--txt2)}
+.hint{font-size:12px;color:var(--dim);margin-top:7px;line-height:1.55}
+
+/* 员工主流程：操作卡固定在右侧，提交前给出明确摘要与恢复提示 */
+#text{min-height:260px;font-size:14.5px;line-height:1.75}
+#submit{width:100%;min-height:46px;padding:11px 22px;font-size:14.5px;font-weight:650;letter-spacing:0}
+#clear{width:100%;margin-top:8px;background:transparent;color:var(--dim)}
+#count{font-size:12.5px;color:var(--txt2);margin-top:9px}
+.submit-summary{margin:2px 0 14px;padding:9px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:10px}
+.summary-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;font-size:12.5px;color:var(--dim)}
+.summary-row+.summary-row{border-top:1px solid rgba(45,53,67,.65)}
+.summary-row strong{color:var(--txt2);font-weight:560;text-align:right}
+.submit-state{display:none;margin-top:10px;padding:9px 11px;border-radius:9px;font-size:12.5px;line-height:1.5}
+.submit-state.show{display:block}
+.submit-state.ok{color:#7EDDB7;background:rgba(63,185,138,.09);border:1px solid rgba(63,185,138,.28)}
+.submit-state.bad{color:#FF9B9B;background:rgba(236,108,108,.09);border:1px solid rgba(236,108,108,.28)}
+.submit-help{margin-top:10px;color:var(--dim);font-size:11.5px;line-height:1.55;text-align:center}
+.employee-recovery{display:flex;gap:7px;margin-top:15px;padding-top:13px;border-top:1px solid var(--line);color:var(--dim);font-size:11.5px;line-height:1.5}
+.employee-recovery svg{width:15px;height:15px;flex:none;margin-top:2px}
+button.primary:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
+.card h2{letter-spacing:1.2px}
+label{font-size:12.5px}
+@media(max-width:600px){
+  .gsel{display:grid;grid-template-columns:1fr}
+  #text{min-height:220px}
+  .head-right{width:100%;justify-content:flex-end}
+}
+
+.job{border:1px solid var(--line);border-radius:12px;padding:13px 15px;margin-bottom:10px;
+  background:linear-gradient(180deg,var(--panel2) 0%,#171C25 100%);
+  transition:border-color .16s var(--ease), transform .16s var(--ease)}
+.job:hover{border-color:var(--line2)}
+.job .top{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.job .pv{color:var(--dim);font-size:12px;margin-top:4px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;line-height:1.5}
+.job .pv.open{white-space:pre-wrap;overflow:visible;text-overflow:clip;
+  max-height:190px;overflow-y:auto;color:var(--txt2);background:#12161E;
+  border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin-top:7px}
+.pvtog{color:var(--accent);cursor:pointer;font-size:12px;margin-left:6px;user-select:none;white-space:nowrap}
+.pvtog:hover{text-decoration:underline}
+.job .ttl{font-size:14px;font-weight:600;margin:5px 0 2px;letter-spacing:-.005em}
+.badge{font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid var(--line2);
+  color:var(--dim);font-weight:500;letter-spacing:.02em}
+.badge.running{color:var(--accent);border-color:rgba(91,159,255,.5);background:rgba(91,159,255,.10)}
+.badge.done{color:var(--ok);border-color:rgba(63,185,138,.45);background:rgba(63,185,138,.10)}
+.badge.error{color:var(--err);border-color:rgba(236,108,108,.45);background:rgba(236,108,108,.10)}
+.badge.queued{color:var(--warn);border-color:rgba(229,162,60,.45);background:rgba(229,162,60,.10)}
+.bar{height:5px;background:#1E242F;border-radius:4px;margin-top:9px;overflow:hidden}
+.bar>i{display:block;height:100%;width:0;transition:width .5s var(--ease);
+  background:linear-gradient(90deg,var(--accent),var(--accent-h));
+  box-shadow:0 0 8px rgba(91,159,255,.5)}
+audio{width:100%;margin-top:9px;height:36px;border-radius:8px}
+.stat{font-size:12px;color:var(--dim);margin-top:6px}
+.empty{color:var(--dim);font-size:13px;padding:20px 0;text-align:center}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+
+.menuwrap{position:relative;flex:none}
+.menubtn{display:flex;align-items:center;gap:7px;padding:7px 13px;font-size:13px;
+  border-radius:10px;white-space:nowrap;background:var(--panel2);border:1px solid var(--line2)}
+.menubtn:hover{background:var(--panel3)}
+.menubtn .gl{width:15px;height:15px;flex:none;opacity:.9}
+.menu{display:none;position:absolute;right:0;top:calc(100% + 7px);z-index:50;min-width:172px;
+  background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:6px;
+  box-shadow:var(--shadow-lg)}
+.menu.open{display:block;animation:pop .16s var(--ease)}
+@keyframes pop{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+.mi{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;cursor:pointer;
+  font-size:13px;color:var(--txt2);transition:background .12s var(--ease)}
+.mi:hover{background:var(--panel3);color:var(--txt)}
+.mi.on{color:var(--accent);font-weight:600}
+.mi .tick{margin-left:auto;font-size:12px;opacity:.9}
+.mi.sep{border-top:1px solid var(--line);margin-top:5px;padding-top:10px}
+.role{font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--line2);color:var(--dim);font-weight:500}
+.role.admin{color:var(--accent);border-color:rgba(91,159,255,.5);background:rgba(91,159,255,.10)}
+
+.mask{position:fixed;inset:0;background:rgba(7,9,13,.80);backdrop-filter:blur(3px);
+  z-index:100;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+.modal{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line2);
+  border-radius:18px;width:100%;max-width:440px;padding:24px 26px;box-shadow:var(--shadow-lg);
+  /* 自适应视口高度：老版本弹窗没有高度上限，内容一长就直接溢出到屏外 ——
+     案例上传页最典型，底部「上传并自动拆解」必须把窗口最大化才点得到。
+     现在弹窗最高 = 视口，超出的部分在 .mbody 里滚。 */
+  box-sizing:border-box;max-height:100vh;max-height:calc(100dvh - 48px);
+  display:flex;flex-direction:column}
+.modal.wide{max-width:700px}
+.modal>*{flex:0 0 auto}
+.modal>.mbody{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  margin-right:-8px;padding-right:8px}
+.modal>.mbody::-webkit-scrollbar{width:7px}
+.modal>.mbody::-webkit-scrollbar-track{background:transparent}
+.modal>.mbody::-webkit-scrollbar-thumb{background:#2A3341;border-radius:7px}
+.modal h3{margin:0 0 4px;font-size:16px;font-weight:600;letter-spacing:-.01em}
+.modal .msub{color:var(--dim);font-size:12.5px;margin-bottom:18px}
+.modal .acts{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+/* 操作栏吸在滚动区底部：表单再长，「上传并自动拆解」也一直看得见、点得到 */
+.mbody .acts{position:sticky;bottom:0;z-index:3;margin-top:16px;padding:12px 0 2px;
+  background:var(--panel);box-shadow:0 -14px 18px -12px var(--panel)}
+@media(max-height:600px){
+  .mask{padding:12px 10px}
+  .modal{max-height:calc(100dvh - 24px);padding:18px 20px}
+}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:9px 9px;border-bottom:1px solid var(--line);color:var(--txt2)}
+th{font-weight:600;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.07em}
+td button{padding:4px 11px;font-size:12px}
+.mini{background:transparent;border:1px solid var(--line2);border-radius:7px;padding:4px 9px;
+  font-size:12px;cursor:pointer;color:var(--dim);transition:all .16s var(--ease)}
+.mini:hover{border-color:var(--accent);color:var(--txt);background:rgba(91,159,255,.08)}
+.mini.danger:hover{border-color:var(--err);color:var(--err);background:rgba(236,108,108,.08)}
+.loginbox{width:100%;max-width:372px}
+.loginbox .brand{font-size:18px;font-weight:600;margin-bottom:3px;letter-spacing:-.01em}
+.loginbox .bsub{color:var(--dim);font-size:12.5px;margin-bottom:22px}
+.err{color:var(--err);font-size:12px;min-height:18px;margin-top:8px}
+.scopes{display:flex;gap:5px;margin-left:auto;background:var(--panel2);padding:3px;
+  border-radius:9px;border:1px solid var(--line)}
+.scopes .tab{padding:5px 12px;font-size:12px}
+.hide{display:none !important}
+.req{color:#e5534b;font-weight:700;margin:0 2px}
+.hint.warn{color:#e0a33a}
+.hint.bad{color:#e5534b}
+.vitem{border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-top:8px;background:var(--panel2)}
+.vitem.bad{border-color:#7a3b34}
+.vtop{display:flex;align-items:center;gap:8px}
+.vname{font-size:13px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vmeta{font-size:11px;color:var(--dim);white-space:nowrap}
+.vtag{font-size:10px;padding:1px 6px;border-radius:999px;background:#3a2f1c;color:#e0a33a;white-space:nowrap}
+.vtag.ok{background:#1f3a2a;color:#5fcf80}
+.vtext{font-size:11.5px;color:var(--dim);margin-top:6px;line-height:1.5;word-break:break-all}
+.vact{margin-top:7px;display:flex;gap:6px;align-items:center}
+.vact button{padding:3px 9px;font-size:11.5px}
+.vdel{color:#e5534b}
+.vplay{width:100%;margin-top:6px;display:none}
+details.adv{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+details.adv summary{cursor:pointer;font-size:12px;color:var(--dim);outline:none;font-weight:500}
+details.adv summary:hover{color:var(--txt2)}
+.filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.filters input,.filters select{width:auto;flex:1;min-width:120px;padding:7px 10px;font-size:13px}
+.pager{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;
+  padding-top:12px;border-top:1px solid var(--line);font-size:13px;color:var(--dim)}
+.pager .pinfo{margin-right:auto}
+.pager .pbtns{display:flex;gap:5px}
+.pager .pbtns button{min-width:34px;text-align:center;padding:5px 10px}
+.pager .psize{display:flex;align-items:center;gap:6px}
+.pager .psize select{width:auto;padding:5px 8px;font-size:13px}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--panel3);
+  border:1px solid var(--line2);border-radius:11px;padding:11px 20px;font-size:13px;z-index:200;
+  box-shadow:var(--shadow-lg);animation:pop .18s var(--ease)}
+</style>
+</head>
+<body>
+
+<div class="mask" id="loginMask" style="display:none">
+  <div class="modal loginbox">
+    <div class="brand" data-i18n="loginTitle">登录工作台</div>
+    <div class="bsub" data-i18n="loginSub">使用公司分配的账号继续</div>
+    <div class="mbody">
+      <label data-i18n="username">账号</label>
+      <input id="luser" autocomplete="username">
+      <label data-i18n="password">密码</label>
+      <input id="lpwd" type="password" autocomplete="current-password">
+      <div class="err" id="lerr"></div>
+    </div>
+    <div class="acts">
+      <button class="primary" id="lbtn" data-i18n="loginBtn">登录</button>
+    </div>
+    <div class="hint" data-i18n="loginHint">如忘记账号或密码，请联系管理员。</div>
+  </div>
+</div>
+
+<div class="mask" id="pwMask" style="display:none">
+  <div class="modal">
+    <h3 data-i18n="changePw">修改密码</h3>
+    <div class="msub" id="pwWho"></div>
+    <div class="mbody">
+      <label data-i18n="oldPwd">当前密码</label>
+      <input id="pwOld" type="password" autocomplete="current-password">
+      <label data-i18n="newPwd">新密码</label>
+      <input id="pwNew" type="password" autocomplete="new-password">
+      <label data-i18n="confirmPwd">确认新密码</label>
+      <input id="pwNew2" type="password" autocomplete="new-password">
+      <div class="err" id="pwErr"></div>
+    </div>
+    <div class="acts">
+      <button id="pwCancel" data-i18n="cancel">取消</button>
+      <button class="primary" id="pwSave" data-i18n="save">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="umMask" style="display:none">
+  <div class="modal wide">
+    <h3 data-i18n="userMgmt">员工账号管理</h3>
+    <div class="msub" data-i18n="userMgmtSub">创建员工账号，员工只能看到自己生成的任务。</div>
+    <div class="mbody">
+      <table>
+        <thead><tr>
+          <th data-i18n="thUser">账号</th><th data-i18n="thRole">角色</th>
+          <th data-i18n="thToday">今日</th><th data-i18n="thJobs">累计</th>
+          <th data-i18n="thLogin">最近登录</th><th></th>
+        </tr></thead>
+        <tbody id="userRows"></tbody>
+      </table>
+      <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
+        <h3 style="font-size:14px;margin:0 0 10px" data-i18n="addUser">新增账号</h3>
+        <div class="split">
+          <div><label data-i18n="username">账号</label><input id="nuName" autocomplete="off"></div>
+          <div><label data-i18n="password">密码</label><input id="nuPwd" type="password" autocomplete="new-password"></div>
+        </div>
+        <label data-i18n="roleLabel">角色</label>
+        <select id="nuRole"><option value="user" data-i18n="roleUser">员工</option><option value="admin" data-i18n="roleAdmin">管理员</option></select>
+        <div class="err" id="nuErr"></div>
+      </div>
+    </div>
+    <div class="acts">
+      <button id="umClose" data-i18n="close">关闭</button>
+      <button class="primary" id="nuCreate" data-i18n="create">创建</button>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="rpMask" style="display:none">
+  <div class="modal wide">
+    <h3 data-i18n="report">产出明细</h3>
+    <div class="msub" data-i18n="reportSub">按人 / 按日统计已完成的语音产出，可导出 CSV 用 Excel 打开。</div>
+    <div class="mbody">
+      <div class="row" style="margin-bottom:14px">
+        <div>
+          <label data-i18n="reportDays">统计范围</label>
+          <select id="rpDays" style="width:auto">
+            <option value="7" data-i18n="d7">7 天</option>
+            <option value="30" selected data-i18n="d30">30 天</option>
+            <option value="90" data-i18n="d90">90 天</option>
+            <option value="0" data-i18n="dAll">全部</option>
+          </select>
+        </div>
+        <button class="mini" id="rpExport" data-i18n="exportCsv" style="margin-top:18px">导出 CSV</button>
+      </div>
+      <div id="rpTable"><span class="hint" data-i18n="loading">加载中...</span></div>
+    </div>
+    <div class="acts">
+      <button id="rpClose" data-i18n="close">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 标杆案例试听 + 员工反馈：指标只证明"差多少"，员工一句话才说明"差在哪" -->
+<div class="mask" id="caseMask" style="display:none">
+  <div class="modal wide">
+    <h3 data-i18n="caseTitle">标杆案例</h3>
+    <div class="msub" data-i18n="caseSub">听一遍对标目标，勾选你觉得好听的地方。攒够反馈后按标签排序，就知道下一步该修哪一项。</div>
+
+    <!-- 列表 / 上传 / 详情三个视图都在这一层里滚，标题常驻、操作栏吸底 -->
+    <div class="mbody" id="caseBody">
+    <!-- 上传入口：案例越多，拆出来的规律越稳（后端上传后会自动跑韵律六维拆解） -->
+    <div id="caseTop" class="admin-only" style="display:flex;align-items:center;gap:10px;margin:10px 0">
+      <button class="mini primary" id="csAdd" data-i18n="upBtn">+ 上传案例</button>
+      <button class="mini" id="csExtract" data-i18n="csExtractBtn">⟳ 重新拆解音色</button>
+      <span class="hint" data-i18n="upTip">多上传几份，拆出来的规律才稳</span>
+    </div>
+
+    <!-- 🔴 自动拆解音色进行中的状态条：不阻塞员工，上传完立刻可用，
+         音色在后台慢慢补齐。之前按钮写着"上传并自动拆解"却根本没调接口。 -->
+    <div id="csExtractBar" style="display:none;margin:6px 0 10px;padding:8px 12px;
+         border-radius:8px;background:rgba(59,130,246,.10);
+         border:1px solid rgba(59,130,246,.30);font-size:13px">
+      <span data-i18n="csExtracting">正在拆解案例音色（按声音自动分类），约需几分钟…</span>
+    </div>
+
+    <div id="caseList"><span class="hint" data-i18n="loading">加载中...</span></div>
+
+    <div id="caseUpload" style="display:none">
+      <div class="row" style="align-items:center;margin-bottom:8px">
+        <h3 style="font-size:14px;margin:0" data-i18n="upTitle">上传标杆案例</h3>
+        <button class="mini" id="upBack" data-i18n="caseBack" style="margin-left:auto">← 返回列表</button>
+      </div>
+      <div class="hint" data-i18n="upSub" style="margin-bottom:12px"></div>
+
+      <label data-i18n="upName">案例名称</label>
+      <input id="upName" type="text" data-i18n-ph="upNamePh" style="width:100%" />
+
+      <div class="row" style="gap:10px;margin-top:10px">
+        <div style="flex:1">
+          <label data-i18n="upGender">性别</label>
+          <select id="upGender" style="width:100%">
+            <option value="male" data-i18n="sexMale">男声</option>
+            <option value="female" data-i18n="sexFemale">女声</option>
+            <option value="unknown" data-i18n="upUnknown">未知</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <label data-i18n="upSource">来源平台</label>
+          <select id="upSource" style="width:100%">
+            <option value="elevenlabs">ElevenLabs</option>
+            <option value="qwen">Qwen3-TTS</option>
+            <option value="cosyvoice3">CosyVoice3</option>
+            <option value="other" data-i18n="upOther">其它</option>
+            <option value="unknown" data-i18n="upUnknown">未知</option>
+          </select>
+        </div>
+      </div>
+
+      <label style="margin-top:10px" data-i18n="upTags">标签（英文逗号分隔，选填）</label>
+      <input id="upTags" type="text" data-i18n-ph="upTagsPh" style="width:100%" />
+
+      <label style="margin-top:10px" data-i18n="upAudio">音频文件（可多选）</label>
+      <input id="upAudio" type="file" accept="audio/*,.mp3,.wav,.m4a,.flac" multiple style="width:100%" />
+      <div class="hint" id="upAudioList" style="margin-top:4px"></div>
+
+      <label style="margin-top:10px" data-i18n="upText">文案文件（可多选，选填）</label>
+      <input id="upText" type="file" accept=".txt,.text" multiple style="width:100%" />
+      <div class="hint" id="upTextList" style="margin-top:4px"></div>
+      <div class="hint" id="upTextMode" style="margin-top:2px"></div>
+      <div class="hint" data-i18n="upTextTip" style="margin-top:4px"></div>
+
+      <label style="margin-top:10px" data-i18n="upNote2">备注（选填）</label>
+      <textarea id="upNote" rows="2" style="width:100%;resize:vertical"></textarea>
+
+      <div class="err" id="upErr" style="margin-top:10px"></div>
+      <div class="hint" id="upMsg" style="margin-top:6px"></div>
+      <div class="acts">
+        <button id="upCancel" data-i18n="close">关闭</button>
+        <button class="primary" id="upSubmit" data-i18n="upSubmit">上传并自动拆解</button>
+      </div>
+    </div>
+
+    <div id="caseDetail" style="display:none">
+      <div class="casehdr">
+        <div class="row" style="align-items:center">
+          <h3 style="font-size:14px;margin:0" id="csName">-</h3>
+          <button class="mini" id="csBack" data-i18n="caseBack" style="margin-left:auto">← 返回列表</button>
+        </div>
+        <div class="hint" id="csMeta" style="margin-top:4px"></div>
+        <div style="margin-top:10px">
+          <audio id="csAudio" controls style="width:100%"></audio>
+        </div>
+      </div>
+
+      <label data-i18n="fbLike">喜欢哪些地方（可多选）</label>
+      <div class="chips" id="csTags"></div>
+
+      <label style="margin-top:14px" data-i18n="fbRating">整体打分</label>
+      <div class="stars" id="csStars"></div>
+
+      <label style="margin-top:14px" data-i18n="fbNote">补充说明（选填）</label>
+      <textarea id="csNote" rows="3" data-i18n-ph="fbNotePh" style="width:100%;resize:vertical"></textarea>
+
+      <div class="hint" id="csSummary" style="margin-top:10px"></div>
+      <div class="err" id="csErr"></div>
+      <div class="acts">
+        <button id="csClose" data-i18n="close">关闭</button>
+        <button class="primary" id="csSubmit" data-i18n="fbSubmit">提交反馈</button>
+      </div>
+    </div>
+    </div><!-- /.mbody -->
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="head">
+    <div>
+      <h1 data-i18n="title">韩语配音工作台</h1>
+      <div class="sub" data-i18n="subtitle">粘贴文案，选择男声或女声，生成后即可试听与下载</div>
+    </div>
+    <div class="head-right">
+      <!-- 案例库是「数据资产」入口，原来只藏在任务队列那一栏，太深，提到页头 -->
+      <button class="menubtn admin-only" id="btnCasesTop" data-i18n="caseBtn"
+              style="margin-right:6px">标杆案例</button>
+      <div class="menuwrap">
+        <button class="menubtn" id="langBtn">
+          <svg class="gl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+            <circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 2.6 15.4 0 18M12 3c-2.6 2.6-2.6 15.4 0 18"/>
+          </svg>
+          <span id="langLabel">简体中文</span><span style="opacity:.55;font-size:11px">▾</span>
+        </button>
+        <div class="menu" id="langMenu"></div>
+      </div>
+      <div class="menuwrap">
+        <button class="menubtn" id="userBtn">
+          <span id="userName">-</span><span class="role" id="userRole">-</span><span style="opacity:.55;font-size:11px">▾</span>
+        </button>
+        <div class="menu" id="userMenu">
+          <div class="mi" id="miPw" data-i18n="changePw">修改密码</div>
+          <div class="mi hide" id="miUsers" data-i18n="userMgmt">员工账号管理</div>
+          <div class="mi" id="miFb" data-i18n="feedback">听感反馈</div>
+          <div class="mi sep" id="miOut" data-i18n="logout">退出登录</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="employee-main">
+      <div class="card">
+        <h2 data-i18n="script">文案</h2>
+        <label data-i18n="jobTitle">语音标题</label>
+        <input id="title" data-i18n-ph="titlePh">
+        <label data-i18n="scriptText">正文</label>
+        <textarea id="text" data-i18n-ph="scriptPh"></textarea>
+        <div class="hint" id="count">0</div>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n="voice">声音</h2>
+        <!-- 员工只要点「男声 / 女声」：代码自动落到该性别下的当前生产音色
+             （best_clone = EL_male / EL_female，走 cosyvoice3）。
+             ⚠️ 别在这里写「实测最佳 / 已验收」：截至 2026-10-14，新方案（男 VoxCPM2 v3 /
+             女 OmniVoice v2）第七轮盲听虽已评「可以直接用」，但**仍未转正式生产**，
+             线上生产链还是 cosyvoice3 + EL_male/EL_female；第八轮 20261014a
+             （号码段 + 男女开头段泛化）待作答。员工侧一律不承诺质量。
+             下面那一大堆音色 / 语气 / 语速 收进「高级」，且只对管理员可见。 -->
+        <div class="gsel" id="gsel">
+          <button class="gbtn" type="button" data-g="male">
+            <span data-i18n="gMale">男声</span>
+            <span class="gsub" id="gsubM"></span>
+          </button>
+          <button class="gbtn" type="button" data-g="female">
+            <span data-i18n="gFemale">女声</span>
+            <span class="gsub" id="gsubF"></span>
+          </button>
+        </div>
+        <div class="hint admin-only" id="gpick"></div>
+        <!-- 🔴 员工侧不承诺质量（2026-10-14 按项目最新状态校正）：
+             新方案（男 VoxCPM2 v3 / 女 OmniVoice v2）第七轮盲听评「可以直接用」，
+             但仍未转正式生产，线上生产链还是 cosyvoice3 + EL_male/EL_female，
+             第八轮在验号码段与开头段泛化。所以这里不写「实测最佳」「已验收」，
+             只做两件事：说清还在调优 + 把问题引到听感反馈台（裁决只能靠员工盲听）。 -->
+        <div class="hint" style="margin-top:10px" data-i18n="tuningNote">音质还在持续调优中；听到不自然的地方，请到右上角「听感反馈」告诉我们。</div>
+
+        <details class="adv admin-only" id="advVoice">
+          <summary data-i18n="voiceAdv">换音色 / 语速（高级）</summary>
+          <div class="advbody">
+        <!-- 🔴 统一成一个音色下拉。原先「预设音色 / 录入音色克隆」是两个 tab
+             + 两个下拉，员工必须知道「克隆」这个词才找得到最好的那条链路。
+             现在按实测还原度排：案例克隆在前，千问自带音色全部靠后。
+             底下的 tab 与 #speaker / #voice 保留但隐藏 —— 它们是提交逻辑
+             真正读取的控件，选中哪一类就自动切到对应模式。 -->
+        <label data-i18n="timbre">音色</label>
+        <select id="vsel"></select>
+        <div class="hint" id="vselHint"></div>
+
+        <div style="display:none">
+          <div class="tabs">
+            <div class="tab" data-mode="custom" data-i18n="presetVoice">预设音色</div>
+            <div class="tab on" data-mode="clone" data-i18n="cloneVoice">录入音色克隆</div>
+          </div>
+          <div id="pane-custom" style="display:none">
+            <select id="speaker"></select>
+          </div>
+          <div id="pane-clone">
+            <select id="voice"></select>
+          </div>
+        </div>
+
+        <!-- 语气指令只对千问预设音色有意义：克隆音色的语气由参考音频本身决定，
+             填了也不生效（模型没有 instruct 通道），所以选克隆时整块藏起来。 -->
+        <div id="instructBox" style="display:none">
+          <label data-i18n="instructLabel">语气指令（点下方标签可添加，多行会自动轮换）</label>
+          <textarea id="instruct"></textarea>
+          <div class="chips" id="chips"></div>
+          <div class="row" style="margin-top:8px">
+            <button class="mini" id="insClear" data-i18n="clearInstruct">清空指令</button>
+          </div>
+          <div class="hint" data-i18n="instructHint">长语音强烈建议填 2-4 行（换行分隔）：系统会按段轮换使用，避免通篇一个语气一个语速——这是长音频 AI 味最主要的来源。留空则自动用中性朗读指令。</div>
+        </div>
+
+        <label data-i18n="language">语言</label>
+        <select id="language"></select>
+
+        <!-- 🔴 2026-10-12 下架情感下拉框（员工反馈优化轮）：
+             情绪不是员工选出来的，是从案例语音里拆解后由参考音频复刻的
+             （零样本克隆天然继承参考音频的情绪与韵律）。下拉框只剩
+             instruct 一个作用，且会用通用情绪指令覆盖案例自带的风格，
+             与"复刻案例情绪"的目标直接冲突。员工操作最小化 = 只粘贴
+             文案 + 选男/女。API 仍收 emotion 字段（A/B 对照用），
+             不传即 standard。 -->
+
+        <label data-i18n="speed">语速</label>
+        <select id="speed"></select>
+        <div class="hint" data-i18n="speedHint">1.0 为正常速度，调大更快（1.1 / 1.2 …）。变速不变调，生成后统一处理，不影响音色与清晰度。</div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="employee-side">
+      <div class="card sticky-action" id="generateCard">
+        <h2 data-i18n="params">确认生成</h2>
+        <div class="submit-summary">
+          <div class="summary-row"><span data-i18n="sumLanguage">输出语言</span><strong id="sumLanguage">韩语</strong></div>
+          <div class="summary-row"><span data-i18n="sumVoice">当前声音</span><strong id="sumVoice">男声</strong></div>
+          <div class="summary-row"><span data-i18n="sumAudio">预计音频</span><strong id="sumAudio">0:00</strong></div>
+          <div class="summary-row"><span data-i18n="sumWait">预计等待</span><strong id="sumWait">0:00</strong></div>
+        </div>
+        <button class="primary" id="submit" data-i18n="submit">开始生成</button>
+        <button id="clear" data-i18n="clear">清空输入</button>
+        <div class="submit-help" data-i18n="shortcutHint">快捷键：Ctrl / ⌘ + Enter</div>
+        <div class="submit-state" id="submitState" role="status" aria-live="polite"></div>
+        <div class="employee-recovery">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4 6v5c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6l-8-3Z"/><path d="m9 12 2 2 4-5"/></svg>
+          <span data-i18n="recoveryHint">提交失败时会保留文案；页面刷新后也会自动恢复未提交草稿。</span>
+        </div>
+        <details class="adv" id="advBox">
+          <summary data-i18n="advanced">高级设置（分段 / 批量）</summary>
+          <div class="split" style="margin-top:10px">
+            <div><label data-i18n="segChars">分段字数</label><input id="maxChars" type="number" value="60" min="60" max="400"></div>
+            <div><label data-i18n="batchSize">批量大小</label><input id="batchSize" type="number" value="8" min="1" max="20"></div>
+          </div>
+          <div class="hint" data-i18n="paramHint">保持默认即可：后端会按显存自动收敛到安全值（分段 ≤60、批量 ≤8）。调大不会更快，只会被自动压回。</div>
+        </details>
+      </div>
+
+      <!-- 🔴 2026-10-09 移除「录入声音（声音克隆用）」整张卡片。
+           它与顶部「标杆案例 → + 上传案例」是同一件事的两条路：案例上传后
+           由 tools/mkcase_voices.py 自动挑最佳 15 秒 + 对齐文字稿生成音色，
+           员工根本不需要自己录音、自己剪、自己抄文字稿。留着只会让人纠结
+           「我到底该用哪个」。要加全新说话人时走案例上传即可。 -->
+      <div class="card admin-only" id="voiceLibraryCard">
+        <div class="row" style="margin-bottom:8px">
+          <h2 style="margin:0" data-i18n="savedVoices">已录入音色</h2>
+          <span class="hint" style="margin-left:auto" id="vcount"></span>
+        </div>
+        <div class="hint" data-i18n="voiceListHint">音色由案例库自动生成（每条案例取最佳 15 秒并对齐文字稿），新增说话人请在顶部「标杆案例 → + 上传案例」上传。可试听、可查看文字稿。</div>
+        <div id="vlist" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="margin-bottom:10px">
+      <h2 style="margin:0" data-i18n="queue">任务队列</h2>
+      <div class="scopes hide" id="scopeBox">
+        <div class="tab on" data-scope="mine" data-i18n="scopeMine">我的</div>
+        <div class="tab" data-scope="all" data-i18n="scopeAll">全部</div>
+      </div>
+    </div>
+    <div class="stat" style="margin:0 0 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span id="statsLine"></span>
+      <button class="mini" id="btnReport" data-i18n="report">产出明细</button>
+      <button class="mini admin-only" id="btnCases" data-i18n="caseBtn">标杆案例</button>
+    </div>
+    <div class="filters">
+      <input id="q" data-i18n-ph="searchPh">
+      <select id="fOwner" class="hide"></select>
+      <select id="fStatus">
+        <option value="" data-i18n="allStatus">全部状态</option>
+        <option value="running" data-i18n="stRunning">生成中</option>
+        <option value="queued" data-i18n="stQueued">排队中</option>
+        <option value="done" data-i18n="stDone">已完成</option>
+        <option value="error" data-i18n="stError">失败</option>
+      </select>
+    </div>
+    <div id="jobs"><div class="empty" data-i18n="noJobs">暂无任务</div></div>
+    <div class="pager hide" id="pager"></div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+const I18N = {
+  zh: {
+    _name:'简体中文',
+    title:'韩语配音工作台', subtitle:'粘贴文案，选择男声或女声，生成后即可试听与下载',
+    loginTitle:'登录工作台', loginSub:'使用公司分配的账号继续', username:'账号', password:'密码',
+    loginBtn:'登录', loginHint:'如忘记账号或密码，请联系管理员。',
+    loginErr:'账号或密码错误', netErr:'网络错误',
+    changePw:'修改密码', oldPwd:'当前密码', newPwd:'新密码', confirmPwd:'确认新密码',
+    pwMismatch:'两次输入的新密码不一致', pwShort:'密码至少 6 位', pwOk:'密码已修改，请重新登录',
+    logout:'退出登录', userMgmt:'员工账号管理', userMgmtSub:'创建员工账号，员工只能看到自己生成的任务。',
+    feedback:'听感反馈',
+    report:'产出明细', reportSub:'按人 / 按日统计已完成的语音产出，可导出 CSV 用 Excel 打开。',
+    reportDays:'统计范围', exportCsv:'导出 CSV',
+    daysUnit:(n)=>`${n} 天`, rangeAll:'全部',
+    caseExtra:(n,cps)=>`${n?` · ${n} 段`:''}${cps?` · ${cps} 字/秒`:''}`,
+    estFmt:(a,g)=>` · 约 ${a} 音频 · 约 ${g} 生成`,
+    thToday2:'今日条数', thTotal:'累计条数', thAudio:'音频时长', thGpu:'GPU 耗时',
+    thDate:'日期', thSum:'当日合计', reportEmpty:'暂无已完成任务', reportFail:'统计加载失败',
+    pagerTotal:(n)=>`共 ${n} 条`, pagerPage:(p,t)=>`第 ${p}/${t} 页`,
+    prevPage:'上一页', nextPage:'下一页', perPage:'每页',
+    addUser:'新增账号', roleLabel:'角色', roleAdmin:'管理员', roleUser:'员工', create:'创建',
+    thUser:'账号', thRole:'角色', thToday:'今日', thJobs:'累计', thLogin:'最近登录', thAct:'操作',
+    resetPw:'重置密码', deleteUser:'删除', confirmDel:(n)=>`确定删除账号「${n}」？`, cannotDelSelf:'不能删除自己',
+    newPwdPrompt:(n)=>`为「${n}」设置新密码`, delDone:'已删除', resetDone:'密码已重置', created:(n)=>`账号 ${n} 已创建`,
+    save:'保存', cancel:'取消', close:'关闭',
+    script:'文案', jobTitle:'任务标题（可选）', titlePh:'例如：10月14日财经早报',
+    scriptText:'韩语文案', scriptPh:'在这里粘贴要生成的韩语文案。长文本会自动分段处理。',
+    voice:'声音', presetVoice:'预设音色', cloneVoice:'录入音色克隆',
+    timbre:'音色',
+    spkGroupRec:(l)=>`千问 Qwen 内置 · 推荐（${l} 母语）`, spkGroupOther:'千问 Qwen 内置 · 其他音色',
+    spkGroupCosy:'CosyVoice3 音色（自带情感，可选激昂/亲切/严肃）', cosyOff:'（引擎未上线）',
+    spkAllHint:'千问 Qwen 的 9 个内置音色与 CosyVoice3 音色是两套各自独立的音色（互不相通，已按引擎分组）；前者发音最稳，后者支持情感。全部音色都支持所有输出语言，可自由搭配。',
+    instructLabel:'语气指令（点下方标签可添加，多行会自动轮换）',
+    instructPh:'例：平静温暖的语气，慢速讲述',
+    instructHint:'长语音强烈建议填 2-4 行（换行分隔）：系统会按段轮换使用，避免通篇一个语气一个语速——这是长音频 AI 味最主要的来源。留空则自动用中性朗读指令。',
+    clearInstruct:'清空指令',
+    savedVoices:'已录入音色', cloneNoInstruct:'克隆模式不支持语气指令，语气由参考音频本身的情绪决定。',
+    speed:'语速', speedHint:'1.0 为正常速度，调大更快（1.1 / 1.2 …）。变速不变调，生成后统一处理，不影响音色与清晰度。',
+    emotion:'情感', emotionHint:'选一种语气即可，引擎和参数由系统自动匹配。「平稳」准确度最高；需要情绪起伏时选其它项。',
+    language:'语言', params:'确认生成', segChars:'分段字数', batchSize:'批量大小',
+    sumLanguage:'输出语言', sumVoice:'当前声音', sumAudio:'预计音频', sumWait:'预计等待',
+    shortcutHint:'快捷键：Ctrl / ⌘ + Enter', recoveryHint:'提交失败时会保留文案；页面刷新后也会自动恢复未提交草稿。',
+    tuningNote:'音质还在持续调优中；听到不自然的地方，请到右上角「听感反馈」告诉我们。',
+    submitting:'正在提交…', submitOk:'已加入任务队列，可继续填写下一条文案。', clearConfirm:'清空当前标题和文案？未提交内容将被移除。',
+    advanced:'高级设置（分段 / 批量）',
+    paramHint:'保持默认即可：后端会按显存自动收敛到安全值（分段 ≤60、批量 ≤8）。调大不会更快，只会被自动压回。',
+    submit:'开始生成', clear:'清空输入', enroll:'录入声音（声音克隆用）',
+    vnamePh:'音色名称，例：韩语女声-知妍', refAudio:'参考音频（整段录音直接上传，无需自己剪辑）',
+    engineLabel:'这个音色用哪个引擎', engineQwen:'千问 Qwen（第一代，发音稳但没有情感选项）', engineCosy:'CosyVoice3（推荐：有情感，可选激昂/亲切/严肃）',
+    vEngine:'引擎', engQwen:'千问 Qwen（无情感）', engCosy:'CosyVoice3（有情感）', engSaved:'引擎已保存', engFail:'引擎保存失败',
+    engineHint:'这个音色的默认引擎。员工生成时若选了「激昂/亲切/严肃」，会强制改走 CosyVoice3 —— 千问克隆没有情感入参，给不了情绪。',
+    refText:'音频对应的完整文字稿', refTextPh:'把这段录音里说的话完整粘进来（不用挑片段，系统会自动截取对应部分）',
+    enrollAdminOnly:'案例音色已由系统批量生成（男声/女声各两组），通常不需要再手动录入；仅当需要添加一个全新说话人时才用这里。',
+    enrollHint:'怎么用：直接上传整段录音 + 粘贴这段录音的完整文字稿即可，不用自己剪音频、也不用自己对时间轴。系统会自动挑出音质最好的约 15 秒，并把文字稿按实际说话时间对齐截出对应片段。首次录入会多花几秒做分析，之后这个音色就是现成的。',
+    needRefText:'请粘贴这段录音的完整文字稿（克隆必填，系统会自动截取对应片段）',
+    refTooShort:(d)=>`音频仅 ${d} 秒，至少需要 3 秒`,
+    refDurOk:(d)=>`音频 ${d} 秒，可直接录入`,
+    refAutoTrim:(d)=>`音频 ${d} 秒，录入时会自动截取其中最清晰的约 15 秒，并同步截取对应文字`,
+    refTooLong:(d)=>`音频 ${d} 秒，超过 15 分钟上限。请先粗略裁到几分钟内再上传`,
+    analyzing:'上传成功，正在分析音频并截取最佳片段…',
+    voiceUnusable:'（不可用）',
+    voiceBad:'所选音色不可用：缺少参考文字稿，或参考音频未经自动截取。请用原音频重新录入一次。',
+    noVoices:'还没有录入任何音色', voiceListHint:'录入一次即可长期复用：生成时在上方「录入音色克隆」里直接选。可试听、可查看文字稿、可删除重录。',
+    voiceSrc:(d)=>`原音频 ${d}s`, voiceClip:(a,b)=>` · 自动截取 ${a}s–${b}s`,
+    voiceReady:'可用', voiceNoText:'缺文字稿',
+    vPlay:'试听', vViewText:'查看文字稿', vHideText:'收起',
+    cmpCase:'并排听案例', cmpCaseName:(n)=>`案例原声：${n}`,
+    cmpTip:'上面是本次成品，下面是案例原声。建议同一段来回切换着听，重点听音色、轻重起伏和句尾落音。',
+    delVoice:'删除', confirmDelVoice:(n)=>`删除音色「${n}」？参考音频会一起删掉，删除后需要重新录入才能再用。`,
+    upload:'上传录入', queue:'最近任务', noJobs:'暂无任务', scopeMine:'我的', scopeAll:'全部',
+    searchPh:'搜索标题或内容…', allStatus:'全部状态', allOwner:'全部成员',
+    stRunning:'生成中', stQueued:'排队中', stDone:'已完成', stError:'失败',
+    countFmt:(n,seg)=>`${n} 字 · 约 ${seg} 段`,
+    gMale:'男声', gFemale:'女声', voiceAdv:'换音色 / 语速（高级）',
+    grpCase:'案例克隆（还原度最高）', grpOther:'其他克隆音色',
+    grpQwen:'千问自带音色（还原度低于案例克隆）',
+    qwenSpkNote:(n)=>`当前：${n} —— 千问出厂音色，未针对案例调优，还原度通常比案例克隆低 2~3 分`,
+    gpickBest:(n)=>`当前：${n} —— 该性别下实测最佳，自动对标它本人的案例取目标值`,
+    gpickOther:(n,b)=>`当前：${n}${b?`（非最佳，最佳是「${b}」）`:''}`,
+    caseBrief:(n,d)=>`${n}（${d}）`,
+    hintBestLine:'该性别下实测最佳，自动对标这位主播本人的案例取目标值',
+    hintOtherLine:(b)=>`非最佳${b?`，最佳是「${b}」`:''}`,
+    hintBench:(c)=>`对标案例：${c}`,
+    hintRefDur:(d)=>`参考音频 ${d} 秒`,
+    needText:'请先粘贴文案', needVoice:'当前没有可用的声音，请联系管理员。',
+    needName:'请填写音色名称并选择音频', uploading:'上传中...',
+    enrolled:(n,d)=>`已录入：${n}（${d}s）`,
+    enrolledTrim:(n,d,a,b)=>`已录入：${n}（从 ${a}s–${b}s 自动截出 ${d}s，文字同步截取）`,
+    fail:'失败：', submitFail:'提交失败: ',
+    st:{queued:'排队中',running:'生成中',done:'已完成',error:'失败'},
+    modeLabel:(j)=> j.mode==='clone' ? '克隆: '+j.voice : '音色: '+j.speaker,
+    statFmt:s=>`分段 ${s.segments} · 音频 ${fmtSec(s.audio_seconds)} · 耗时 ${fmtSec(s.gen_seconds)} · RTF ${Number(s.rtf||0).toFixed(2)}`,
+    progFmt:(d,t)=>`${d}/${t} 段`, dlWav:'下载 WAV', dlMp3:'下载 MP3',
+    expand:'展开全文', collapse:'收起', almostDone:'即将完成', preparing:'准备中',
+    stagePreparing:'正在分段', stageGenerating:'正在生成', stageMerging:'正在拼接', stageEncoding:'正在转码', stageLoading:'正在加载模型',
+    batchFmt:(n,m)=>`第 ${n}/${m} 批`, pctFmt:(p)=>`${p}%`, elapsedFmt:(s)=>`已用 ${s}`,
+    etaFmt:(s)=>`预计还需 ${s}`, queueAhead:(n)=> n>0?`排队中 · 前面还有 ${n} 个任务`:'排队中，即将开始',
+    statsFmt:(td,n,h)=>`今日 ${td} 条 · 累计 ${n} 条 · 累计音频 ${h} 小时`,
+    by:(o)=>`由 ${o} 生成`, untitled:'未命名', loading:'加载中...',
+    delJob:'删除', retry:'重试', confirmDelJob:(t)=>`删除「${t}」？音频文件会一起删掉`, noRetry:'原文案已丢失，无法重试',
+    altVer:'换个版本', altVerTip:'同一文案换一个随机种子重出，效果会不一样（模型有随机性）', altVerDone:'已提交，换个版本生成中',
+    draftSaved:'草稿已恢复', draftCleared:'草稿已清空',
+    emptyOpt:'（尚未录入）', noInstructPreset:'该语言暂无预设，可直接手动输入',
+    l10n:{auto:'自动检测',chinese:'中文',english:'英语',french:'法语',german:'德语',italian:'意大利语',
+          japanese:'日语',korean:'韩语',portuguese:'葡萄牙语',russian:'俄语',spanish:'西班牙语'},
+    spk:{aiden:'English · 男声 · 阳光',dylan:'Chinese · 男声 · 北京腔',eric:'Chinese · 男声 · 四川口音',
+         ono_anna:'Japanese · 女声 · 可爱',ryan:'English · 男声 · 节奏感强',serena:'Chinese · 女声 · 温暖',
+         sohee:'Korean · 女声 · 温暖',uncle_fu:'Chinese · 男声 · 沉稳',vivian:'Chinese · 女声 · 明亮'},
+    // 内置克隆音色：用稳定 ID 存库，显示名随界面语言切换
+    bv:{builtin_male:'韩语克隆男声',builtin_female:'韩语克隆女声',EL_male:'韩语克隆男声',EL_female:'韩语克隆女声'},
+    builtinTag:'内置', builtinNoDel:'内置音色不可删除',
+    chunkLabel:(i,n,s)=>`第 ${i}/${n} 段 · ${Math.round(s)} 秒`,
+    dlChunk:(i)=>`下载第 ${i} 段`,
+    chunkHint:(n)=>`共 ${n} 段，按文案自动分块（句末断开，未拼接）`,
+    caseBtn:'标杆案例', caseTitle:'标杆案例',
+    upBtn:'+ 上传案例', upTip:'多上传几份，拆出来的规律才稳',
+    csExtractBtn:'⟳ 重新拆解音色',
+    csExtracting:'正在拆解案例音色（按声音自动分类），约需几分钟…',
+    csExtractDone:n=>'已生成/更新 '+n+' 个音色模板',
+    csExtractNone:'没有新增音色（案例不足或说话人已存在）',
+    csExtractFail:'拆解失败，请稍后重试或联系管理员',
+    upTitle:'上传标杆案例',
+    upSub:'一段音频配一份文案，多个文件按文件名一一对应（1.mp3 ↔ 1.txt）。没给文案的段会自动用 ASR 转写补上，之后可校对。',
+    upName:'案例名称', upNamePh:'比如：EL-男声-财经播报-第3期',
+    upGender:'性别', upSource:'来源平台', upTags:'标签（英文逗号分隔，选填）',
+    upTagsPh:'财经,播报,中速',
+    upAudio:'音频文件（可多选）', upText:'文案文件（可多选，选填）',
+    upTextTip:'传 1 个整篇＝按各段时长占比自动切分（推荐）；传 N 个＝按文件名一一对应；不传＝自动 ASR 转写。多段请命名 01、02…，裸数字 10 会排到 2 前面',
+    upSelAud:(n,s)=>`已选 ${n} 段音频，拼接顺序：${s}`, upSelTxt:(n,s)=>`已选 ${n} 个文案，对应顺序：${s}`,
+    upNoneAud:'未选择音频', upNoneTxt:'未传文案',
+    upModeWhole:'将按各段时长占比自动切分（推荐）', upModeOne:'将按文件名与音频一一对应', upModeAsr:'将自动 ASR 转写补全文案',
+    upNote2:'备注（选填）', upSubmit:'上传并自动拆解',
+    upDoing:'上传中…韵律六维拆解会在后台跑几十秒',
+    upPct:(p,a,b)=>`上传中 ${p}%（${a} / ${b} MB）`,
+    upDone:'上传完成，韵律六维正在后台拆解',
+    upFail:'上传失败', upNeed:'请填案例名称，并至少选一个音频文件',
+    upGMale:'男声', upGFemale:'女声', upUnknown:'未知', upOther:'其它',
+    caseSub:'听一遍对标目标，勾选你觉得好听的地方。攒够反馈后按标签排序，就知道下一步该修哪一项。',
+    caseBack:'← 返回列表', caseEmpty:'还没有标杆案例', caseFail:'案例加载失败',
+    caseNosrc:'（无音频）',
+    fbLike:'喜欢哪些地方（可多选）', fbRating:'整体打分',
+    fbNote:'补充说明（选填）', fbNotePh:'比如：开头那句的气口很像真人',
+    fbSubmit:'提交反馈', fbSaved:'反馈已提交，谢谢', fbNeed:'至少勾一项、打个分或写点备注',
+    fbMine:'你已提交过，可改完重新提交', fbFail:'提交失败',
+    fbSummary:(n,r)=>`已有 ${n} 人反馈${r?` · 平均 ${r} 分`:''}`,
+    fbTag:{pace:'语速节奏',intonation:'语调起伏',emotion:'情绪感染力',clarity:'咬字清晰度',
+           pausing:'停顿换气',timbre:'音色质感',natural:'整体自然度',other:'其它'},
+    caseMeta:(g,s,d)=>`${g==='male'?'男声':'女声'} · ${s||'-'} · ${d?Math.round(d)+' 秒':'-'}`
+  },
+  en: {
+    _name:'English',
+    title:'Korean Voice Workspace', subtitle:'Paste a script, choose male or female, then preview and download the result',
+    loginTitle:'Sign in to workspace', loginSub:'Use your company account to continue', username:'Username', password:'Password',
+    loginBtn:'Sign in', loginHint:'Contact your administrator if you forgot your account or password.',
+    loginErr:'Wrong username or password', netErr:'Network error',
+    changePw:'Change password', oldPwd:'Current password', newPwd:'New password', confirmPwd:'Confirm new password',
+    pwMismatch:'New passwords do not match', pwShort:'Password must be at least 6 characters',
+    pwOk:'Password updated, please sign in again',
+    logout:'Sign out', userMgmt:'User accounts', userMgmtSub:'Create staff accounts — they only see their own jobs.',
+    feedback:'Listening feedback',
+    report:'Production report', reportSub:'Output by person / by day; exportable to CSV for Excel.',
+    reportDays:'Range', exportCsv:'Export CSV',
+    daysUnit:(n)=>`${n} days`, rangeAll:'All',
+    caseExtra:(n,cps)=>`${n?` · ${n} seg`:''}${cps?` · ${cps} cps`:''}`,
+    estFmt:(a,g)=>` · ~${a} audio · ~${g} to generate`,
+    thToday2:'Today', thTotal:'Total', thAudio:'Audio', thGpu:'GPU time',
+    thDate:'Date', thSum:'Day total', reportEmpty:'No completed jobs yet', reportFail:'Failed to load stats',
+    pagerTotal:(n)=>`${n} total`, pagerPage:(p,t)=>`page ${p}/${t}`,
+    prevPage:'Prev', nextPage:'Next', perPage:'Per page',
+    addUser:'Add account', roleLabel:'Role', roleAdmin:'Admin', roleUser:'Staff', create:'Create',
+    thUser:'User', thRole:'Role', thToday:'Today', thJobs:'Total', thLogin:'Last login', thAct:'Actions',
+    resetPw:'Reset password', deleteUser:'Delete', confirmDel:(n)=>`Delete account "${n}"?`, cannotDelSelf:'You cannot delete yourself',
+    newPwdPrompt:(n)=>`New password for "${n}"`, delDone:'Deleted', resetDone:'Password reset', created:(n)=>`Account ${n} created`,
+    save:'Save', cancel:'Cancel', close:'Close',
+    script:'Script', jobTitle:'Task title (optional)', titlePh:'e.g. October 14 market briefing',
+    scriptText:'Korean script', scriptPh:'Paste the Korean script here. Long text is split automatically.',
+    voice:'Voice', presetVoice:'Preset voice', cloneVoice:'Cloned voice',
+    spkGroupRec:(l)=>`Qwen built-in · recommended (native ${l})`, spkGroupOther:'Qwen built-in · others',
+    spkGroupCosy:'CosyVoice3 voices (emotional excited / warm / serious)', cosyOff:' (engine offline)',
+    spkAllHint:"Qwen's 9 built-in voices and the CosyVoice3 voices are two separate sets (grouped by engine below); Qwen is most accurate, CosyVoice3 supports emotion. All voices support every output language.",
+    timbre:'Speaker', instructLabel:'Style instructions (click chips to add; multiple lines rotate)',
+    instructPh:'e.g. Calm and warm tone, speaking slowly',
+    instructHint:'For long audio, enter 2-4 lines (one per line): they rotate across segments so the whole piece never sits on one tone and one speed — the biggest source of AI-sounding long-form narration.',
+    clearInstruct:'Clear',
+    savedVoices:'Enrolled voices', cloneNoInstruct:'Voice clone does not support style instructions — emotion comes from the reference audio.',
+    speed:'Speed', speedHint:'1.0 is normal; higher is faster (1.1 / 1.2 …). Tempo-only — pitch and timbre stay unchanged.',
+    emotion:'Emotion', emotionHint:'Pick a tone — engine and parameters are chosen automatically. Standard is most accurate; use the others when you want emotional colour.',
+    language:'Language', params:'Confirm generation', segChars:'Chars per segment', batchSize:'Batch size',
+    sumLanguage:'Output language', sumVoice:'Selected voice', sumAudio:'Estimated audio', sumWait:'Estimated wait',
+    shortcutHint:'Shortcut: Ctrl / ⌘ + Enter', recoveryHint:'Your script is preserved if submission fails, and unfinished drafts return after refresh.',
+    tuningNote:'Voice quality is still being tuned. If something sounds off, tell us via “Listening feedback” in the top-right menu.',
+    submitting:'Submitting…', submitOk:'Added to the queue. You can start the next script.', clearConfirm:'Clear the current title and script? Unsubmitted content will be removed.',
+    advanced:'Advanced (segment / batch)',
+    paramHint:'Keep defaults: the backend auto-tunes a safe plan (seg ≤60, batch ≤8) from free VRAM. Larger values get clamped, not faster.',
+    submit:'Start generation', clear:'Clear input', enroll:'Enroll a voice (for cloning)',
+    vnamePh:'Voice name, e.g. Korean female — Jiyeon', refAudio:'Reference audio (upload the whole recording — no need to trim it yourself)',
+    engineLabel:'Engine for this voice', engineQwen:'Qwen (most accurate, calm)', engineCosy:'CosyVoice3 (more expressive; excited / warm / serious available)',
+    vEngine:'Engine', engQwen:'Qwen (most accurate)', engCosy:'CosyVoice3 (expressive)', engSaved:'Engine saved', engFail:'Failed to save engine',
+    engineHint:'Default engine for this voice. If the employee picks Excited / Warm / Serious when generating, CosyVoice3 is forced — Qwen cloning has no emotion input.',
+    refText:'Full transcript of the audio', refTextPh:'Paste everything said in this recording — no need to pick a clip, the matching part is cut automatically',
+    enrollAdminOnly:'Case voices are generated in bulk (two sets each for male/female), so manual enrollment is rarely needed — use this only when adding a brand-new speaker.',
+    enrollHint:'How to use: upload the full recording and paste its full transcript. No manual trimming, no timeline work. The server picks the cleanest ~15s and cuts the transcript to match it by actual speaking time. The first enrollment takes a few extra seconds to analyze; after that the voice is ready to use.',
+    needRefText:'Please paste the full transcript of this recording (required — the matching part is cut automatically)',
+    refTooShort:(d)=>`Audio is only ${d}s — at least 3s required`,
+    refDurOk:(d)=>`Audio is ${d}s — ready to enroll`,
+    refAutoTrim:(d)=>`Audio is ${d}s — the cleanest ~15s will be cut automatically, with the matching transcript`,
+    refTooLong:(d)=>`Audio is ${d}s, over the 15-minute limit. Please trim it roughly to a few minutes first`,
+    analyzing:'Uploaded — analyzing the audio and cutting the best segment…',
+    voiceUnusable:'(unusable)',
+    voiceBad:'This voice is unusable: missing transcript, or the reference audio was never auto-trimmed. Please enroll it again from the original recording.',
+    noVoices:'No voices enrolled yet', voiceListHint:'Enroll once, reuse forever: pick it under "Cloned voice" when generating. You can preview, read the transcript, or delete and re-enroll.',
+    voiceSrc:(d)=>`source ${d}s`, voiceClip:(a,b)=>` · auto-cut ${a}s–${b}s`,
+    voiceReady:'ready', voiceNoText:'no transcript',
+    vPlay:'Preview', vViewText:'Transcript', vHideText:'Collapse',
+    cmpCase:'Play case side by side', cmpCaseName:(n)=>`Case audio: ${n}`,
+    cmpTip:'Top is your output, bottom is the reference case. Switch back and forth on the same passage — listen for timbre, dynamics, and sentence-final pitch.',
+    delVoice:'Delete', confirmDelVoice:(n)=>`Delete voice "${n}"? The reference audio is removed too — you must enroll again to use it.`,
+    upload:'Enroll', queue:'Recent jobs', noJobs:'No jobs yet', scopeMine:'Mine', scopeAll:'All',
+    searchPh:'Search title or text…', allStatus:'All status', allOwner:'All members',
+    stRunning:'running', stQueued:'queued', stDone:'done', stError:'error',
+    countFmt:(n,seg)=>`${n} chars · ~${seg} segments`,
+    gMale:'Male', gFemale:'Female', voiceAdv:'Change voice / speed (advanced)',
+    grpCase:'Case clones (best fidelity)', grpOther:'Other cloned voices',
+    grpQwen:'Qwen built-in voices (lower fidelity than case clones)',
+    qwenSpkNote:(n)=>`Now: ${n} — a stock Qwen voice, not tuned to our cases; usually 2~3 points below case clones`,
+    gpickBest:(n)=>`Now: ${n} — best tested for this gender; targets are taken from that speaker's own case`,
+    gpickOther:(n,b)=>`Now: ${n}${b?` (not the best; best is "${b}")`:''}`,
+    caseBrief:(n,d)=>`${n} (${d})`,
+    hintBestLine:'Best tested for this gender; targets come from this speaker’s own case',
+    hintOtherLine:(b)=>`Not the best${b?`; best is "${b}"`:''}`,
+    hintBench:(c)=>`Benchmarked against: ${c}`,
+    hintRefDur:(d)=>`Reference audio ${d}s`,
+    needText:'Please paste a script first', needVoice:'No voice is available right now. Please contact the admin.',
+    needName:'Please enter a voice name and choose an audio file', uploading:'Uploading...',
+    enrolled:(n,d)=>`Enrolled: ${n} (${d}s)`,
+    enrolledTrim:(n,d,a,b)=>`Enrolled: ${n} (auto-cut ${a}s–${b}s → ${d}s, transcript cut to match)`,
+    fail:'Failed: ', submitFail:'Submit failed: ',
+    st:{queued:'queued',running:'running',done:'done',error:'error'},
+    modeLabel:(j)=> j.mode==='clone' ? 'clone: '+j.voice : 'voice: '+j.speaker,
+    statFmt:s=>`${s.segments} segments · audio ${fmtSec(s.audio_seconds)} · took ${fmtSec(s.gen_seconds)} · RTF ${Number(s.rtf||0).toFixed(2)}`,
+    progFmt:(d,t)=>`${d}/${t} segments`, dlWav:'Download WAV', dlMp3:'Download MP3',
+    expand:'Expand', collapse:'Collapse', almostDone:'almost done', preparing:'preparing',
+    stagePreparing:'Splitting', stageGenerating:'Generating', stageMerging:'Joining', stageEncoding:'Encoding', stageLoading:'Loading model',
+    batchFmt:(n,m)=>`batch ${n}/${m}`, pctFmt:(p)=>`${p}%`, elapsedFmt:(s)=>`${s} elapsed`,
+    etaFmt:(s)=>`~${s} left`, queueAhead:(n)=> n>0?`queued · ${n} ahead`:'queued, starting soon',
+    statsFmt:(td,n,h)=>`Today ${td} · total ${n} · ${h}h audio`,
+    by:(o)=>`by ${o}`, untitled:'Untitled', loading:'Loading...',
+    delJob:'Delete', retry:'Retry', confirmDelJob:(t)=>`Delete "${t}"? Audio files go too`, noRetry:'Original script lost, cannot retry',
+    altVer:'New take', altVerTip:'Re-generate with a different random seed — output varies between seeds', altVerDone:'Queued a new take',
+    draftSaved:'Draft restored', draftCleared:'Draft cleared',
+    emptyOpt:'(none enrolled)', noInstructPreset:'No presets for this language — type one manually',
+    l10n:{auto:'Auto detect',chinese:'Chinese',english:'English',french:'French',german:'German',italian:'Italian',
+          japanese:'Japanese',korean:'Korean',portuguese:'Portuguese',russian:'Russian',spanish:'Spanish'},
+    spk:{aiden:'English · male · bright',dylan:'Chinese · male · Beijing accent',eric:'Chinese · male · Sichuan accent',
+         ono_anna:'Japanese · female · cute',ryan:'English · male · rhythmic',serena:'Chinese · female · warm',
+         sohee:'Korean · female · warm',uncle_fu:'Chinese · male · deep & steady',vivian:'Chinese · female · bright'},
+    bv:{builtin_male:'Korean Clone · Male',builtin_female:'Korean Clone · Female',EL_male:'Korean Clone · Male',EL_female:'Korean Clone · Female'},
+    builtinTag:'Built-in', builtinNoDel:'Built-in voices cannot be deleted',
+    chunkLabel:(i,n,s)=>`Part ${i}/${n} · ${Math.round(s)}s`,
+    dlChunk:(i)=>`Download part ${i}`,
+    chunkHint:(n)=>`${n} parts, auto-split at sentence ends (not merged)`,
+    caseBtn:'Benchmarks', caseTitle:'Benchmark cases',
+    upBtn:'+ Upload', upTip:'More cases = more reliable patterns',
+    csExtractBtn:'⟳ Re-extract voices',
+    csExtracting:'Extracting voice templates (auto-clustering by speaker), a few minutes…',
+    csExtractDone:n=>n+' voice template(s) created/updated',
+    csExtractNone:'No new voice (too few cases or speaker already exists)',
+    csExtractFail:'Extraction failed, please retry later or contact admin',
+    upTitle:'Upload benchmark case',
+    upSub:'One audio per script file, matched by filename order (1.mp3 \u2194 1.txt). Segments without a script are transcribed by ASR and can be corrected later.',
+    upName:'Case name', upNamePh:'e.g. EL-male-finance-ep03',
+    upGender:'Gender', upSource:'Source platform',
+    upTags:'Tags (comma separated, optional)', upTagsPh:'finance,newscast,medium',
+    upAudio:'Audio files (multiple)', upText:'Script files (multiple, optional)',
+    upTextTip:'One full script = auto-split by segment duration (recommended); N files = matched by filename; none = ASR. Name segments 01, 02... (bare 10 sorts before 2)',
+    upSelAud:(n,s)=>`${n} audio file(s) selected, order: ${s}`, upSelTxt:(n,s)=>`${n} script file(s) selected, order: ${s}`,
+    upNoneAud:'No audio selected', upNoneTxt:'No script file',
+    upModeWhole:'will be split by segment duration (recommended)', upModeOne:'will be matched to audio by filename', upModeAsr:'will be transcribed by ASR',
+    upNote2:'Note (optional)', upSubmit:'Upload & analyze',
+    upDoing:'Uploading\u2026 prosody analysis runs in background for a while',
+    upPct:(p,a,b)=>`Uploading ${p}% (${a} / ${b} MB)`,
+    upDone:'Uploaded \u2014 prosody analysis is running in background',
+    upFail:'Upload failed',
+    upNeed:'Please enter a name and pick at least one audio file',
+    upGMale:'Male', upGFemale:'Female', upUnknown:'Unknown', upOther:'Other',
+    caseSub:'Listen to the reference clips and tick what you like. Once enough votes land in, sorting by tag tells us what to fix next.',
+    caseBack:'← Back to list', caseEmpty:'No benchmark cases yet', caseFail:'Failed to load cases',
+    caseNosrc:'(no audio)',
+    fbLike:'What do you like (multi-select)', fbRating:'Overall rating',
+    fbNote:'Anything else (optional)', fbNotePh:'e.g. the breath at the opening sounds really human',
+    fbSubmit:'Submit', fbSaved:'Thanks, feedback saved', fbNeed:'Tick a tag, give a rating, or leave a note',
+    fbMine:'You already submitted — edit and resubmit any time', fbFail:'Submit failed',
+    fbSummary:(n,r)=>`${n} response${n===1?'':'s'}${r?` · avg ${r}`:''}`,
+    fbTag:{pace:'Pacing',intonation:'Intonation',emotion:'Emotion',clarity:'Clarity',
+           pausing:'Pausing',timbre:'Timbre',natural:'Naturalness',other:'Other'},
+    caseMeta:(g,s,d)=>`${g==='male'?'Male':'Female'} · ${s||'-'} · ${d?Math.round(d)+' s':'-'}`
+  },
+  ko: {
+    _name:'한국어',
+    title:'한국어 음성 작업대', subtitle:'원고를 붙여넣고 남성 또는 여성을 선택하면, 생성 후 바로 듣고 다운로드할 수 있습니다',
+    loginTitle:'작업대 로그인', loginSub:'회사에서 받은 계정으로 계속하세요', username:'아이디', password:'비밀번호',
+    loginBtn:'로그인', loginHint:'계정이나 비밀번호를 잊었다면 관리자에게 문의하세요.',
+    loginErr:'아이디 또는 비밀번호가 잘못되었습니다', netErr:'네트워크 오류',
+    changePw:'비밀번호 변경', oldPwd:'현재 비밀번호', newPwd:'새 비밀번호', confirmPwd:'새 비밀번호 확인',
+    pwMismatch:'새 비밀번호가 일치하지 않습니다', pwShort:'비밀번호는 6자 이상이어야 합니다',
+    pwOk:'비밀번호가 변경되었습니다. 다시 로그인해 주세요',
+    logout:'로그아웃', userMgmt:'직원 계정 관리', userMgmtSub:'직원 계정을 만듭니다. 직원은 본인이 만든 작업만 볼 수 있습니다.',
+    feedback:'음성 듣기 피드백',
+    report:'생산 통계', reportSub:'사람별 / 날짜별 완료된 음성 산출량. CSV로 내보내 Excel에서 열 수 있습니다.',
+    reportDays:'기간', exportCsv:'CSV 내보내기',
+    daysUnit:(n)=>`${n}일`, rangeAll:'전체',
+    caseExtra:(n,cps)=>`${n?` · ${n}개 구간`:''}${cps?` · ${cps}자/초`:''}`,
+    estFmt:(a,g)=>` · 약 ${a} 오디오 · 약 ${g} 생성`,
+    thToday2:'오늘', thTotal:'누적', thAudio:'오디오', thGpu:'GPU 시간',
+    thDate:'날짜', thSum:'일별 합계', reportEmpty:'완료된 작업이 없습니다', reportFail:'통계 불러오기 실패',
+    pagerTotal:(n)=>`총 ${n}건`, pagerPage:(p,t)=>`${p}/${t} 페이지`,
+    prevPage:'이전', nextPage:'다음', perPage:'페이지당',
+    addUser:'계정 추가', roleLabel:'권한', roleAdmin:'관리자', roleUser:'직원', create:'생성',
+    thUser:'아이디', thRole:'권한', thToday:'오늘', thJobs:'누적', thLogin:'최근 로그인', thAct:'관리',
+    resetPw:'비밀번호 초기화', deleteUser:'삭제', confirmDel:(n)=>`계정 "${n}"을(를) 삭제할까요?`, cannotDelSelf:'본인 계정은 삭제할 수 없습니다',
+    newPwdPrompt:(n)=>`"${n}"의 새 비밀번호`, delDone:'삭제되었습니다', resetDone:'비밀번호가 초기화되었습니다', created:(n)=>`계정 ${n} 생성 완료`,
+    save:'저장', cancel:'취소', close:'닫기',
+    script:'원고', jobTitle:'작업 제목 (선택)', titlePh:'예: 10월 14일 금융 브리핑',
+    scriptText:'한국어 원고', scriptPh:'생성할 한국어 원고를 붙여넣으세요. 긴 원고는 자동으로 나뉩니다.',
+    voice:'음성', presetVoice:'기본 음색', cloneVoice:'녹음 음성 클론',
+    spkGroupRec:(l)=>`Qwen 내장 · 추천 (${l} 원어민)`, spkGroupOther:'Qwen 내장 · 기타 음색',
+    spkGroupCosy:'CosyVoice3 음색 (감정 지원 격앙/다정/엄숙)', cosyOff:' (엔진 미가동)',
+    spkAllHint:'Qwen 내장 음색 9종과 CosyVoice3 음색은 서로 다른 두 세트입니다(아래에서 엔진별로 묶어 표시). Qwen이 발음이 가장 안정적이고, CosyVoice3는 감정을 지원합니다. 모든 음색이 모든 출력 언어를 지원합니다.',
+    timbre:'음색', instructLabel:'톤 지시문 (아래 태그를 누르면 추가, 여러 줄은 자동 순환)',
+    instructPh:'예: 차분하고 따뜻한 톤으로 천천히',
+    instructHint:'긴 음성은 2-4줄(줄바꿈 구분)을 권장합니다: 구간마다 번갈아 적용되어 전체가 한 가지 톤과 속도로 흘러가지 않습니다. 비워두면 중성 낭독 지시가 자동 적용됩니다.',
+    clearInstruct:'지우기',
+    savedVoices:'등록된 음성', cloneNoInstruct:'음성 클론은 톤 지시문을 지원하지 않습니다. 톤은 참고 음성의 감정으로 결정됩니다.',
+    speed:'말하기 속도', speedHint:'1.0이 기본입니다. 값이 클수록 빨라집니다(1.1 / 1.2 …). 속도만 바뀌고 음높이·음색은 그대로입니다.',
+    emotion:'감정', emotionHint:'톤만 고르면 엔진과 파라미터는 자동으로 맞춰집니다. 「차분」이 가장 정확하고, 감정 기복이 필요할 때 다른 항목을 고르세요.',
+    language:'언어', params:'생성 확인', segChars:'분할 글자 수', batchSize:'배치 크기',
+    sumLanguage:'출력 언어', sumVoice:'현재 음성', sumAudio:'예상 오디오', sumWait:'예상 대기',
+    shortcutHint:'단축키: Ctrl / ⌘ + Enter', recoveryHint:'전송에 실패해도 원고는 유지되며, 새로 고침 후에도 미완성 초안이 복원됩니다.',
+    tuningNote:'음질은 계속 다듬는 중입니다. 어색한 부분을 들으셨다면 오른쪽 위 「청감 피드백」으로 알려주세요.',
+    submitting:'전송 중…', submitOk:'작업 대기열에 추가했습니다. 다음 원고를 작성할 수 있습니다.', clearConfirm:'현재 제목과 원고를 지울까요? 제출하지 않은 내용은 삭제됩니다.',
+    advanced:'고급 설정 (분할 / 배치)',
+    paramHint:'기본값 유지: 백엔드가 여유 VRAM에 따라 안전한 값(분할 ≤60, 배치 ≤8)으로 자동 조정합니다. 크게 해도 빨라지지 않습니다.',
+    submit:'생성 시작', clear:'입력 지우기', enroll:'음성 등록 (클론용)',
+    vnamePh:'음성 이름, 예: 한국어 여성-지연', refAudio:'참고 음성 (녹음 전체를 그대로 올리세요. 직접 자를 필요 없습니다)',
+    engineLabel:'이 음성에 사용할 엔진', engineQwen:'Qwen (가장 정확하고 차분함)', engineCosy:'CosyVoice3 (감정 표현이 풍부함 · 격양/부드러움/진지함 선택 가능)',
+    vEngine:'엔진', engQwen:'Qwen (가장 정확)', engCosy:'CosyVoice3 (감정 표현)', engSaved:'엔진이 저장되었습니다', engFail:'엔진 저장 실패',
+    engineHint:'이 음성의 기본 엔진입니다. 생성 시 "격앙/부드러움/진지함"을 선택하면 CosyVoice3로 강제 전환됩니다 — Qwen 클론에는 감정 입력이 없습니다.',
+    refText:'녹음 전체의 대사', refTextPh:'이 녹음에서 한 말을 전체로 붙여 넣으세요. 구간을 고를 필요 없이 해당 부분은 자동으로 잘립니다',
+    enrollAdminOnly:'케이스 음성은 시스템이 일괄 생성했습니다(남성/여성 각 2세트). 보통 수동 등록은 필요 없으며, 완전히 새로운 화자를 추가할 때만 사용하세요.',
+    enrollHint:'사용법: 녹음 전체와 그 대사 전체를 올리면 끝입니다. 오디오를 자르거나 타임라인을 맞출 필요가 없습니다. 서버가 가장 깨끗한 약 15초를 골라 실제 발화 시간에 맞춰 대사도 함께 잘라 줍니다. 첫 등록 때 분석에 몇 초 더 걸리고, 이후에는 바로 사용할 수 있습니다.',
+    needRefText:'이 녹음의 대사 전체를 붙여 넣어 주세요 (클론 필수, 해당 구간은 자동으로 잘립니다)',
+    refTooShort:(d)=>`음성이 ${d}초뿐입니다. 최소 3초가 필요합니다`,
+    refDurOk:(d)=>`음성 ${d}초 — 바로 등록 가능`,
+    refAutoTrim:(d)=>`음성 ${d}초 — 가장 깨끗한 약 15초가 자동으로 잘리고, 대사도 함께 잘립니다`,
+    refTooLong:(d)=>`음성이 ${d}초로 15분 제한을 넘었습니다. 몇 분 내로 대략 잘라서 올려 주세요`,
+    analyzing:'업로드 완료 — 음성을 분석해 최적 구간을 자르는 중…',
+    voiceUnusable:'(사용 불가)',
+    voiceBad:'이 음성은 사용할 수 없습니다: 대사가 없거나 자동 자르기가 적용되지 않은 음성입니다. 원본 녹음으로 다시 등록해 주세요.',
+    noVoices:'등록된 음성이 없습니다', voiceListHint:'한 번 등록하면 계속 재사용할 수 있습니다: 생성할 때 위의 "녹음 음성 클론"에서 골라 주세요. 미리 듣기, 대사 확인, 삭제 후 재등록이 가능합니다.',
+    voiceSrc:(d)=>`원본 ${d}초`, voiceClip:(a,b)=>` · 자동 절단 ${a}초~${b}초`,
+    voiceReady:'사용 가능', voiceNoText:'대사 없음',
+    vPlay:'미리 듣기', vViewText:'대사 보기', vHideText:'접기',
+    cmpCase:'케이스 함께 듣기', cmpCaseName:(n)=>`케이스 원본: ${n}`,
+    cmpTip:'위는 생성 결과, 아래는 기준 케이스입니다. 같은 구간을 번갈아 들으며 음색·강약·문장 끝 억양을 비교해 보세요.',
+    delVoice:'삭제', confirmDelVoice:(n)=>`음성 "${n}"을(를) 삭제할까요? 참고 음성도 함께 삭제되며, 다시 사용하려면 재등록해야 합니다.`,
+    upload:'등록하기', queue:'최근 작업', noJobs:'작업이 없습니다', scopeMine:'내 작업', scopeAll:'전체',
+    searchPh:'제목이나 내용 검색…', allStatus:'전체 상태', allOwner:'전체 멤버',
+    stRunning:'생성중', stQueued:'대기중', stDone:'완료', stError:'실패',
+    countFmt:(n,seg)=>`${n}자 · 약 ${seg}개 구간`,
+    gMale:'남성', gFemale:'여성', voiceAdv:'음성 / 속도 변경 (고급)',
+    grpCase:'케이스 클론 (재현도 최고)', grpOther:'기타 클론 음성',
+    grpQwen:'Qwen 기본 음성 (케이스 클론보다 재현도 낮음)',
+    qwenSpkNote:(n)=>`현재: ${n} — 케이스에 맞춰 조정되지 않은 Qwen 기본 음성입니다. 재현도는 보통 케이스 클론보다 2~3점 낮습니다`,
+    gpickBest:(n)=>`현재: ${n} — 이 성별에서 실측 최고. 목표값은 화자 본인의 케이스에서 가져옵니다`,
+    gpickOther:(n,b)=>`현재: ${n}${b?` (최고 아님, 최고는 "${b}")`:''}`,
+    caseBrief:(n,d)=>`${n}(${d})`,
+    hintBestLine:'이 성별에서 실측 최고이며, 목표값은 이 화자 본인의 케이스에서 가져옵니다',
+    hintOtherLine:(b)=>`최고 아님${b?`, 최고는 "${b}"`:''}`,
+    hintBench:(c)=>`비교 기준 케이스: ${c}`,
+    hintRefDur:(d)=>`참고 오디오 ${d}초`,
+    needText:'원고를 먼저 붙여넣어 주세요', needVoice:'사용할 수 있는 음성이 없습니다. 관리자에게 문의해 주세요.',
+    needName:'음성 이름과 오디오 파일을 선택해 주세요', uploading:'업로드 중...',
+    enrolled:(n,d)=>`등록 완료: ${n} (${d}초)`,
+    enrolledTrim:(n,d,a,b)=>`등록 완료: ${n} (${a}초~${b}초에서 ${d}초 자동 절단, 대사도 함께 절단)`,
+    fail:'실패: ', submitFail:'요청 실패: ',
+    st:{queued:'대기중',running:'생성중',done:'완료',error:'실패'},
+    modeLabel:(j)=> j.mode==='clone' ? '클론: '+j.voice : '음색: '+j.speaker,
+    statFmt:s=>`구간 ${s.segments} · 오디오 ${fmtSec(s.audio_seconds)} · 소요 ${fmtSec(s.gen_seconds)} · RTF ${Number(s.rtf||0).toFixed(2)}`,
+    progFmt:(d,t)=>`${d}/${t} 구간`, dlWav:'WAV 다운로드', dlMp3:'MP3 다운로드',
+    expand:'전체 보기', collapse:'접기', almostDone:'곧 완료', preparing:'준비 중',
+    stagePreparing:'분할 중', stageGenerating:'생성 중', stageMerging:'연결 중', stageEncoding:'인코딩 중', stageLoading:'모델 로딩 중',
+    batchFmt:(n,m)=>`${n}/${m} 배치`, pctFmt:(p)=>`${p}%`, elapsedFmt:(s)=>`${s} 경과`,
+    etaFmt:(s)=>`약 ${s} 남음`, queueAhead:(n)=> n>0?`대기중 · 앞에 ${n}개`:'대기중, 곧 시작',
+    statsFmt:(td,n,h)=>`오늘 ${td}건 · 누적 ${n}건 · 누적 오디오 ${h}시간`,
+    by:(o)=>`${o} 생성`, untitled:'제목 없음', loading:'불러오는 중...',
+    delJob:'삭제', retry:'재시도', confirmDelJob:(t)=>`"${t}"을(를) 삭제할까요? 음성 파일도 함께 삭제됩니다`, noRetry:'원고가 없어 재시도할 수 없습니다',
+    altVer:'다른 버전', altVerTip:'새 시드로 다시 생성합니다(모델 특성상 결과가 달라집니다)', altVerDone:'새 버전 생성을 요청했습니다',
+    draftSaved:'임시 저장된 원고를 불러왔습니다', draftCleared:'임시 저장이 비워졌습니다',
+    emptyOpt:'(등록된 음성 없음)', noInstructPreset:'이 언어의 프리셋이 없습니다. 직접 입력하세요',
+    l10n:{auto:'자동 감지',chinese:'중국어',english:'영어',french:'프랑스어',german:'독일어',italian:'이탈리아어',
+          japanese:'일본어',korean:'한국어',portuguese:'포르투갈어',russian:'러시아어',spanish:'스페인어'},
+    spk:{aiden:'English · 남성 · 밝은',dylan:'Chinese · 남성 · 북경 억양',eric:'Chinese · 남성 · 사천 억양',
+         ono_anna:'Japanese · 여성 · 귀여운',ryan:'English · 남성 · 리듬감',serena:'Chinese · 여성 · 따뜻한',
+         sohee:'Korean · 여성 · 따뜻한',uncle_fu:'Chinese · 남성 · 차분한',vivian:'Chinese · 여성 · 밝은'},
+    bv:{builtin_male:'한국어 클론 남성',builtin_female:'한국어 클론 여성',EL_male:'한국어 클론 남성',EL_female:'한국어 클론 여성'},
+    builtinTag:'내장', builtinNoDel:'내장 음성은 삭제할 수 없습니다',
+    chunkLabel:(i,n,s)=>`${i}/${n} 파트 · ${Math.round(s)}초`,
+    dlChunk:(i)=>`${i}파트 다운로드`,
+    chunkHint:(n)=>`총 ${n}개 파트, 문장 끝에서 자동 분할(병합 안 함)`,
+    caseBtn:'标杆案例', caseTitle:'标杆案例',
+    upBtn:'+ 사례 업로드', upTip:'사례가 많을수록 패턴이 안정적입니다',
+    csExtractBtn:'⟳ 음성 다시 추출',
+    csExtracting:'음성 템플릿 추출 중(화자 자동 분류), 몇 분 정도 소요됩니다…',
+    csExtractDone:n=>n+'개 음성 템플릿 생성/갱신',
+    csExtractNone:'새 음성 없음(사례 부족 또는 화자 이미 존재)',
+    csExtractFail:'추출 실패, 나중에 다시 시도하거나 관리자에게 문의',
+    upTitle:'벤치마크 사례 업로드',
+    upSub:'오디오와 스크립트를 파일명 순서로 1:1 매칭합니다(1.mp3 \u2194 1.txt). 스크립트가 없으면 ASR로 자동 전사하며 나중에 수정할 수 있습니다.',
+    upName:'사례 이름', upNamePh:'예: EL-남성-경제-3회',
+    upGender:'성별', upSource:'출처 플랫폼', upTags:'태그(쉼표 구분, 선택)',
+    upTagsPh:'경제,보도,중간속도',
+    upAudio:'오디오 파일(복수 선택)', upText:'스크립트 파일(복수 선택, 선택사항)',
+    upTextTip:'전문 1개=구간 길이 비율로 자동 분할(권장) / N개=파일명 순서 매칭 / 없음=ASR 자동 전사. 구간 이름은 01, 02…로 (10이 2보다 앞에 옴)',
+    upSelAud:(n,s)=>`오디오 ${n}개 선택, 이어붙이는 순서: ${s}`, upSelTxt:(n,s)=>`대본 ${n}개 선택, 대응 순서: ${s}`,
+    upNoneAud:'오디오 미선택', upNoneTxt:'대본 파일 없음',
+    upModeWhole:'구간 길이 비율로 자동 분할됩니다(권장)', upModeOne:'파일명 순서로 오디오와 1:1 대응됩니다', upModeAsr:'ASR로 자동 전사되어 대본이 채워집니다',
+    upNote2:'메모(선택)', upSubmit:'업로드하고 분석',
+    upDoing:'업로드 중\u2026 운율 분석은 백그라운드에서 진행됩니다',
+    upPct:(p,a,b)=>`업로드 중 ${p}% (${a} / ${b} MB)`,
+    upDone:'업로드 완료 \u2014 운율 분석이 백그라운드에서 실행 중입니다',
+    upFail:'업로드 실패',
+    upNeed:'이름을 입력하고 오디오 파일을 하나 이상 선택하세요',
+    upGMale:'남성', upGFemale:'여성', upUnknown:'알 수 없음', upOther:'기타',
+    caseSub:'对标 목소리를 한 번 들어보고, 좋았던 부분을 골라 주세요. 의견이 쌓이면 태그별로 정렬해서 다음에 고칠 항목을 알 수 있습니다.',
+    caseBack:'← 목록으로', caseEmpty:'아직标杆案例가 없습니다', caseFail:'案例 불러오기 실패',
+    caseNosrc:'(오디오 없음)',
+    fbLike:'어떤 점이 좋았나요 (복수 선택)', fbRating:'전체 평점',
+    fbNote:'추가 설명 (선택)', fbNotePh:'예: 첫 문장의 숨소리가 사람 같아요',
+    fbSubmit:'의견 보내기', fbSaved:'의견 감사합니다', fbNeed:'태그를 고르거나, 점수를 주거나, 메모를 남겨 주세요',
+    fbMine:'이미 보냈습니다 — 수정해서 다시 보낼 수 있어요', fbFail:'전송 실패',
+    fbSummary:(n,r)=>`${n}명 참여${r?` · 평균 ${r}점`:''}`,
+    fbTag:{pace:'속도·리듬',intonation:'억양',emotion:'감정',clarity:'발음',
+           pausing:'쉼·호흡',timbre:'음색',natural:'자연스러움',other:'기타'},
+    caseMeta:(g,s,d)=>`${g==='male'?'남성':'여성'} · ${s||'-'} · ${d?Math.round(d)+'초':'-'}`
+  },
+  ja: {
+    _name:'日本語',
+    title:'韓国語音声ワークスペース', subtitle:'原稿を貼り付け、男性または女性を選ぶと、生成後すぐに試聴・ダウンロードできます',
+    loginTitle:'ワークスペースにログイン', loginSub:'会社から発行されたアカウントを使用してください', username:'ユーザー名', password:'パスワード',
+    loginBtn:'ログイン', loginHint:'アカウントまたはパスワードを忘れた場合は管理者に連絡してください。',
+    loginErr:'ユーザー名またはパスワードが違います', netErr:'通信エラー',
+    changePw:'パスワード変更', oldPwd:'現在のパスワード', newPwd:'新しいパスワード', confirmPwd:'新しいパスワード（確認）',
+    pwMismatch:'新しいパスワードが一致しません', pwShort:'パスワードは6文字以上で入力してください',
+    pwOk:'パスワードを変更しました。再ログインしてください',
+    logout:'ログアウト', userMgmt:'スタッフアカウント', userMgmtSub:'スタッフは自分が生成したジョブのみ閲覧できます。',
+    feedback:'聴感フィードバック',
+    report:'生産レポート', reportSub:'担当者別 / 日別の完了済み音声。CSV出力してExcelで開けます。',
+    reportDays:'期間', exportCsv:'CSV エクスポート',
+    daysUnit:(n)=>`${n} 日`, rangeAll:'すべて',
+    caseExtra:(n,cps)=>`${n?` · ${n} セグメント`:''}${cps?` · ${cps}字/秒`:''}`,
+    estFmt:(a,g)=>` · 約 ${a} 音声 · 約 ${g} 生成`,
+    thToday2:'今日', thTotal:'累計', thAudio:'音声時間', thGpu:'GPU 時間',
+    thDate:'日付', thSum:'1日の合計', reportEmpty:'完了したジョブはありません', reportFail:'統計の読み込みに失敗',
+    pagerTotal:(n)=>`全 ${n} 件`, pagerPage:(p,t)=>`${p}/${t} ページ`,
+    prevPage:'前へ', nextPage:'次へ', perPage:'表示件数',
+    addUser:'アカウント追加', roleLabel:'権限', roleAdmin:'管理者', roleUser:'スタッフ', create:'作成',
+    thUser:'ユーザー', thRole:'権限', thToday:'本日', thJobs:'累計', thLogin:'最終ログイン', thAct:'操作',
+    resetPw:'パスワード再設定', deleteUser:'削除', confirmDel:(n)=>`アカウント「${n}」を削除しますか？`, cannotDelSelf:'自分自身は削除できません',
+    newPwdPrompt:(n)=>`「${n}」の新しいパスワード`, delDone:'削除しました', resetDone:'パスワードを再設定しました', created:(n)=>`アカウント ${n} を作成しました`,
+    save:'保存', cancel:'キャンセル', close:'閉じる',
+    script:'原稿', jobTitle:'タスク名（任意）', titlePh:'例：10月14日 市況ブリーフィング',
+    scriptText:'韓国語原稿', scriptPh:'生成する韓国語原稿を貼り付けてください。長文は自動で分割されます。',
+    voice:'音声', presetVoice:'プリセット音色', cloneVoice:'録音音色のクローン',
+    spkGroupRec:(l)=>`Qwen 内蔵 · 推奨 (${l} 母語)`, spkGroupOther:'Qwen 内蔵 · その他の音色',
+    spkGroupCosy:'CosyVoice3 音色（感情対応 熱烈/親しみ/厳粛）', cosyOff:'（エンジン未起動）',
+    spkAllHint:'Qwen 内蔵音色9種と CosyVoice3 音色は別々のセットです（下記はエンジン別にグループ化）。Qwen は発音が最も安定し、CosyVoice3 は感情表現に対応します。全音色が全出力言語に対応します。',
+    timbre:'音色', instructLabel:'スタイル指示（タップで追加、複数行は自動ローテーション）',
+    instructPh:'例：落ち着いた温かいトーンでゆっくりと',
+    instructHint:'長い音声には2〜4行（改行区切り）がおすすめです。区間ごとに交互に適用され、全体が同じトーン・同じ速度のままになりません。空欄なら中立的な朗読指示が自動適用されます。',
+    clearInstruct:'クリア',
+    savedVoices:'登録済みの音色', cloneNoInstruct:'ボイスクローンはスタイル指示に対応していません。感情は参照音声から引き継がれます。',
+    speed:'話速', speedHint:'1.0 が標準です。数値を上げると速くなります（1.1 / 1.2 …）。速度のみ変化し、音程と音色は保たれます。',
+    emotion:'感情', emotionHint:'トーンを選ぶだけで、エンジンとパラメータは自動で選ばれます。「標準」が最も正確です。感情の起伏が必要なときは他を選んでください。',
+    language:'言語', params:'生成内容を確認', segChars:'分割文字数', batchSize:'バッチサイズ',
+    sumLanguage:'出力言語', sumVoice:'選択中の音声', sumAudio:'音声の目安', sumWait:'待ち時間の目安',
+    shortcutHint:'ショートカット：Ctrl / ⌘ + Enter', recoveryHint:'送信に失敗しても原稿は保持され、更新後も未送信の下書きが復元されます。',
+    tuningNote:'音質は継続的に改善中です。不自然な箇所を聞いたら、右上の「聴感フィードバック」からお知らせください。',
+    submitting:'送信中…', submitOk:'キューに追加しました。次の原稿を入力できます。', clearConfirm:'現在のタイトルと原稿を消去しますか？未送信の内容は削除されます。',
+    advanced:'詳細設定（分割 / バッチ）',
+    paramHint:'既定値のまま：バックエンドが空き VRAM に応じて安全な値（分割 ≤60、バッチ ≤8）へ自動調整します。大きくしても速くなりません。',
+    submit:'生成を開始', clear:'入力をクリア', enroll:'音色を登録（クローン用）',
+    vnamePh:'音色名、例：韓国語女性-ジヨン', refAudio:'参照音声（録音をそのままアップロード。自分で切る必要はありません）',
+    engineLabel:'この音色に使うエンジン', engineQwen:'Qwen（最も正確、抑揚は穏やか）', engineCosy:'CosyVoice3（感情表現が豊か・激昂/穏やか/真剣を選べます）',
+    vEngine:'エンジン', engQwen:'Qwen（最も正確）', engCosy:'CosyVoice3（感情表現）', engSaved:'エンジンを保存しました', engFail:'エンジンの保存に失敗',
+    engineHint:'この音色の既定エンジンです。生成時に「激昂/穏やか/真剣」を選ぶと CosyVoice3 に強制切り替えされます — Qwen のクローンには感情入力がありません。',
+    refText:'録音全体の書き起こし', refTextPh:'この録音で話した内容をすべて貼り付けてください。区間を選ぶ必要はなく、該当部分は自動で切り出されます',
+    enrollHint:'使い方：録音全体とその書き起こし全体をアップロードするだけです。音声の編集もタイムライン調整も不要です。サーバーが最もクリアな約 15 秒を選び、実際の発話時間に合わせて書き起こしも同時に切り出します。初回登録は分析に数秒余計にかかりますが、以降はそのまま使えます。',
+    needRefText:'この録音の書き起こし全体を貼り付けてください（クローン必須、該当部分は自動で切り出されます）',
+    refTooShort:(d)=>`音声が ${d} 秒しかありません。最低 3 秒必要です`,
+    refDurOk:(d)=>`音声 ${d} 秒 — そのまま登録できます`,
+    refAutoTrim:(d)=>`音声 ${d} 秒 — 最もクリアな約 15 秒が自動で切り出され、書き起こしも連動します`,
+    refTooLong:(d)=>`音声が ${d} 秒で 15 分の上限を超えています。数分程度に大まかに切ってからアップロードしてください`,
+    analyzing:'アップロード完了 — 音声を解析して最適な区間を切り出しています…',
+    voiceUnusable:'（使用不可）',
+    voiceBad:'この音色は使用できません：書き起こしが空、または自動切り出しが未適用です。元の録音から再登録してください。',
+    noVoices:'まだ音色が登録されていません', voiceListHint:'一度登録すればずっと再利用できます：生成時に上の「録音音色のクローン」から選ぶだけ。試聴・書き起こしの確認・削除して再登録ができます。',
+    voiceSrc:(d)=>`元 audio ${d}秒`, voiceClip:(a,b)=>` · 自動切り出し ${a}秒〜${b}秒`,
+    voiceReady:'使用可', voiceNoText:'書き起こしなし',
+    vPlay:'試聴', vViewText:'書き起こし', vHideText:'閉じる',
+    cmpCase:'ケースと聴き比べ', cmpCaseName:(n)=>`ケース原音: ${n}`,
+    cmpTip:'上が今回の生成結果、下が基準ケースです。同じ区間を聞き比べ、音色・強弱・文末のイントネーションを確認してください。',
+    delVoice:'削除', confirmDelVoice:(n)=>`音色「${n}」を削除しますか？参照音声も一緒に削除され、再利用には再登録が必要です。`,
+    upload:'登録', queue:'最近のジョブ', noJobs:'ジョブはありません', scopeMine:'自分の', scopeAll:'すべて',
+    searchPh:'タイトル・本文を検索…', allStatus:'すべての状態', allOwner:'全メンバー',
+    stRunning:'生成中', stQueued:'待機中', stDone:'完了', stError:'失敗',
+    countFmt:(n,seg)=>`${n}文字 · 約${seg}セグメント`,
+    gMale:'男性', gFemale:'女性', voiceAdv:'音色 / 速度を変更（詳細）',
+    grpCase:'ケースクローン（再現度最高）', grpOther:'その他のクローン音色',
+    grpQwen:'Qwen 標準音色（ケースクローンより再現度が低い）',
+    qwenSpkNote:(n)=>`現在: ${n} — ケースに合わせて調整していない Qwen 標準音色です。再現度は通常ケースクローンより 2~3 点低くなります`,
+    gpickBest:(n)=>`現在: ${n} — この性別で実測最高。目標値は話者本人のケースから取得します`,
+    gpickOther:(n,b)=>`現在: ${n}${b?`（最高ではありません。最高は「${b}」）`:''}`,
+    caseBrief:(n,d)=>`${n}（${d}）`,
+    hintBestLine:'この性別で実測最高。目標値はこの話者本人のケースから取得します',
+    hintOtherLine:(b)=>`最高ではない${b?`、最高は「${b}」`:''}`,
+    hintBench:(c)=>`比較基準ケース: ${c}`,
+    hintRefDur:(d)=>`参照音声 ${d} 秒`,
+    needText:'先に原稿を貼り付けてください', needVoice:'利用できる音声がありません。管理者にご連絡ください。',
+    needName:'音色名と音声ファイルを指定してください', uploading:'アップロード中...',
+    enrolled:(n,d)=>`登録完了: ${n}（${d}秒）`,
+    enrolledTrim:(n,d,a,b)=>`登録完了: ${n}（${a}秒〜${b}秒から ${d}秒を自動切断、書き起こしも連動）`,
+    fail:'失敗: ', submitFail:'送信失敗: ',
+    st:{queued:'待機中',running:'生成中',done:'完了',error:'失敗'},
+    modeLabel:(j)=> j.mode==='clone' ? 'クローン: '+j.voice : '音色: '+j.speaker,
+    statFmt:s=>`セグメント ${s.segments} · 音声 ${fmtSec(s.audio_seconds)} · 処理 ${fmtSec(s.gen_seconds)} · RTF ${Number(s.rtf||0).toFixed(2)}`,
+    progFmt:(d,t)=>`${d}/${t} セグメント`, dlWav:'WAV をダウンロード', dlMp3:'MP3 をダウンロード',
+    expand:'全文を表示', collapse:'折りたたむ', almostDone:'まもなく完了', preparing:'準備中',
+    stagePreparing:'分割中', stageGenerating:'生成中', stageMerging:'結合中', stageEncoding:'エンコード中', stageLoading:'モデル読み込み中',
+    batchFmt:(n,m)=>`${n}/${m} バッチ`, pctFmt:(p)=>`${p}%`, elapsedFmt:(s)=>`経過 ${s}`,
+    etaFmt:(s)=>`残り 約 ${s}`, queueAhead:(n)=> n>0?`待機中 · 前に ${n} 件`:'待機中、まもなく開始',
+    statsFmt:(td,n,h)=>`本日 ${td}件 · 累計 ${n}件 · 音声 ${h}時間`,
+    by:(o)=>`${o} が生成`, untitled:'無題', loading:'読み込み中...',
+    delJob:'削除', retry:'再試行', confirmDelJob:(t)=>`「${t}」を削除しますか？音声ファイルも削除されます`, noRetry:'原稿が残っていないため再試行できません',
+    altVer:'別テイク', altVerTip:'別のシードで再生成します（結果は変わります）', altVerDone:'別テイクを投入しました',
+    draftSaved:'下書きを復元しました', draftCleared:'下書きをクリアしました',
+    emptyOpt:'（未登録）', noInstructPreset:'この言語のプリセットはありません。手入力してください',
+    l10n:{auto:'自動判定',chinese:'中国語',english:'英語',french:'フランス語',german:'ドイツ語',italian:'イタリア語',
+          japanese:'日本語',korean:'韓国語',portuguese:'ポルトガル語',russian:'ロシア語',spanish:'スペイン語'},
+    spk:{aiden:'English · 男性 · 明るい',dylan:'Chinese · 男性 · 北京なまり',eric:'Chinese · 男性 · 四川なまり',
+         ono_anna:'Japanese · 女性 · 可愛い',ryan:'English · 男性 · リズム感',serena:'Chinese · 女性 · 温かい',
+         sohee:'Korean · 女性 · 温かい',uncle_fu:'Chinese · 男性 · 落ち着いた',vivian:'Chinese · 女性 · 明るい'},
+    bv:{builtin_male:'韓国語クローン・男性',builtin_female:'韓国語クローン・女性',EL_male:'韓国語クローン・男性',EL_female:'韓国語クローン・女性'},
+    builtinTag:'内蔵', builtinNoDel:'内蔵音声は削除できません',
+    chunkLabel:(i,n,s)=>`パート ${i}/${n} · ${Math.round(s)}秒`,
+    dlChunk:(i)=>`パート${i}をダウンロード`,
+    chunkHint:(n)=>`全${n}パート、文末で自動分割（結合なし）`,
+    caseBtn:'标杆案例', caseTitle:'标杆案例',
+    upBtn:'+ 事例をアップロード', upTip:'事例が多いほど法則が安定します',
+    csExtractBtn:'⟳ 音声を再抽出',
+    csExtracting:'音声テンプレート抽出中（話者自動分類）、数分かかります…',
+    csExtractDone:n=>n+'件の音声テンプレートを作成/更新',
+    csExtractNone:'新しい音声なし（事例不足または話者が既に存在）',
+    csExtractFail:'抽出失敗、後で再試行するか管理者に連絡',
+    upTitle:'ベンチマーク事例をアップロード',
+    upSub:'音声と原稿はファイル名順に1対1で対応します（1.mp3 \u2194 1.txt）。原稿がない場合はASRが自動文字起こしし、後で修正できます。',
+    upName:'事例名', upNamePh:'例: EL-男性-経済-第3回',
+    upGender:'性別', upSource:'出典プラットフォーム',
+    upTags:'タグ（カンマ区切り、任意）', upTagsPh:'経済,報道,中速',
+    upAudio:'音声ファイル（複数可）', upText:'原稿ファイル（複数可、任意）',
+    upTextTip:'全文1個=各区間の長さ比で自動分割(推奨) / N個=ファイル名順で対応 / 無し=ASR自動文字起こし。区間名は01,02…（10は2より前に並ぶ）',
+    upSelAud:(n,s)=>`音声 ${n}件選択、連結順: ${s}`, upSelTxt:(n,s)=>`原稿 ${n}件選択、対応順: ${s}`,
+    upNoneAud:'音声が未選択', upNoneTxt:'原稿ファイルなし',
+    upModeWhole:'区間の長さ比で自動分割されます（推奨）', upModeOne:'ファイル名順で音声と1対1対応します', upModeAsr:'ASRで自動文字起こしして原稿を補完します',
+    upNote2:'メモ（任意）', upSubmit:'アップロードして分析',
+    upDoing:'アップロード中\u2026韻律分析はバックグラウンドで数十秒かかります',
+    upPct:(p,a,b)=>`アップロード中 ${p}% (${a} / ${b} MB)`,
+    upDone:'アップロード完了 \u2014 韻律分析をバックグラウンドで実行中',
+    upFail:'アップロード失敗',
+    upNeed:'名前を入力し、音声ファイルを1つ以上選んでください',
+    upGMale:'男性', upGFemale:'女性', upUnknown:'不明', upOther:'その他',
+    caseSub:'目標音声を一度聴いて、良いと思った点にチェックを入れてください。票数が溜まったらタグ順に並べ、次に直す項目が分かります。',
+    caseBack:'← 一覧へ', caseEmpty:'标杆案例はまだありません', caseFail:'読み込みに失敗しました',
+    caseNosrc:'（音声なし）',
+    fbLike:'どこが良かったか（複数選択）', fbRating:'総合評価',
+    fbNote:'補足（任意）', fbNotePh:'例：冒頭の息づかいが人間っぽい',
+    fbSubmit:'送信', fbSaved:'ご意見ありがとうございます', fbNeed:'タグ・評価・メモのいずれかを入力してください',
+    fbMine:'送信済みです — 修正して再送信できます', fbFail:'送信に失敗しました',
+    fbSummary:(n,r)=>`${n}件の回答${r?` · 平均 ${r}`:''}`,
+    fbTag:{pace:'速度・リズム',intonation:'抑揚',emotion:'感情',clarity:'明瞭さ',
+           pausing:'間・息継ぎ',timbre:'音色',natural:'自然さ',other:'その他'},
+    caseMeta:(g,s,d)=>`${g==='male'?'男性':'女性'} · ${s||'-'} · ${d?Math.round(d)+'秒':'-'}`
+  }
+};
+
+const UI2OUT = {zh:'chinese', en:'english', ko:'korean', ja:'japanese'};
+const SPK_LANG = {aiden:'english', dylan:'chinese', eric:'chinese', ono_anna:'japanese',
+                  ryan:'english', serena:'chinese', sohee:'korean', uncle_fu:'chinese', vivian:'chinese'};
+const LANG_SPK = {auto:'sohee', chinese:'serena', english:'aiden', japanese:'ono_anna', korean:'sohee',
+                  french:'serena', german:'uncle_fu', italian:'vivian', portuguese:'ryan',
+                  russian:'dylan', spanish:'aiden'};
+
+const INSTRUCTS = {
+  korean:['차분하고 따뜻한 톤으로 천천히','밝고 활기찬 톤으로 또박또박','낮은 목소리로 조용히 이야기하듯',
+    '뉴스 앵커처럼 또렷하고 전문적으로','친구에게 설명하듯 편안하게','약간 상기된 톤으로 빠르게','감동적인 분위기로 천천히 또박또박'],
+  chinese:['平静温暖的语气，慢速讲述','明快有活力的语气，吐字清晰','低声安静地，像在讲一个故事',
+    '像新闻主播一样清晰专业','像对朋友解释一样轻松自然','略带兴奋，语速稍快','富有感染力，缓慢而清晰'],
+  english:['Calm and warm tone, speaking slowly','Bright and cheerful, clearly articulated',
+    'Low voice, as if telling a story quietly','Clear and professional, like a news anchor',
+    'Relaxed, as if explaining to a friend','Slightly excited, a bit faster','Emotional and moving, slow and clear'],
+  japanese:['落ち着いた温かいトーンでゆっくりと','明るく元気に、はっきりと','低い声で静かに語りかけるように',
+    'ニュースキャスターのように明瞭で専門的に','友達に説明するようにリラックスして','少し高揚した口調でやや速めに','感動的な雰囲気でゆっくりはっきりと'],
+  spanish:['Tono tranquilo y cálido, hablando despacio','Alegre y enérgico, articulando con claridad',
+    'Voz baja, como contando una historia en silencio','Claro y profesional, como un presentador',
+    'Relajado, como explicándoselo a un amigo','Ligeramente emocionado, un poco más rápido','Emotivo, lento y claro'],
+  french:['Ton calme et chaleureux, en parlant lentement','Vif et enjoué, bien articulé',
+    'Voix basse, comme en racontant une histoire','Clair et professionnel, comme un présentateur',
+    'Détendu, comme en l\'expliquant à un ami','Légèrement enthousiaste, un peu plus rapide','Émouvant, lent et clair'],
+  german:['Ruhiger, warmer Ton, langsam gesprochen','Hell und lebhaft, deutlich artikuliert',
+    'Leise Stimme, wie beim Erzählen','Klar und professionell wie ein Nachrichtensprecher',
+    'Entspannt, als würde man es einem Freund erklären','Etwas aufgeregt, etwas schneller','Emotional, langsam und klar'],
+  italian:['Tono calmo e caloroso, parlando lentamente','Brillante e vivace, ben articolato',
+    'Voce bassa, come raccontando una storia','Chiaro e professionale come un presentatore',
+    'Rilassato, come spiegandolo a un amico','Leggermente emozionato, un po\' più veloce','Emotivo, lento e chiaro'],
+  portuguese:['Tom calmo e acolhedor, falando devagar','Alegre e vibrante, bem articulado',
+    'Voz baixa, como quem conta uma história','Claro e profissional como um apresentador',
+    'Relaxado, como explicando a um amigo','Um pouco empolgado, mais rápido','Emocionante, lento e claro'],
+  russian:['Спокойный тёплый тон, говорить медленно','Яркий и энергичный, чёткая дикция',
+    'Тихий голос, словно рассказываешь историю','Чётко и профессионально, как ведущий новостей',
+    'Расслабленно, как объясняя другу','Немного взволнованно, чуть быстрее','Проникновенно, медленно и чётко']
+};
+const INSTRUCT_PH = {
+  korean:'예: 차분하고 따뜻한 톤으로 천천히 이야기하듯이', chinese:'例：平静温暖的语气，慢速讲述',
+  english:'e.g. Calm and warm tone, speaking slowly', japanese:'例：落ち着いた温かいトーンでゆっくりと',
+  spanish:'ej: Tono tranquilo y cálido, hablando despacio', french:'ex. : Ton calme et chaleureux, en parlant lentement',
+  german:'z. B. Ruhiger, warmer Ton, langsam gesprochen', italian:'es: Tono calmo e caloroso, parlando lentamente',
+  portuguese:'ex: Tom calmo e acolhedor, falando devagar', russian:'напр.: Спокойный тёплый тон, говорить медленно', auto:''
+};
+
+/* ---------- 全局状态 ---------- */
+/* 默认「录入音色克隆」：全量实测这条链路还原度最高，员工打开就是最佳组合 */
+let mode = 'clone';
+/* 语言优先级：手动选择(localStorage) > 浏览器系统语言 > 中文 */
+function detectLang(){
+  const langs = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ''])
+    .map(x => String(x || '').toLowerCase());
+  for(const l of langs){
+    if(l.startsWith('zh')) return 'zh';
+    if(l.startsWith('ko')) return 'ko';
+    if(l.startsWith('ja')) return 'ja';
+    if(l.startsWith('en')) return 'en';
+  }
+  return 'zh';
+}
+let UI = localStorage.getItem('tts_ui_lang');
+if(!UI || !I18N[UI]) UI = detectLang();
+let userSwitched = false;
+let outLangTouched = false;
+let spkTouched = false;          /* 用户手动挑过音色后，不再随语言自动切换 */
+let ME = null;
+let META = {languages:[], speakers:[], voices:[]};
+let scope = 'mine';
+/* 历史记录分页：默认每页 10 条 */
+let page = 1, pageSize = +(localStorage.getItem('tts_page_size') || 10), pages = 1, totalJobs = 0;
+let USERS = [];
+const jobNodes = new Map();
+const DRAFT = 'tts_draft';
+const PREF  = 'tts_pref';   /* 生成参数记忆：模式/音色/语言/情感/语速，避免每天重复选 */
+
+const t = k => (I18N[UI][k] !== undefined ? I18N[UI][k] : k);
+const outLang = () => $('#language').value || UI2OUT[UI] || 'korean';
+const presetLang = () => { const l = outLang(); return l === 'auto' ? (UI2OUT[UI]||'korean') : l; };
+const esc = s => String(s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function fmtDur(s){
+  /* 旧版两处问题：① 详情页直接打印 s.audio_seconds 原始浮点，会出现
+     "475.84000000000003s" 这种 IEEE754 二进制尾巴；② 超过 1 小时会显示成
+     "67:56" 而不是 "1:07:56"。这里统一处理。 */
+  s = Math.max(0, Math.round(s || 0));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  const head = h ? `${h}:${String(m).padStart(2, '0')}` : String(m);
+  return `${head}:${String(ss).padStart(2, '0')}`;
+}
+/* 「几分几秒」方便读，「多少秒」方便对数 —— 两个都要，给成一个串 */
+function fmtSec(s){
+  s = Math.max(0, Number(s || 0));
+  return `${fmtDur(s)}（${s.toFixed(1)} 秒）`;
+}
+function toast(msg){
+  const d = document.createElement('div');
+  d.className = 'toast'; d.textContent = msg;
+  document.body.appendChild(d);
+  setTimeout(()=>d.remove(), 2200);
+}
+
+/* ---------- 请求 ---------- */
+async function api(url, opt){
+  const r = await fetch(url, opt);
+  if(r.status === 401){ ME = null; showLogin(t('loginErr')); throw new Error('401'); }
+  return r;
+}
+
+/* ---------- i18n ---------- */
+function applyStatic(){
+  $$('[data-i18n]').forEach(e => { if(I18N[UI][e.dataset.i18n] !== undefined) e.textContent = I18N[UI][e.dataset.i18n]; });
+  $$('[data-i18n-ph]').forEach(e => { if(I18N[UI][e.dataset.i18nPh] !== undefined) e.placeholder = I18N[UI][e.dataset.i18nPh]; });
+  document.title = t('title');
+  document.documentElement.lang = UI === 'zh' ? 'zh-CN' : UI;
+  $('#langLabel').textContent = I18N[UI]._name;
+  $('#langMenu').innerHTML = Object.keys(I18N)
+    .map(k=>`<div class="mi ${k===UI?'on':''}" data-lang="${k}">${I18N[k]._name}${k===UI?'<span class="tick">✓</span>':''}</div>`).join('');
+  $$('#langMenu .mi').forEach(it => it.onclick = () => setLang(it.dataset.lang));
+  if(ME){
+    $('#userRole').textContent = t(ME.role === 'admin' ? 'roleAdmin' : 'roleUser');
+    $('#miUsers').classList.toggle('hide', ME.role !== 'admin');
+  }
+}
+function setLang(k){
+  UI = k; localStorage.setItem('tts_ui_lang', k); userSwitched = true;
+  applyStatic(); renderLanguages(); renderSpeakers(); renderVoices(); renderVsel(); renderCount();
+  syncSpeakerToLang(); resetJobs(); poll(); loadStats();
+}
+
+/* ---------- 下拉 ---------- */
+const spkName = s => I18N[UI].spk[s] ? `${s} — ${I18N[UI].spk[s]}` : s;
+const langName = l => I18N[UI].l10n[l] ? `${I18N[UI].l10n[l]}（${l}）` : l;
+const langShort = l => I18N[UI].l10n[l] || l;   /* 只要本地名，不带英文 id */
+
+/* 音色不做过滤：实测 9 个内置音色都支持全部 10 种语言。
+   只把当前输出语言的"母语/最佳音色"排在最前面，其余全部列出供自由选择。 */
+function speakersForLang(){
+  const all = META.speakers || [];
+  const lang = outLang();
+  const map = META.speaker_langs || SPK_LANG;
+  return {
+    rec:   all.filter(s => map[s] === lang),
+    other: all.filter(s => map[s] !== lang),
+  };
+}
+/* CosyVoice3 常驻音色：与 Qwen 的 9 个发音人是两套互不相通的命名空间，
+   分组标出来，员工才知道「选这个会换引擎」。引擎没上线时整组置灰 ——
+   否则选了会静默回退 Qwen，出的成品和千问音色一模一样，白等一轮排队。 */
+function cosyOpt(o){
+  const L = (window.UI && UI.lang) || 'zh';
+  const nm = (o.name && (o.name[L] || o.name.zh)) || o.key;
+  const okk = o.available !== false;
+  return `<option value="${esc(o.key)}"${okk ? '' : ' disabled'}>`
+       + `${esc(nm)}${okk ? '' : ' ' + esc(t('cosyOff'))}</option>`;
+}
+function renderSpeakers(){
+  const sp = $('#speaker');
+  const {rec, other} = speakersForLang();
+  const cosy = META.cosy_speakers || [];
+  const prev = sp.value;
+  const opt = s => `<option value="${s}">${esc(spkName(s))}</option>`;
+  let html = '';
+  if(rec.length)   html += `<optgroup label="${esc(t('spkGroupRec')(langShort(outLang())))}">${rec.map(opt).join('')}</optgroup>`;
+  if(other.length) html += `<optgroup label="${esc(t('spkGroupOther'))}">${other.map(opt).join('')}</optgroup>`;
+  if(cosy.length)  html += `<optgroup label="${esc(t('spkGroupCosy'))}">${cosy.map(cosyOpt).join('')}</optgroup>`;
+  if(!html) html = '<option value="sohee">sohee</option>';
+  sp.innerHTML = html;
+  const all = rec.concat(other).concat(cosy.map(o => String(o.key)));
+  if(prev && all.includes(prev)) sp.value = prev;      /* 尊重手动选择 */
+  else {
+    const def = (META.speaker_default||LANG_SPK)[outLang()];
+    const pick = (def && all.includes(def)) ? def : (rec[0] || all[0]);
+    if(pick) sp.value = pick;
+  }
+}
+/* 切输出语言时，只在用户没手动挑过音色的情况下切到推荐音色 */
+function syncSpeakerToLang(){
+  if(spkTouched) return;
+  const want = (META.speaker_default||LANG_SPK)[outLang()];
+  const all = META.speakers || [];
+  if(want && all.includes(want)) $('#speaker').value = want;
+}
+function renderLanguages(){
+  const lg = $('#language'), list = META.languages || ['korean'], prev = lg.value;
+  lg.innerHTML = list.length ? list.map(l=>`<option value="${l}">${langName(l)}</option>`).join('')
+                             : '<option value="korean">korean</option>';
+  /* 🔴 2026-10-14：这是韩语配音工作台，输出语言默认必须是韩语。
+     原来是「默认跟随界面语言」→ 中文界面会落到 chinese，员工粘的是韩语文案
+     却被按中文合成，整篇读音不对还得重跑（长稿几十分钟）。
+     现在只要后端支持韩语就默认韩语；手动改过之后仍然尊重手选。 */
+  const ko = list.find(l => /korean/i.test(l));
+  const target = outLangTouched
+    ? (prev && list.includes(prev) ? prev : (ko || 'korean'))
+    : (ko || UI2OUT[UI] || 'korean');
+  if(list.includes(target)) lg.value = target;
+  else if(ko) lg.value = ko;
+  renderSpeakers();   /* 音色跟着输出语言走 */
+  renderChips();
+}
+function renderChips(){
+  const pl = presetLang(), arr = INSTRUCTS[pl] || [];
+  $('#chips').innerHTML = arr.length ? arr.map(x=>`<div class="chip">${esc(x)}</div>`).join('')
+                                     : `<span class="hint">${t('noInstructPreset')}</span>`;
+  $$('#chips .chip').forEach(c => c.onclick = () => addInstruct(c.textContent));
+  $('#instruct').placeholder = INSTRUCT_PH[outLang()] || INSTRUCT_PH[pl] || t('instructPh');
+}
+function addInstruct(v){
+  const ta = $('#instruct');
+  const lines = ta.value.split(/[\n|]+/).map(x=>x.trim()).filter(Boolean);
+  if(!lines.includes(v.trim())) lines.push(v.trim());
+  ta.value = lines.join('\n');
+}
+$('#insClear').onclick = ()=>{ $('#instruct').value=''; };
+const voiceOk = x => { const m = META.voices_ok || {}; return m[x] !== false; };
+// 内置音色用稳定 ID 存库（builtin_male / builtin_female），这里按界面语言
+// 换成对应显示名；员工自己录的音色直接显示原名。
+function voiceName(x){
+  // 案例音色自带四语显示名（voices.json 的 label），优先用它；没有再回退内置表
+  const lb = (META.voice_labels || {})[x] || {};
+  const named = lb[UI] || lb.zh;
+  if(named) return named;
+  const m = (I18N[UI] && I18N[UI].bv) || {};
+  return m[x] || x;
+}
+function isBuiltin(x){ return x === 'builtin_male' || x === 'builtin_female' || x === 'EL_male' || x === 'EL_female'; }
+
+/* ---------- 性别二选一：员工的主入口 ---------- */
+/* 后端按 gender 给克隆音色分好组，并指定了每组的「最佳」(best_clone)。
+   员工点一下男声/女声 = 选中该组实测最好的那个克隆音色，并对标它自己那条
+   案例取生产目标值。全程不需要知道有「音色」这个东西。 */
+function genderOf(x){
+  const byG = META.voices_by_gender || {};
+  if((byG.male   || []).indexOf(x) >= 0) return 'male';
+  if((byG.female || []).indexOf(x) >= 0) return 'female';
+  return '';
+}
+function pickForGender(g){
+  const byG = META.voices_by_gender || {}, best = META.best_clone || {};
+  const pool = byG[g] || [];
+  // 后端指定的最佳优先；它不可用时退到该组第一个可用音色
+  if(best[g] && pool.indexOf(best[g]) >= 0 && voiceOk(best[g])) return best[g];
+  return pool.find(voiceOk) || pool[0] || '';
+}
+function applyGender(g){
+  const want = pickForGender(g);
+  if(!want){ markGender(''); updateGpick(); return; }
+  const sel = $('#vsel');
+  if(sel){ sel.value = want; applyVsel(want); }
+  else { setMode('clone'); $('#voice').value = want; syncGender(); }
+  markGender(g);
+  updateGpick();
+  renderCount();          /* 右侧摘要的「当前声音」要跟着切 */
+}
+
+/* ---------- 统一音色下拉：员工只看到一个列表 ---------- */
+/* 顺序按实测还原度排：案例克隆 → 其他克隆 → 千问自带（一律靠后）。
+   千问自带是模型出厂音色，从没针对案例调过，实测比克隆低 2~3 分；
+   排前面只会让员工误选。案例克隆音色去重后各只出现一次。 */
+function vselGroups(){
+  const voices = META.voices || [];
+  const byG = META.voices_by_gender || {};
+  const seen = {}, caseV = [];
+  [].concat(byG.male || [], byG.female || []).forEach(x => {
+    if(voices.indexOf(x) >= 0 && !seen[x]){ seen[x] = 1; caseV.push(x); }
+  });
+  return {caseV, otherV: voices.filter(x => caseV.indexOf(x) < 0),
+          spk: (META.speakers || []).map(String)};
+}
+function renderVsel(){
+  const sel = $('#vsel'); if(!sel) return;
+  const {caseV, otherV, spk} = vselGroups();
+  const cosy = META.cosy_speakers || [];
+  const grp = (label, arr, kind) => arr.length
+    ? `<optgroup label="${esc(label)}">` + arr.map(x =>
+        `<option value="${esc(x)}" data-kind="${kind}">${esc(kind === 'clone' ? voiceName(x) : spkName(x))}</option>`
+      ).join('') + '</optgroup>' : '';
+  sel.innerHTML = grp(t('grpCase'), caseV, 'clone')
+                + grp(t('grpOther'), otherV, 'clone')
+                + grp(t('grpQwen'),  spk,   'custom')
+                + (cosy.length ? `<optgroup label="${esc(t('spkGroupCosy'))}">${cosy.map(cosyOpt).join('')}</optgroup>` : '');
+  /* 默认落在案例克隆的最佳（男声）；整个库空了才退到千问音色 */
+  const dft = pickForGender('male') || caseV[0] || otherV[0] || spk[0] || '';
+  if(dft){ sel.value = dft; applyVsel(dft); } else { applyVsel(''); }
+}
+/* 选中哪一项 → 自动切到对应的模式，员工不需要知道「克隆」这个词 */
+function applyVsel(v){
+  if(!v) return;
+  if((META.voices || []).indexOf(v) >= 0){
+    setMode('clone');
+    const sv = $('#voice'); if(sv) sv.value = v;
+  }else{
+    setMode('custom');
+    const ss = $('#speaker'); if(ss) ss.value = v;
+  }
+  syncGender();
+  updateVselHint();
+}
+/* 这条任务对标的是哪条案例：任务自己存了就用存的（历史任务），
+   否则按音色元数据里登记的 bench_case 推——和生成时用的是同一个值。 */
+function benchCaseOf(j){
+  if(j && j.bench_case) return j.bench_case;
+  const info = (META.info || {})[(j && j.voice) || ''] || {};
+  return info.bench_case || '';
+}
+
+/* 案例库索引（按 id 查）。注意别和上面案例弹窗的 CASES 数组重名。
+   音色要对标哪条案例，得把案例名/时长显示给员工看，否则「自动对标」
+   是个黑盒，员工不知道自己会拿到什么。 */
+let CASEINDEX = {};
+async function loadCaseIndex(){
+  try{
+    const r = await api('/api/cases');
+    if(!r.ok) return;
+    const j = await r.json();
+    const arr = Array.isArray(j) ? j : (j.cases || j.items || []);
+    const m = {};
+    arr.forEach(c => { if(c && c.id) m[c.id] = c; });
+    CASEINDEX = m;
+  }catch(e){}
+}
+function caseBrief(cid){
+  const c = CASEINDEX[cid];
+  if(!c) return '';
+  const nm = c.name || cid;
+  const d = Number(c.total_dur || 0);
+  return d > 0 ? t('caseBrief')(nm, fmtDur(d)) : nm;
+}
+function updateVselHint(){
+  const el = $('#vselHint'); if(!el) return;
+  const v = $('#vsel') ? $('#vsel').value : '';
+  if(!v){ el.innerHTML = ''; return; }
+  const nm = voiceName(v);
+  if((META.voices || []).indexOf(v) >= 0){
+    const g = genderOf(v), best = (META.best_clone || {})[g] || '';
+    const info = (META.info || {})[v] || {};
+    const bc = info.bench_case || '';
+    const ref = Number(info.dur || 0);
+    let html = `<div style="font-weight:500">${esc(nm)}</div>`;
+    html += `<div>${esc(v === best ? t('hintBestLine') : t('hintOtherLine')(best ? voiceName(best) : ''))}</div>`;
+    if(bc) html += `<div>${esc(t('hintBench')(caseBrief(bc)))}</div>`;
+    if(ref > 0) html += `<div>${esc(t('hintRefDur')(ref.toFixed(1)))}</div>`;
+    el.innerHTML = html;
+  }else{
+    el.innerHTML = `<div style="font-weight:500">${esc(spkName(v))}</div>`
+                 + `<div>${esc(t('qwenSpkNote')(spkName(v)))}</div>`;
+  }
+}
+function markGender(g){
+  $$('#gsel .gbtn').forEach(b => b.classList.toggle('on', b.dataset.g === g && !!g));
+}
+/* 员工手动在高级里换了音色 → 高亮跟着变，避免「按钮显示女声、实际是男声」 */
+function syncGender(){
+  const g = genderOf($('#voice').value);
+  markGender(g); updateGpick();
+}
+/* 主界面的效果预览：员工点完男/女，提交前就要知道「会拿到什么」——
+   是哪个音色、是不是实测最佳、对标哪条案例、参考音频多长。 */
+function updateGpick(){
+  const x = $('#voice').value, g = genderOf(x);
+  const el = $('#gpick'); if(!el) return;
+  if(!x){ el.innerHTML = ''; return; }
+  const best = (META.best_clone || {})[g] || '';
+  const info = (META.info || {})[x] || {};
+  const bc = info.bench_case || '';
+  const ref = Number(info.dur || 0);
+  let html = `<div style="font-weight:500">${esc(voiceName(x))}</div>`;
+  html += `<div>${esc(x === best ? t('hintBestLine') : t('hintOtherLine')(best ? voiceName(best) : ''))}</div>`;
+  if(bc) html += `<div>${esc(t('hintBench')(caseBrief(bc)))}</div>`;
+  if(ref > 0) html += `<div>${esc(t('hintRefDur')(ref.toFixed(1)))}</div>`;
+  el.innerHTML = html;
+}
+
+function renderVoices(){
+  const v = $('#voice'), list = META.voices || [], prev = v.value;
+  const byG = META.voices_by_gender || {};
+  // 案例克隆音色靠前（男声组 → 女声组），其余音色垫后。
+  // 依据：案例克隆是实测还原度最高的链路，员工不该在一堆选项里自己找。
+  const front = [].concat(byG.male || [], byG.female || []).filter(x=>list.includes(x));
+  const rest  = list.filter(x => front.indexOf(x) < 0);
+  const opt = x => `<option value="${x}">${esc(voiceName(x))}${voiceOk(x)?'':' '+t('voiceUnusable')}</option>`;
+  const grp = (label, arr) => arr.length
+    ? `<optgroup label="${esc(label)}">${arr.map(opt).join('')}</optgroup>` : '';
+  v.innerHTML = list.length
+    ? grp(t('grpCase'), front) + grp(t('grpOther'), rest)
+    : `<option value="">${t('emptyOpt')}</option>`;
+  if(prev && list.includes(prev)) v.value = prev;
+  else {
+    /* 默认落在第一个「可用」的音色上：缺文字稿的那些能列出但不能用，
+       让员工一进来就选中它们会白等一轮排队才报错。
+        gender 分好组时优先取男声组的最佳（实测链路最强）。 */
+    const dft = pickForGender('male') || list.find(voiceOk);
+    if(dft) v.value = dft;
+  }
+  syncGender();
+}
+function renderOwners(){
+  const sel = $('#fOwner'), cur = sel.value;
+  sel.innerHTML = `<option value="">${t('allOwner')}</option>` +
+    USERS.map(u=>`<option value="${esc(u.username)}">${esc(u.username)}</option>`).join('');
+  if(cur) sel.value = cur;
+}
+function renderCount(){
+  const n = $('#text').value.length;
+  const seg = Math.max(1, Math.ceil(n / (+$('#maxChars').value || 110)));
+  /* 韩语实测模型：audio_seconds = 字数/6.15，gen_seconds = 8.40 + 0.07374×字数
+     让员工提交前就知道要等多久、成品多长，不用干等 */
+  let extra = '';
+  const spd = +($('#speed') && $('#speed').value) || 1.0;
+  if(n > 0){
+    extra = t('estFmt')(fmtDur(n / 6.15 / spd), fmtDur(8.40 + 0.07374 * n));
+  }
+  $('#count').textContent = t('countFmt')(n, seg) + extra;
+  renderSummary(n, spd);
+}
+/* 右侧「确认生成」四行摘要。预估沿用上面同一个实测模型，
+   避免「字数条」和「确认卡」两个数字对不上。 */
+function renderSummary(n, spd){
+  if(n == null) n = $('#text').value.length;
+  if(spd == null) spd = +($('#speed') && $('#speed').value) || 1.0;
+  const lg = $('#language');
+  if(lg && lg.value){
+    /* 只显示本地化名（「韩语」）：langName 会带出 korean 这个 id，员工不需要看 */
+    const el = $('#sumLanguage'), m = (I18N[UI] && I18N[UI].l10n) || {};
+    if(el) el.textContent = m[lg.value] || lg.value;
+  }
+  const g = genderOf($('#voice') ? $('#voice').value : ''), ev = $('#sumVoice');
+  if(ev && g) ev.textContent = (g === 'male') ? t('gMale') : t('gFemale');
+  const ea = $('#sumAudio'), ew = $('#sumWait');
+  if(ea) ea.textContent = n > 0 ? fmtDur(n / 6.15 / spd) : '0:00';
+  if(ew) ew.textContent = n > 0 ? fmtDur(8.40 + 0.07374 * n) : '0:00';
+}
+async function loadMeta(){
+  try{ META = await (await api('/api/meta')).json(); }catch(e){ return; }
+  // 音色详情（时长/文字稿/截取来源）单独一份，用于右侧音色列表
+  try{ META.info = await (await api('/api/voices')).json(); }catch(e){ META.info = META.info || {}; }
+  renderSpeakers(); renderLanguages(); renderVoices(); renderVoiceList(); renderVsel();
+  await loadCaseIndex(); updateGpick(); updateVselHint();   /* 案例名要等这一份才显示得出来 */
+  renderSpeeds();
+  renderCount();          /* 音色/语速/语言都填好了，摘要这才有正确值 */
+  /* 2026-10-12：情感下拉已下架——情绪由案例参考音频复刻，员工不选。
+     renderEmotions() 一并移除；提交处不传 emotion，后端落 standard。 */
+}
+
+/* 语速档位由后端 /api/meta 下发（模型本身没有 speed 接口，靠 atempo 后处理） */
+function renderSpeeds(){
+  const sp = $('#speed');
+  if(!sp) return;
+  const list = (META.speeds && META.speeds.length) ? META.speeds : [0.8,0.9,1.0,1.1,1.2,1.3];
+  const prev = sp.value;
+  sp.innerHTML = list.map(v=>`<option value="${v}">${Number(v).toFixed(1)}×</option>`).join('');
+  const strs = list.map(String);
+  const def  = String(META.speed_default != null ? META.speed_default : 1.0);
+  sp.value = (prev && strs.includes(prev)) ? prev : (strs.includes(def) ? def : strs[0]);
+}
+
+/* ---------- 已录入音色：可试听 / 查看文字稿 / 删除重录 ---------- */
+function renderVoiceList(){
+  const box = $('#vlist'), list = META.voices || [], info = META.info || {};
+  $('#vcount').textContent = list.length ? String(list.length) : '';
+  if(!list.length){ box.innerHTML = `<div class="hint">${t('noVoices')}</div>`; return; }
+  box.innerHTML = list.map(n => {
+    const v = info[n] || {}, ok = voiceOk(n);
+    const src = v.src_dur ? t('voiceSrc')(v.src_dur) : '';
+    const clip = (v.clip && v.clip.start != null) ? t('voiceClip')(v.clip.start, v.clip.end) : '';
+    const txt = v.ref_text || '';
+    return `<div class="vitem${ok ? '' : ' bad'}" data-v="${esc(n)}">
+      <div class="vtop">
+        <span class="vname" title="${esc(n)}">${esc(voiceName(n))}</span>
+        ${isBuiltin(n) ? `<span class="vtag ok">${t('builtinTag')}</span>` : ''}
+        <span class="vtag${ok ? ' ok' : ''}">${ok ? t('voiceReady') : t('voiceUnusable')}</span>
+        <span class="vmeta">${v.dur != null ? v.dur + 's' : ''}</span>
+      </div>
+      <div class="vmeta">${src}${clip}</div>
+      <div class="vrow" style="display:flex;align-items:center;gap:6px;margin:4px 0">
+        <span class="vmeta">${t('vEngine')}</span>
+        <select class="veng" style="flex:1" title="${t('engineHint')}">
+          <option value="qwen"${v.engine === 'cosyvoice3' ? '' : ' selected'}>${t('engQwen')}</option>
+          <option value="cosyvoice3"${v.engine === 'cosyvoice3' ? ' selected' : ''}>${t('engCosy')}</option>
+        </select>
+      </div>
+      <div class="vtext" data-full="${esc(txt)}">${txt ? esc(txt.length > 46 ? txt.slice(0, 46) + '…' : txt)
+            : '<span style="color:#e5534b">' + t('voiceNoText') + '</span>'}</div>
+      <div class="vact">
+        <button class="vplaybtn">${t('vPlay')}</button>
+        ${txt ? `<button class="vview">${t('vViewText')}</button>` : ''}
+        <button class="vdel">${t('delVoice')}</button>
+      </div>
+      <audio class="vplay" controls preload="none"></audio>
+    </div>`;
+  }).join('');
+
+  box.querySelectorAll('.vitem').forEach(item => {
+    const n = item.dataset.v, a = item.querySelector('audio');
+    item.querySelector('.vplaybtn').onclick = () => {
+      if(a.style.display === 'block'){ a.pause(); a.style.display = 'none'; return; }
+      if(!a.src) a.src = '/api/voices/' + encodeURIComponent(n) + '/audio';
+      a.style.display = 'block';
+      a.play().catch(()=>{});
+    };
+    // 引擎：管理员可随时改，立即生效（服务端 voices 在内存里，写回后下个任务就用新引擎）
+    const es = item.querySelector('.veng');
+    if(es) es.onchange = async () => {
+      const val = es.value;
+      try{
+        const r = await api('/api/voices/' + encodeURIComponent(n) + '/engine', {
+          method:'POST',
+          headers:{'Content-Type':'application/x-www-form-urlencoded'},
+          body:'engine=' + encodeURIComponent(val)});
+        if(!r.ok){ const j = await r.json().catch(()=>({detail:'error'})); throw new Error(j.detail || 'error'); }
+        if(META.info[n]) META.info[n].engine = val;
+        const tip = item.querySelector('.vengtip');
+        if(!tip){ const s = document.createElement('span'); s.className = 'vmeta vengtip'; item.querySelector('.vrow').appendChild(s); }
+        item.querySelector('.vengtip').textContent = t('engSaved');
+        setTimeout(()=>{ const x = item.querySelector('.vengtip'); if(x) x.textContent = ''; }, 2500);
+      }catch(e){
+        if(e.message !== '401') alert(t('engFail') + ': ' + e.message);
+        loadMeta();
+      }
+    };
+    const vt = item.querySelector('.vtext');
+    const vv = item.querySelector('.vview');
+    if(vv) vv.onclick = () => {
+      const full = vt.dataset.full || '';
+      const open = vt.dataset.open === '1';
+      vt.textContent = open ? (full.length > 46 ? full.slice(0, 46) + '…' : full) : full;
+      vt.dataset.open = open ? '0' : '1';
+      vv.textContent = open ? t('vViewText') : t('vHideText');
+    };
+    const del = item.querySelector('.vdel');
+    if(isBuiltin(n)){
+      // 内置音色是团队共用模板，误删会让所有人立刻用不了
+      del.disabled = true;
+      del.title = t('builtinNoDel');
+      del.style.opacity = '.45';
+      del.style.cursor = 'not-allowed';
+    }
+    del.onclick = async () => {
+      if(isBuiltin(n)){ alert(t('builtinNoDel')); return; }
+      if(!confirm(t('confirmDelVoice')(n))) return;
+      try{
+        await api('/api/voices/' + encodeURIComponent(n), {method:'DELETE'});
+        loadMeta();
+      }catch(e){ if(e.message !== '401') alert(t('fail') + e.message); }
+    };
+  });
+}
+
+/* ---------- 登录 ---------- */
+function showLogin(err){
+  $('#loginMask').style.display = 'flex';
+  $('#lerr').textContent = err || '';
+  setTimeout(()=>$('#lpwd').focus(), 50);
+}
+$('#lbtn').onclick = login;
+$('#lpwd').onkeydown = e => { if(e.key === 'Enter') login(); };
+$('#luser').onkeydown = e => { if(e.key === 'Enter') $('#lpwd').focus(); };
+/* ---------- 角色显隐 ----------
+   员工只做三件事：粘贴文案 → 选男声/女声 → 开始生成。
+   管理员才需要：音色库、标杆案例、调参（音色/语速/分段）、全员任务范围。
+   🔴 2026-10-14：以前是登录和刷新两条路径各写一遍 id 列表，加新元素必漏。
+     现在统一走 class .admin-only + 这一处函数，新增管理员入口只要挂 class。 */
+function applyRole(){
+  const admin = !!(ME && ME.role === 'admin');
+  $('#userRole').className = 'role' + (admin ? ' admin' : '');
+  $('#scopeBox').classList.toggle('hide', !admin);
+  $('#fOwner').classList.toggle('hide', !admin);
+  $('#advBox').classList.toggle('hide', !admin);
+  $('#miUsers').classList.toggle('hide', !admin);
+  $$('.admin-only').forEach(el => el.classList.toggle('hide', !admin));
+  scope = admin ? 'all' : 'mine';
+  $$('#scopeBox .tab').forEach(x => x.classList.toggle('on', x.dataset.scope === scope));
+}
+async function login(){
+  const fd = new FormData();
+  fd.append('username', $('#luser').value.trim());
+  fd.append('password', $('#lpwd').value);
+  $('#lerr').textContent = '';
+  try{
+    const r = await fetch('/api/login', {method:'POST', body:fd});
+    if(!r.ok){ $('#lerr').textContent = t('loginErr'); return; }
+    ME = await r.json();
+    $('#lpwd').value = '';
+    $('#loginMask').style.display = 'none';
+    $('#userName').textContent = ME.username;
+    applyRole();
+    /* loadMeta 是异步的：不 await 的话选项还没填好，参数记忆恢复不上 */
+    applyStatic(); await loadMeta(); resetJobs(); poll(); loadStats(); loadUsersSilent();
+    restoreDraft(); restorePref();
+    if(ME.must_change) setTimeout(()=>openPw(true), 300);
+  }catch(e){ $('#lerr').textContent = t('netErr'); }
+}
+
+/* ---------- 用户菜单 ---------- */
+$('#userBtn').onclick = e => { e.stopPropagation(); $('#userMenu').classList.toggle('open'); $('#langMenu').classList.remove('open'); };
+$('#langBtn').onclick = e => { e.stopPropagation(); $('#langMenu').classList.toggle('open'); $('#userMenu').classList.remove('open'); };
+document.addEventListener('click', ()=>{ $('#userMenu').classList.remove('open'); $('#langMenu').classList.remove('open'); });
+$('#miPw').onclick = ()=> openPw(false);
+$('#miUsers').onclick = ()=> openUsers();
+// 听感反馈：独立页面，员工听完选字母，服务端存票（不需要管理员权限）
+$('#miFb').onclick = ()=> { location.href = '/feedback'; };
+$('#miOut').onclick = async () => { await fetch('/api/logout', {method:'POST'}); ME = null; location.reload(); };
+
+function openPw(force){
+  $('#pwWho').textContent = ME ? ME.username : '';
+  $('#pwOld').value = $('#pwNew').value = $('#pwNew2').value = '';
+  $('#pwErr').textContent = '';
+  $('#pwMask').style.display = 'flex';
+}
+$('#pwCancel').onclick = ()=>{ $('#pwMask').style.display='none'; };
+$('#pwSave').onclick = async ()=>{
+  const o = $('#pwOld').value, n = $('#pwNew').value, n2 = $('#pwNew2').value;
+  if(n !== n2){ $('#pwErr').textContent = t('pwMismatch'); return; }
+  if(n.length < 6){ $('#pwErr').textContent = t('pwShort'); return; }
+  const fd = new FormData(); fd.append('old_password', o); fd.append('new_password', n);
+  try{
+    const r = await api('/api/password', {method:'POST', body:fd});
+    if(!r.ok){ const j = await r.json().catch(()=>({detail:'error'})); $('#pwErr').textContent = j.detail || 'error'; return; }
+    alert(t('pwOk')); location.reload();
+  }catch(e){ if(e.message !== '401') $('#pwErr').textContent = t('netErr'); }
+};
+
+/* ---------- 员工管理 ---------- */
+async function loadUsersSilent(){
+  if(!ME || ME.role !== 'admin') return;
+  try{ USERS = await (await api('/api/users')).json(); renderOwners(); }catch(e){}
+}
+async function openUsers(){
+  $('#nuErr').textContent = '';
+  $('#umMask').style.display = 'flex';
+  loadUsers();
+}
+async function loadUsers(){
+  try{
+    USERS = await (await api('/api/users')).json();
+    renderOwners();
+    $('#userRows').innerHTML = USERS.map(u=>`<tr>
+      <td>${esc(u.username)}</td>
+      <td>${esc(t(u.role==='admin'?'roleAdmin':'roleUser'))}</td>
+      <td><b style="color:var(--accent)">${u.today||0}</b></td>
+      <td>${u.jobs||0}</td>
+      <td>${u.last_login ? new Date(u.last_login*1000).toLocaleString() : '-'}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="mini" data-reset="${esc(u.username)}">${t('resetPw')}</button>
+        <button class="mini danger" data-del="${esc(u.username)}">${t('deleteUser')}</button>
+      </td></tr>`).join('');
+    $$('#userRows [data-reset]').forEach(b=>b.onclick=()=>resetPw(b.dataset.reset));
+    $$('#userRows [data-del]').forEach(b=>b.onclick=()=>delUser(b.dataset.del));
+  }catch(e){}
+}
+async function resetPw(name){
+  const np = prompt(t('newPwdPrompt')(name));
+  if(!np) return;
+  if(np.length < 6){ alert(t('pwShort')); return; }
+  const fd = new FormData(); fd.append('new_password', np);
+  try{
+    const r = await api(`/api/users/${encodeURIComponent(name)}/password`, {method:'POST', body:fd});
+    if(!r.ok){ const j = await r.json().catch(()=>({detail:'error'})); alert(j.detail||'error'); return; }
+    toast(t('resetDone')); loadUsers();
+  }catch(e){}
+}
+async function delUser(name){
+  if(name === ME.username){ alert(t('cannotDelSelf')); return; }
+  if(!confirm(t('confirmDel')(name))) return;
+  try{
+    const r = await api(`/api/users/${encodeURIComponent(name)}`, {method:'DELETE'});
+    if(!r.ok){ const j = await r.json().catch(()=>({detail:'error'})); alert(j.detail||'error'); return; }
+    loadUsers();
+  }catch(e){}
+}
+$('#umClose').onclick = ()=>{ $('#umMask').style.display='none'; };
+
+/* ---------- 产出明细 ---------- */
+$('#btnReport').onclick = ()=>{ $('#rpMask').style.display='flex'; loadReport(); };
+$('#rpClose').onclick = ()=>{ $('#rpMask').style.display='none'; };
+$('#rpDays').onchange = loadReport;
+$('#rpExport').onclick = ()=>{
+  const d = +$('#rpDays').value || 0;
+  window.location.href = '/api/stats/export?days=' + d;
+};
+async function loadReport(){
+  const days = +$('#rpDays').value || 3650;
+  let d;
+  try{ d = await (await api('/api/stats?days=' + days)).json(); }
+  catch(e){ $('#rpTable').innerHTML = `<span class="hint">${esc(t('reportFail'))}</span>`; return; }
+  const users = Object.keys(d).sort();
+  if(!users.length || !users.some(u => (d[u].jobs||0) > 0)){
+    $('#rpTable').innerHTML = `<span class="hint">${esc(t('reportEmpty'))}</span>`; return;
+  }
+  /* 表 1：按人汇总 */
+  let h = `<table><thead><tr><th>${esc(t('thUser'))}</th><th>${esc(t('thToday2'))}</th>`
+        + `<th>${esc(t('thTotal'))}</th><th>${esc(t('thAudio'))}</th><th>${esc(t('thGpu'))}</th>`
+        + `</tr></thead><tbody>`;
+  for(const u of users){
+    const r = d[u];
+    h += `<tr><td>${esc(u)}</td><td>${r.today||0}</td><td>${r.jobs||0}</td>`
+      +  `<td>${fmtDur(r.audio_seconds)}</td><td>${fmtDur(r.gen_seconds)}</td></tr>`;
+  }
+  h += '</tbody></table>';
+  /* 表 2：按日 × 人 */
+  const byDate = {};
+  for(const u of users){
+    for(const [day, n] of Object.entries(d[u].by_day || {})){
+      byDate[day] = byDate[day] || {}; byDate[day][u] = n;
+    }
+  }
+  const dates = Object.keys(byDate).sort().reverse();
+  if(dates.length){
+    h += `<div style="height:18px"></div><table><thead><tr><th>${esc(t('thDate'))}</th>`;
+    for(const u of users) h += `<th>${esc(u)}</th>`;
+    h += `<th>${esc(t('thSum'))}</th></tr></thead><tbody>`;
+    for(const day of dates){
+      let sum = 0;
+      h += `<tr><td>${esc(day)}</td>`;
+      for(const u of users){ const n = byDate[day][u] || 0; sum += n; h += `<td>${n || '-'}</td>`; }
+      h += `<td>${sum}</td></tr>`;
+    }
+    h += '</tbody></table>';
+  }
+  $('#rpTable').innerHTML = h;
+}
+
+/* ---------- 标杆案例试听 + 反馈 ---------- */
+/* 为什么放这里：韵律六维/CER 只证明"差多少"，证明不了"差在哪、值不值得修"。
+   员工每天在听，把"好听"拆成可勾选的维度，攒够后按标签排序就知道先修哪一项。 */
+let CASES = [], CUR_CASE = null, CUR_FB = null;
+const FB_TAGS = ['pace','intonation','emotion','clarity','pausing','timbre','natural','other'];
+const fbTagName = k => (I18N[UI].fbTag && I18N[UI].fbTag[k]) || k;
+
+const openCases = ()=>{ $('#caseMask').style.display='flex'; loadCases(); };
+$('#btnCases').onclick    = openCases;   // 任务队列那一栏
+$('#btnCasesTop').onclick = openCases;   // 页头导航（新加，入口不再藏两层）
+$('#csAdd').onclick    = ()=>{ showCaseUpload(); };
+$('#csExtract').onclick= ()=>{ manualExtractVoices(); };
+$('#upBack').onclick   = ()=>{ backCaseList(); };
+$('#upCancel').onclick = ()=>{ backCaseList(); };
+$('#upSubmit').onclick = submitCaseUpload;
+$('#csClose').onclick  = ()=>{ $('#caseMask').style.display='none'; stopCaseAudio(); };
+$('#csBack').onclick   = ()=>{ stopCaseAudio(); $('#caseDetail').style.display='none'; $('#caseTop').style.display='flex'; $('#caseList').style.display=''; caseScrollTop(); };
+$('#caseMask').onclick = e =>{ if(e.target.id === 'caseMask'){ $('#caseMask').style.display='none'; stopCaseAudio(); } };
+function stopCaseAudio(){ const a = $('#csAudio'); if(a){ a.pause(); a.removeAttribute('src'); a.load(); } }
+
+/* ---------- 案例上传 ----------
+   上传后后端会自动起后台线程跑韵律六维拆解（server.CASE_PROSODY），
+   所以这里不用再调 /analyze，回到列表等几秒刷新就能看到六维数据。 */
+/* 三个视图共用一个滚动容器，切换时必须回到顶部：
+   否则从列表底部点进详情，会直接落在「提交反馈」上，看不到音频和勾选区。 */
+function caseScrollTop(){
+  const b = $('#caseBody'); if(b) b.scrollTop = 0;
+}
+
+function showCaseUpload(){
+  stopCaseAudio();
+  $('#caseList').style.display='none';
+  $('#caseDetail').style.display='none';
+  $('#caseTop').style.display='none';
+  $('#caseUpload').style.display='';
+  $('#upErr').textContent=''; $('#upMsg').textContent='';
+  renderUpFiles();
+  caseScrollTop();
+}
+
+function backCaseList(){
+  $('#caseUpload').style.display='none';
+  $('#caseDetail').style.display='none';
+  $('#caseTop').style.display='flex';
+  $('#caseList').style.display='';
+  caseScrollTop();
+  loadCases();
+}
+
+/* 选完文件立刻回显「实际会按什么顺序拼」——多段音频的自然序（01/02 vs 1/2/10）
+   是最容易踩的坑，只靠一行说明文字挡不住。 */
+const natKey = s => String(s).replace(/(\d+)/g, m => String(m).padStart(12, '0'));
+function renderUpFiles(){
+  const sortNat = arr => [...arr].map(f=>f.name).sort((a,b)=>natKey(a)<natKey(b)?-1:natKey(a)>natKey(b)?1:0);
+  const a = sortNat($('#upAudio').files || []), x = sortNat($('#upText').files || []);
+  $('#upAudioList').textContent = a.length ? t('upSelAud')(a.length, a.join(' → ')) : t('upNoneAud');
+  $('#upTextList').textContent  = x.length ? t('upSelTxt')(x.length, x.join(' → ')) : t('upNoneTxt');
+  $('#upTextMode').textContent  = x.length === 1 ? t('upModeWhole')
+                                : x.length  > 1  ? t('upModeOne') : t('upModeAsr');
+  $('#upTextMode').className = 'hint' + (x.length > 1 && a.length && x.length !== a.length ? ' warn' : '');
+}
+$('#upAudio').onchange = renderUpFiles;
+$('#upText').onchange  = renderUpFiles;
+
+/* 用 XHR 而不是 fetch：多段音频动辄几十 MB，fetch 拿不到上传进度，
+   用户只能盯着一行「上传中…」干等，会以为卡死。这里给真实百分比。 */
+async function submitCaseUpload(){
+  const name = ($('#upName').value || '').trim();
+  const aud  = $('#upAudio').files;
+  if(!name || !aud.length){ $('#upErr').textContent = t('upNeed'); return; }
+  $('#upErr').textContent = '';
+  $('#upMsg').textContent = t('upDoing');
+  $('#upSubmit').disabled = true;
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('gender', $('#upGender').value);
+  fd.append('source', $('#upSource').value);
+  fd.append('tags', ($('#upTags').value || '').trim());
+  fd.append('note', ($('#upNote').value || '').trim());
+  for(const f of aud) fd.append('files', f);
+  for(const f of $('#upText').files) fd.append('text_files', f);
+  try{
+    await new Promise((res, rej)=>{
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/cases');
+      xhr.upload.onprogress = e =>{
+        if(!e.lengthComputable) return;
+        const mb = e.loaded/1048576, tot = e.total/1048576;
+        $('#upMsg').textContent = t('upPct')(Math.round(e.loaded/e.total*100), mb.toFixed(1), tot.toFixed(1));
+      };
+      xhr.onload = ()=> xhr.status>=200 && xhr.status<300
+        ? res(xhr.responseText) : rej(new Error(xhr.responseText.slice(0,200)));
+      xhr.onerror = ()=> rej(new Error('network'));
+      xhr.send(fd);
+    });
+    toast(t('upDone'));
+    $('#upName').value=''; $('#upTags').value=''; $('#upNote').value='';
+    $('#upAudio').value=''; $('#upText').value='';
+    renderUpFiles();
+    backCaseList();
+    // 🔴 链路闭环：上传完自动跑一次案例拆解，按声音聚类生成音色模板。
+    //    不 await —— 员工上传完就能继续干活，音色在后台补齐。
+    kickExtractVoices();
+  }catch(e){
+    $('#upErr').textContent = t('upFail') + '：' + (e.message || e);
+  }finally{
+    $('#upMsg').textContent = '';
+    $('#upSubmit').disabled = false;
+  }
+}
+
+/* 案例拆解 → 音色模板（不阻塞）。
+   后端跑 tools/mkcase_voices.py：按声音聚类 → 挑最佳片段 → 对齐文字稿
+   → 写 voices.json → 自动 reload。耗时几十秒到几分钟。
+   ⚠️ 这里刻意不 await：员工上传完就该能继续用，音色晚一点出现没关系。
+   ⚠️ 失败也不弹红字报错打断员工，只记在控制台 —— 拆解失败不阻塞生成。 */
+let _csExtracting = false;
+async function kickExtractVoices(manual){
+  if(_csExtracting) return;
+  const bar = $('#csExtractBar');
+  _csExtracting = true;
+  if(bar) bar.style.display = '';
+  try{
+    const r = await api('/api/cases/extract-voices', {method:'POST'});
+    const j = await r.json().catch(()=>({}));
+    if(j && j.added && j.added.length){
+      toast(t('csExtractDone')(j.added.length, j.added.join('、')));
+    }else if(manual){
+      toast(t('csExtractNone'));
+    }
+    // 重新拉 /api/meta + /api/voices 并重绘音色列表（后端 reload 后内存已更新）
+    await loadMeta();
+  }catch(e){
+    console.warn('案例音色自动拆解失败（不影响生成）:', e);
+    if(manual) toast(t('csExtractFail'));
+  }finally{
+    _csExtracting = false;
+    if(bar) bar.style.display = 'none';
+  }
+}
+async function manualExtractVoices(){ return kickExtractVoices(true); }
+
+async function loadCases(){
+  $('#caseDetail').style.display='none'; $('#caseUpload').style.display='none';
+  $('#caseTop').style.display='flex'; $('#caseList').style.display='';
+  $('#caseList').innerHTML = `<span class="hint">${esc(t('loading'))}</span>`;
+  let list;
+  try{ list = await (await api('/api/cases')).json(); }
+  catch(e){ $('#caseList').innerHTML = `<span class="hint">${esc(t('caseFail'))}</span>`; return; }
+  CASES = Array.isArray(list) ? list : [];
+  if(!CASES.length){
+    $('#caseList').innerHTML =
+      `<div class="empty">${esc(t('caseEmpty'))}</div>
+       <div style="margin-top:14px;text-align:center">
+         <button class="mini primary" id="emptyAdd">${esc(t('upBtn'))}</button>
+         <div class="hint" style="margin-top:8px">${esc(t('upTip'))}</div>
+       </div>`;
+    $('#emptyAdd').onclick = ()=>showCaseUpload();
+    return;
+  }
+  $('#caseList').innerHTML = CASES.map(c=>{
+    const n = c.fb_count || 0, r = c.fb_rating;
+    const top = Object.entries(c.fb_tags || {}).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    const tg = top.map(([k,v])=>`<span class="fbtag">${esc(fbTagName(k))} ${v}</span>`).join('');
+    return `<div class="crow" data-cid="${esc(c.id)}">
+      <div>
+        <div class="nm">${esc(c.name || c.id)}</div>
+        <div class="mt">${esc(t('caseMeta')(c.gender||'-', c.source, c.total_dur))}
+          ${t('caseExtra')(c.seg_count, c.cps)}</div>
+        <div class="fbtags">${tg}</div>
+      </div>
+      <div class="rt">${n ? esc(t('fbSummary')(n, r)) : ''}</div>
+    </div>`;
+  }).join('');
+  $$('#caseList .crow').forEach(el => el.onclick = ()=>openCase(el.dataset.cid));
+}
+
+async function openCase(cid){
+  const c = CASES.find(x=>x.id === cid);
+  if(!c) return;
+  CUR_CASE = c;
+  $('#caseList').style.display='none'; $('#caseDetail').style.display='';
+  caseScrollTop();
+  $('#csName').textContent = c.name || cid;
+  $('#csMeta').textContent = t('caseMeta')(c.gender||'-', c.source, c.total_dur);
+  $('#csErr').textContent = ''; $('#csNote').value = ''; $('#csSummary').textContent = '';
+  $('#csAudio').src = `/api/cases/${encodeURIComponent(cid)}/audio`;
+  renderFbTags([], null);
+  try{
+    CUR_FB = await (await api(`/api/cases/${encodeURIComponent(cid)}/feedback`)).json();
+  }catch(e){ CUR_FB = null; }
+  if(CUR_FB){
+    const mine = CUR_FB.mine;
+    renderFbTags(mine ? (mine.tags||[]) : [], mine ? mine.rating : null);
+    if(mine && mine.note) $('#csNote').value = mine.note;
+    $('#csSummary').textContent = (CUR_FB.fb_count ? t('fbSummary')(CUR_FB.fb_count, CUR_FB.fb_rating) + ' · ' : '')
+      + (mine ? t('fbMine') : '');
+  }
+}
+
+function renderFbTags(sel, rating){
+  $('#csTags').innerHTML = FB_TAGS.map(k=>
+    `<div class="chip ${sel.includes(k)?'on':''}" data-tag="${k}">${esc(fbTagName(k))}</div>`).join('');
+  $$('#csTags .chip').forEach(el => el.onclick = ()=> el.classList.toggle('on'));
+  $('#csStars').innerHTML = [1,2,3,4,5].map(i=>
+    `<span class="star ${rating && i<=rating?'on':''}" data-star="${i}">★</span>`).join('');
+  $$('#csStars .star').forEach(el => el.onclick = ()=>{
+    const v = +el.dataset.star;
+    $$('#csStars .star').forEach(s => s.classList.toggle('on', +s.dataset.star <= v));
+    $('#csStars').dataset.rating = v;
+  });
+  $('#csStars').dataset.rating = rating || '';
+}
+
+$('#csSubmit').onclick = async ()=>{
+  if(!CUR_CASE) return;
+  const tags = $$('#csTags .chip.on').map(e=>e.dataset.tag);
+  const rating = $('#csStars').dataset.rating ? +$('#csStars').dataset.rating : null;
+  const note = $('#csNote').value.trim();
+  if(!tags.length && !rating && !note){ $('#csErr').textContent = t('fbNeed'); return; }
+  try{
+    const r = await api(`/api/cases/${encodeURIComponent(CUR_CASE.id)}/feedback`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({tags, rating, note})
+    });
+    if(!r.ok){ const j = await r.json().catch(()=>({detail:t('fbFail')})); $('#csErr').textContent = j.detail || t('fbFail'); return; }
+    $('#csErr').textContent = '';
+    toast(t('fbSaved'));
+    CASES = [];
+    loadCases();                       /* 回到列表，票数立刻更新 */
+  }catch(e){ if(e.message !== '401') $('#csErr').textContent = t('fbFail'); }
+};
+
+$('#nuCreate').onclick = async ()=>{
+  const name = $('#nuName').value.trim(), pwd = $('#nuPwd').value;
+  if(!name || pwd.length < 6){ $('#nuErr').textContent = pwd.length < 6 ? t('pwShort') : t('needName'); return; }
+  const fd = new FormData();
+  fd.append('username', name); fd.append('password', pwd); fd.append('role', $('#nuRole').value);
+  try{
+    const r = await api('/api/users', {method:'POST', body:fd});
+    if(!r.ok){ const j = await r.json().catch(()=>({detail:'error'})); $('#nuErr').textContent = j.detail||'error'; return; }
+    $('#nuErr').textContent = t('created')(name);
+    $('#nuName').value = ''; $('#nuPwd').value = '';
+    loadUsers();
+  }catch(e){}
+};
+
+/* ---------- 草稿 ---------- */
+let draftTimer = null;
+function saveDraft(){
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(()=>{
+    const title = $('#title').value, text = $('#text').value;
+    if(title || text) localStorage.setItem(DRAFT, JSON.stringify({title, text}));
+    else localStorage.removeItem(DRAFT);
+  }, 600);
+}
+function restoreDraft(){
+  try{
+    const d = JSON.parse(localStorage.getItem(DRAFT) || 'null');
+    if(d && (d.title || d.text)){
+      $('#title').value = d.title || ''; $('#text').value = d.text || '';
+      renderCount(); toast(t('draftSaved'));
+    }
+  }catch(e){}
+}
+
+/* ---------- 生成参数记忆 ----------
+   员工每天都用同一套设置（同一音色、韩语、同一情感语速），
+   没有记忆的话每天要点 5 次下拉。提交时记一次，下次自动恢复。 */
+function savePref(){
+  try{
+    const g = id => { const e = $(id); return e ? e.value : ''; };
+    localStorage.setItem(PREF, JSON.stringify({
+      mode: (typeof mode !== 'undefined' ? mode : 'clone'),
+      speaker: g('#speaker'), voice: g('#voice'), language: g('#language'),
+      emotion: g('#emotion'), speed: g('#speed')
+    }));
+  }catch(e){}
+}
+function restorePref(){
+  try{
+    const p = JSON.parse(localStorage.getItem(PREF) || 'null');
+    if(!p) return;
+    if(p.mode && p.mode !== (typeof mode !== 'undefined' ? mode : 'clone')){
+      const tab = document.querySelector('.tab[data-mode="'+p.mode+'"]');
+      if(tab) tab.click();          /* 切 tab 会同步显示对应面板 */
+    }
+    const set = (id, v) => { const e = $(id); if(e && v && [...e.options].some(o=>o.value===v)) e.value = v; };
+    set('#language', p.language);
+    set('#speaker',  p.speaker);  if(p.speaker && typeof spkTouched !== 'undefined') spkTouched = true;
+    set('#voice',    p.voice);
+    set('#emotion',  p.emotion);
+    set('#speed',    p.speed);
+  }catch(e){}
+}
+
+/* ---------- 提交 ---------- */
+function setMode(m){
+  mode = m;
+  $$('.tab[data-mode]').forEach(x=>x.classList.toggle('on', x.dataset.mode === m));
+  const pc = $('#pane-custom'), pk = $('#pane-clone');
+  if(pc) pc.style.display = m==='custom' ? '' : 'none';
+  if(pk) pk.style.display = m==='clone'  ? '' : 'none';
+  // 语气指令只有千问预设音色用得上：克隆没有 instruct 通道，填了不生效
+  const ib = $('#instructBox'); if(ib) ib.style.display = m==='custom' ? '' : 'none';
+}
+$$('.tab[data-mode]').forEach(tab => { tab.onclick = () => setMode(tab.dataset.mode); });
+$$('#scopeBox .tab').forEach(tab=>{
+  tab.onclick = () => {
+    $$('#scopeBox .tab').forEach(x=>x.classList.remove('on'));
+    tab.classList.add('on'); scope = tab.dataset.scope;
+    page = 1; resetJobs(); poll(); loadStats();
+  };
+});
+$('#title').oninput = saveDraft;
+$('#text').oninput = () => { renderCount(); saveDraft(); };
+/* Ctrl/Cmd + Enter 直接提交：员工粘完文案不用再去摸鼠标 */
+$('#text').addEventListener('keydown', e => {
+  if((e.ctrlKey || e.metaKey) && e.key === 'Enter'){ e.preventDefault(); $('#submit').click(); }
+});
+/* 语速变了，预估时长要跟着变 */
+$('#speed').addEventListener('change', renderCount);
+$('#maxChars').oninput = renderCount;
+$('#language').onchange = () => { outLangTouched = true; renderChips(); syncSpeakerToLang(); renderCount(); };
+$('#speaker').onchange = () => { spkTouched = true; };   /* 手动挑过就不再被语言切换覆盖 */
+/* 性别二选一：点一下就落到该性别下实测最佳的克隆音色 */
+$$('#gsel .gbtn').forEach(b => { b.onclick = () => applyGender(b.dataset.g); });
+$('#voice').onchange = syncGender;   /* 高级里手改音色后，按钮高亮跟着走 */
+const _vs = $('#vsel');
+if(_vs) _vs.onchange = () => { applyVsel(_vs.value); markGender(genderOf(_vs.value)); updateGpick(); };
+$('#q').oninput = debounce(()=>{ page = 1; resetJobs(); poll(); }, 350);
+$('#fOwner').onchange = ()=>{ page = 1; resetJobs(); poll(); };
+$('#fStatus').onchange = ()=>{ page = 1; resetJobs(); poll(); };
+function debounce(fn, ms){ let x; return (...a)=>{ clearTimeout(x); x=setTimeout(()=>fn(...a), ms); }; }
+
+/* 提交反馈写在按钮下面，不再用 alert 弹窗打断：
+   弹窗一关，员工就不知道自己到底提交成功没有，失败时也不知文案还在不在。 */
+function setSubmitState(cls, msg){
+  const st = $('#submitState'); if(!st) return;
+  st.className = 'submit-state' + (msg ? ' show' : '') + (cls ? ' ' + cls : '');
+  st.textContent = msg || '';
+}
+$('#submit').onclick = async () => {
+  const text = $('#text').value.trim();
+  const btn = $('#submit');
+  if(!text){ setSubmitState('bad', t('needText')); return; }
+  if(mode==='clone'){
+    if(!$('#voice').value){ setSubmitState('bad', t('needVoice')); return; }
+    if(!voiceOk($('#voice').value)){ setSubmitState('bad', t('voiceBad')); return; }
+  }
+  const fd = new FormData();
+  fd.append('title', $('#title').value.trim());
+  fd.append('text', text);
+  fd.append('mode', mode);
+  fd.append('language', $('#language').value);
+  fd.append('speaker', $('#speaker').value);
+  fd.append('instruct', $('#instruct').value);
+  fd.append('voice', $('#voice').value);
+  fd.append('max_chars', $('#maxChars').value);
+  fd.append('batch_size', $('#batchSize').value);
+  fd.append('speed', ($('#speed') && $('#speed').value) || '1.0');
+  fd.append('emotion', ($('#emotion') && $('#emotion').value) || 'standard');
+  setSubmitState('', '');
+  btn.disabled = true; btn.textContent = t('submitting');
+  try{
+    await api('/api/jobs', {method:'POST', body:fd});
+    savePref();                       /* 记住这次的设置，下次打开自动恢复 */
+    $('#title').value = ''; $('#text').value = '';
+    localStorage.removeItem(DRAFT);
+    renderCount(); page = 1; resetJobs(); poll(); loadStats();
+    setSubmitState('ok', t('submitOk'));
+  }catch(e){ if(e.message !== '401') setSubmitState('bad', t('submitFail') + ((e && e.message) || e)); }
+  btn.disabled = false; btn.textContent = t('submit');
+};
+/* 清空是唯一会丢东西的操作，必须先问一句。 */
+$('#clear').onclick = ()=>{
+  if(!$('#text').value.trim() && !$('#title').value.trim()) return;
+  if(!confirm(t('clearConfirm'))) return;
+  $('#text').value=''; $('#title').value=''; localStorage.removeItem(DRAFT);
+  renderCount(); setSubmitState('', '');
+};
+
+/* 手动录入音色的整套逻辑（probeDuration / #vfile / #vupload）随卡片一起移除：
+   音色现在只有一条来源 —— 顶部「标杆案例 → + 上传案例」，
+   由服务端自动挑最佳 15 秒并对齐文字稿。 */
+
+/* ---------- 任务列表（增量更新，绝不重建 audio） ---------- */
+function jobSkeleton(){
+  return `<div class="top">
+      <div><span class="badge"></span><span class="own" style="font-size:12px;color:var(--dim);margin-left:8px"></span></div>
+      <div class="time" style="font-size:12px;color:var(--dim)"></div>
+    </div>
+    <div class="ttl"></div>
+    <div class="pv"></div>
+    <div class="dyn"></div>
+    <div class="media"></div>`;
+}
+/* 文案默认只显示摘要，点"展开全文"才拉取完整内容——长文案不会撑爆列表 */
+/*  列表每 3 秒轮询刷新一次。textContent / innerHTML 赋值会销毁原有节点，
+    把用户正在拖选的文字选区一起弄丢，所以内容没变就一律不写 DOM。 */
+function setText(el, v){
+  if(!el) return;
+  v = (v == null ? '' : String(v));
+  if(el.textContent !== v) el.textContent = v;
+}
+/* 用户当前的选区是否落在这个元素内部 */
+function hasSelIn(el){
+  const s = window.getSelection && window.getSelection();
+  if(!s || s.isCollapsed || !s.anchorNode) return false;
+  return el.contains(s.anchorNode) || (s.focusNode && el.contains(s.focusNode));
+}
+function renderPreview(el, j){
+  const pv = el.querySelector('.pv');
+  if(!pv) return;
+  const meta = ' · ' + t('modeLabel')(j);
+  const opened = pv.dataset.open === '1';
+  let html;
+  if(opened && pv.dataset.full != null){
+    pv.classList.add('open');
+    html = esc(pv.dataset.full) + `<span class="pvtog">${t('collapse')}</span>`;
+  }else{
+    pv.classList.remove('open');
+    html = esc(j.preview || '') + esc(meta) + `<span class="pvtog">${t('expand')}</span>`;
+  }
+  /* 内容没变、或用户正在这块里拖选取字，就跳过重建（下一轮轮询再补，最多晚 3 秒） */
+  if(pv.dataset.sig === html || hasSelIn(pv)) return;
+  pv.dataset.sig = html;
+  pv.innerHTML = html;
+  const tog = pv.querySelector('.pvtog');
+  if(!tog) return;
+  tog.onclick = async (ev)=>{
+    ev.stopPropagation();
+    if(pv.dataset.open === '1'){ pv.dataset.open = '0'; renderPreview(el, j); return; }
+    if(pv.dataset.full == null){
+      tog.textContent = '…';
+      try{
+        const r = await api('/api/jobs/' + j.id);
+        if(!r.ok) return;
+        const d = await r.json();
+        pv.dataset.full = d.text || d.preview || '';
+      }catch(e){ return; }
+    }
+    pv.dataset.open = '1';
+    renderPreview(el, j);
+  };
+}
+function updateJob(el, j){
+  el.dataset.jid = j.id;
+  const b = el.querySelector('.badge');
+  b.className = 'badge ' + j.status;
+  setText(b, t('st')[j.status] || j.status);
+  setText(el.querySelector('.own'),
+    (ME && ME.role === 'admin' && scope === 'all' && j.owner) ? t('by')(j.owner) : '');
+  setText(el.querySelector('.time'), new Date(j.created_at*1000).toLocaleString());
+  setText(el.querySelector('.ttl'), j.title || t('untitled'));
+  renderPreview(el, j);
+
+  let dyn = '';
+  const p = j.progress || {};
+  if(j.status === 'running'){
+    /* 段数少时批量一次跑完，段进度会一闪而过；用"已用时间/(已用+预计)"
+       补一条平滑曲线，保证进度条始终在动、等待时间始终可见。 */
+    const total = p.total || 0, done = p.done || 0;
+    const bs = j.batch_size || 16;
+    const totalBatch = total ? Math.ceil(total / bs) : 0;
+    const curBatch = total ? Math.min(Math.floor(done / bs) + 1, totalBatch) : 0;
+    const el2 = j.elapsed_seconds || 0, eta = j.eta_seconds;
+    let pct = total ? (done / total * 100) : 0;
+    if(eta > 0 && el2 > 0) pct = Math.max(pct, el2 / (el2 + eta) * 100);
+    pct = Math.max(0, Math.min(96, pct));
+    const stageKey = {preparing:'stagePreparing', generating:'stageGenerating',
+                      merging:'stageMerging', encoding:'stageEncoding',
+                      loading:'stageLoading'}[j.stage] || 'stageGenerating';
+    let etaTxt = '';
+    if(eta > 0) etaTxt = t('etaFmt')(fmtDur(eta));
+    else if(eta === 0) etaTxt = t('almostDone');
+    const line1 = [t(stageKey),
+                   totalBatch ? t('batchFmt')(curBatch, totalBatch) : '',
+                   total ? t('progFmt')(done, total) : '',
+                   t('pctFmt')(Math.round(pct))].filter(Boolean).join(' · ');
+    const line2 = [etaTxt, el2 > 0 ? t('elapsedFmt')(fmtDur(el2)) : ''].filter(Boolean).join(' · ');
+    dyn = `<div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div>
+           <div class="stat">${esc(line1)}</div>
+           ${line2 ? `<div class="stat">${esc(line2)}</div>` : ''}`;
+  } else if(j.status === 'queued'){
+    dyn = `<div class="stat">${t('queueAhead')(j.queue_ahead||0)}</div>`;
+  }
+  if(j.error) dyn += `<div class="stat" style="color:var(--err)">${esc(j.error)}</div>`;
+  const s = j.stats || {};
+  if(s.audio_seconds) dyn += `<div class="stat">${t('statFmt')(s)}</div>`;
+  const dynBox = el.querySelector('.dyn');
+  /* 同 .pv：内容未变或用户正在选字就不重写；状态真变了下一轮自然会补上 */
+  if(dynBox.dataset.sig !== dyn && !hasSelIn(dynBox)){
+    dynBox.dataset.sig = dyn;
+    dynBox.innerHTML = dyn;
+  }
+
+  const m = el.querySelector('.media');
+  // 分块输出：每块一个独立 mp3（块间不拼接），全部列出来可单独播放/下载
+  const files = j.files || [];
+  const sig = j.id + '|' + files.map(f=>f.path).join(',') + '|' + (j.wav||'') + (j.mp3||'');
+  if((j.wav || files.length) && m.dataset.jid !== sig){
+    m.dataset.jid = sig;
+    let mediaHtml = '';
+    if(files.length){
+      mediaHtml = files.map((f, i) => `
+        <div class="chunkRow" style="margin-bottom:8px">
+          <div class="stat">${t('chunkLabel')(i + 1, files.length, f.seconds || 0)}</div>
+          <audio controls preload="metadata" src="/api/download/${encodeURIComponent(f.path)}"></audio>
+          <a href="/api/download/${encodeURIComponent(f.path)}" download><button>${t('dlChunk')(i + 1)}</button></a>
+        </div>`).join('');
+    } else {
+      const play = j.mp3 || j.wav;
+      mediaHtml = `<audio controls preload="metadata" src="/api/download/${play}"></audio>`;
+    }
+    if(files.length > 1){
+      mediaHtml += `<div class="stat">${t('chunkHint')(files.length)}</div>`;
+    }
+    /* 「并排听案例」：指标只说「差多少」，耳朵才知道「差在哪」。
+       取这个音色对标的那条案例（音色元数据的 bench_case），
+       和成品并排放两个播放器，员工不用去别处翻案例库。 */
+    const _cid = benchCaseOf(j);
+    m.innerHTML = mediaHtml
+      + (_cid ? `<div class="row" style="margin-top:6px">
+           <button class="mini" data-cmp="${j.id}" data-cid="${esc(_cid)}">${t('cmpCase')}</button>
+         </div><div class="cmpbox" id="cmp_${j.id}" style="display:none;margin-top:8px"></div>` : '')
+      + `
+      <div class="row" style="margin-top:6px">
+        ${j.wav?`<a href="/api/download/${j.wav}" download><button>${t('dlWav')}</button></a>`:''}
+        ${(j.mp3 && !files.length)?`<a href="/api/download/${j.mp3}" download><button>${t('dlMp3')}</button></a>`:''}
+        <button class="mini danger" data-deljob="${j.id}">${t('delJob')}</button>
+        ${j.status==='error'
+          ?`<button class="mini" data-retry="${j.id}">${t('retry')}</button>`
+          :(j.status==='done'
+            /* 「换个版本」= 换新种子重出。模型有随机性，同一段文案不同种子
+               效果不一样；原来只有「重试」且它连种子一起复制，出的是逐字节
+               相同的音频，等于没有。这是员工遇到「某段别扭」时唯一的自救手段。 */
+            ?`<button class="mini" data-retry="${j.id}" title="${t('altVerTip')}">${t('altVer')}</button>`
+            :'')}
+      </div>`;
+    const db = m.querySelector('[data-deljob]');
+    db.onclick = async ()=>{
+      if(!confirm(t('confirmDelJob')(j.title || t('untitled')))) return;
+      try{
+        const r = await api(`/api/jobs/${j.id}`, {method:'DELETE'});
+        if(!r.ok) return;
+        const n = jobNodes.get(j.id); if(n){ n.el.remove(); jobNodes.delete(j.id); }
+        loadStats();
+      }catch(e){}
+    };
+    const cb = m.querySelector('[data-cmp]');
+    if(cb) cb.onclick = ()=>{
+      const box = m.querySelector('#cmp_' + j.id);
+      if(!box) return;
+      const cid = cb.dataset.cid;
+      if(box.style.display === 'none'){
+        box.innerHTML = `
+          <div class="stat" style="margin-bottom:4px">${esc(t('cmpCaseName')((CASEINDEX[cid]||{}).name || cid))}</div>
+          <audio controls preload="metadata" src="/api/cases/${encodeURIComponent(cid)}/audio"></audio>
+          <div class="hint">${esc(t('cmpTip'))}</div>`;
+        box.style.display = '';
+      }else{
+        box.style.display = 'none'; box.innerHTML = '';
+      }
+    };
+    const rb = m.querySelector('[data-retry]');
+    if(rb) rb.onclick = async ()=>{
+      try{
+        // new_seed=1：换一个新种子。后端默认就是 1，这里显式传，防止以后默认改了
+        // 又把「换个版本」变回「出一模一样的音频」。
+        const alt = j.status === 'done';
+        const fd2 = new FormData(); fd2.append('new_seed', '1');
+        const r = await api(`/api/jobs/${j.id}/retry`, {method:'POST', body:fd2});
+        if(!r.ok){ const d = await r.json().catch(()=>({detail:t('noRetry')})); toast(d.detail||t('noRetry')); return; }
+        if(alt) toast(t('altVerDone'));
+        resetJobs(); poll();
+      }catch(e){}
+    };
+  }
+}
+function resetJobs(){
+  jobNodes.clear();
+  $('#jobs').innerHTML = `<div class="empty">${t('noJobs')}</div>`;
+}
+function gotoPage(p){
+  page = Math.max(1, Math.min(p, pages));
+  resetJobs(); poll();
+}
+function renderPager(){
+  const el = $('#pager');
+  if(!totalJobs){ el.classList.add('hide'); el.innerHTML = ''; return; }
+  el.classList.remove('hide');
+  const SIZES = [10, 20, 50, 100, 300, 500, 1000];
+  if(!SIZES.includes(pageSize)) SIZES.push(pageSize);
+  SIZES.sort((a,b)=>a-b);
+  const opts = SIZES.map(n => `<option value="${n}"${n===pageSize?' selected':''}>${n}</option>`).join('');
+  el.innerHTML =
+    `<span class="pinfo">${esc(t('pagerTotal')(totalJobs))} · ${esc(t('pagerPage')(page, pages))}</span>` +
+    `<span class="pbtns">` +
+      `<button class="mini" id="pgFirst"${page<=1?' disabled':''}>«</button>` +
+      `<button class="mini" id="pgPrev"${page<=1?' disabled':''}>${esc(t('prevPage'))}</button>` +
+      `<button class="mini" id="pgNext"${page>=pages?' disabled':''}>${esc(t('nextPage'))}</button>` +
+      `<button class="mini" id="pgLast"${page>=pages?' disabled':''}>»</button>` +
+    `</span>` +
+    `<span class="psize">${esc(t('perPage'))}<select id="pgSize">${opts}</select></span>`;
+  $('#pgFirst').onclick = ()=>gotoPage(1);
+  $('#pgPrev').onclick  = ()=>gotoPage(page - 1);
+  $('#pgNext').onclick  = ()=>gotoPage(page + 1);
+  $('#pgLast').onclick  = ()=>gotoPage(pages);
+  $('#pgSize').onchange = ()=>{
+    pageSize = +$('#pgSize').value;
+    localStorage.setItem('tts_page_size', pageSize);
+    page = 1; resetJobs(); poll();
+  };
+}
+async function poll(){
+  if(!ME) return;
+  const q = encodeURIComponent($('#q').value.trim());
+  const owner = encodeURIComponent($('#fOwner').value || '');
+  const status = encodeURIComponent($('#fStatus').value || '');
+  try{
+    const d = await (await api(`/api/jobs?scope=${scope}&q=${q}&owner=${owner}&status=${status}`
+                               + `&page=${page}&page_size=${pageSize}`)).json();
+    const list = d.items || [];
+    totalJobs = d.total || 0;
+    pages = d.pages || 1;
+    if(page > pages) page = pages;      /* 删任务后可能越界 */
+    renderPager();
+    const box = $('#jobs');
+    if(!list.length){
+      if(!jobNodes.size){ box.innerHTML = `<div class="empty">${t('noJobs')}</div>`; }
+      else { for(const [id,n] of jobNodes){ n.el.remove(); jobNodes.delete(id); } box.innerHTML = `<div class="empty">${t('noJobs')}</div>`; }
+      return;
+    }
+    if(box.querySelector('.empty')) box.innerHTML = '';
+    list.forEach((j, idx) => {
+      let n = jobNodes.get(j.id);
+      if(!n){
+        n = {el: document.createElement('div')};
+        n.el.className = 'job';
+        n.el.innerHTML = jobSkeleton();
+        jobNodes.set(j.id, n);
+        let anchor = null;
+        for(let k = idx + 1; k < list.length; k++){
+          const nx = jobNodes.get(list[k].id);
+          if(nx){ anchor = nx.el; break; }
+        }
+        if(anchor) box.insertBefore(n.el, anchor); else box.appendChild(n.el);
+      }
+      updateJob(n.el, j);
+    });
+    const ids = new Set(list.map(j=>j.id));
+    for(const [id, n] of Array.from(jobNodes)){
+      if(!ids.has(id)){ n.el.remove(); jobNodes.delete(id); }
+    }
+  }catch(e){}
+}
+async function loadStats(){
+  if(!ME) return;
+  try{
+    const d = await (await api('/api/stats')).json();
+    let td = 0, n = 0, sec = 0;
+    for(const k in d){ td += d[k].today||0; n += d[k].jobs||0; sec += d[k].audio_seconds||0; }
+    $('#statsLine').textContent = t('statsFmt')(td, n, (sec/3600).toFixed(1));
+  }catch(e){}
+}
+
+/* ---------- 启动 ---------- */
+applyStatic();
+renderChips();
+renderCount();
+(function boot(){
+  fetch('/api/me').then(async r => {
+    if(r.status === 401){ showLogin(''); return; }
+    ME = await r.json();
+    $('#userName').textContent = ME.username;
+    applyRole();
+    /* loadMeta 是异步的：不 await 的话选项还没填好，参数记忆恢复不上 */
+    applyStatic(); await loadMeta(); resetJobs(); poll(); loadStats(); loadUsersSilent();
+    restoreDraft(); restorePref();
+    if(ME.must_change) setTimeout(()=>openPw(true), 300);
+  }).catch(()=>showLogin(t('netErr')));
+})();
+setInterval(()=>{ if(ME) poll(); }, 3000);
+setInterval(()=>{ if(ME) loadStats(); }, 30000);
+</script>
+</body>
+</html>

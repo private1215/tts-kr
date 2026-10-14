@@ -1,0 +1,72 @@
+{
+ "items": [
+  {
+   "id": "ctrl_pitch_20261014g",
+   "dim": "热身",
+   "title": "先热个身：两段声音，音调一样高吗",
+   "desc": "依次听第 1 段和第 2 段。\n\n🎯 哪一段的**声音更高**（更尖）？\n\n✅ 凭耳朵，不用想太多。",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": "k12_c1.mp3", "label": "第 1 段更高"},
+    {"key": "B", "file": "k12_c2.mp3", "label": "第 2 段更高"},
+    {"key": "C", "file": null, "label": "两段一样高"},
+    {"key": "D", "file": null, "label": "没听清"}
+   ]
+  },
+  {
+   "id": "m_head_ab_20261014g",
+   "dim": "男声·开头",
+   "title": "男声·开头：哪段更像真人",
+   "desc": "两段男声，念的是**同一句话**，都取自稿子**开头**部分。\n\n🎯 哪一段**更像真人在说话**？",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": "k12_v5_head.mp3", "label": "第 1 段更像真人"},
+    {"key": "B", "file": "k12_v7_head.mp3", "label": "第 2 段更像真人"},
+    {"key": "C", "file": null, "label": "两段都像真人"},
+    {"key": "D", "file": null, "label": "两段都不像真人"},
+    {"key": "E", "file": null, "label": "没听清"}
+   ]
+  },
+  {
+   "id": "m_tail_ab_20261014g",
+   "dim": "男声·后半段",
+   "title": "男声·后半段：哪段更像真人",
+   "desc": "还是这两条声音，这次听**后面**的部分（约第 5 分钟处）。\n\n🎯 哪一段**更像真人在说话**？",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": "k12_v5_tail.mp3", "label": "第 1 段更像真人"},
+    {"key": "B", "file": "k12_v7_tail.mp3", "label": "第 2 段更像真人"},
+    {"key": "C", "file": null, "label": "两段都像真人"},
+    {"key": "D", "file": null, "label": "两段都不像真人"},
+    {"key": "E", "file": null, "label": "没听清"}
+   ]
+  },
+  {
+   "id": "m_vs_el_20261014g",
+   "dim": "男声·对标",
+   "title": "男声：跟标杆比，哪段更像真人",
+   "desc": "换两段男声，还是**同一句话**、同样的位置。\n\n🎯 哪一段**更像真人在说话**？",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": "k12_v7_tail.mp3", "label": "第 1 段更像真人"},
+    {"key": "B", "file": "k12_el_tail.mp3", "label": "第 2 段更像真人"},
+    {"key": "C", "file": null, "label": "两段都像真人"},
+    {"key": "D", "file": null, "label": "两段都不像真人"},
+    {"key": "E", "file": null, "label": "没听清"}
+   ]
+  },
+  {
+   "id": "m_ship_20261014g",
+   "dim": "男声·能否上线",
+   "title": "这段能直接发给客户用吗",
+   "desc": "单独听这一段（前几题里的第 2 段）。\n\n🎯 按你平时发货的标准，这段**能不能直接用**？",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": "k12_v7_tail.mp3", "label": "可以直接用"},
+    {"key": "B", "file": null, "label": "还差一点，但接近了"},
+    {"key": "C", "file": null, "label": "还是不行"},
+    {"key": "D", "file": null, "label": "没听清"}
+   ]
+  }
+ ]
+}

@@ -58,17 +58,18 @@ DEFAULT_F0 = {"f": 276.0, "m": 197.7}
 #    所以变调后高频要压到 -6.5dB。未变调时保持默认 -4dB。
 #    ❌ rubberband 的 formant=preserved（只升基频不动声道）**不可用**：
 #       频谱平坦度 0.050 → 0.015（EL 0.042），声音发闷发假。
-# 🔴 男声 EQ 三段式（2026-10-14 用 eq_search.py 网格搜出来的，不是拍脑袋）：
-#    原单段 highshelf(4000,-4) 只会把高频整体压掉，结果能量全堆在 100~1kHz：
-#      我们 100-1k 0.763 / 1k-4k 0.225，而 EL 是 0.712 / 0.275 —— 听感"厚而闷、不清晰"。
-#    三段：lowshelf 800 -1.0（减低频堆积）+ highshelf 1500 +1.5（补中频清晰度）
-#          + highshelf 4000 %g（压变调搬上来的高频）
-#    网格搜索结果（24k 口径 60s 频段能量 L1 偏差）：
-#      基线 0.1026 → 单提中频 0.033 → **加低频衰减+高频回压 0.0060**（flat 也 0.0378→0.0389）
-#    变调会把频谱整体搬高（hf 0.0064→0.0185，EL 只有 0.0104），
-#    所以变调时高频那一档要从 -4dB 加深到 -8dB。
-EQ_MALE_TMPL = ("lowshelf=f=800:g=-1.0,highshelf=f=1500:g=1.5,"
-                "highshelf=f=4000:g=%g,lowpass=f=14000")
+# 🔴 男声 EQ 四段式（2026-10-14 第五轮网格搜出来的，**全篇/中段口径**）：
+#    equalizer f=800 w=1.2 -2dB（削鼻音共振区）
+#    + highshelf 1500 +2.5dB（补 1~2k 存在感）
+#    + highshelf 2500 -1.5dB（压 2~4k）
+#    + highshelf 4000 %g（压 4~8k）
+#    + lowpass 14000
+#    搜索口径 [60s,360s] 对 2 条 EL 男声案例均值，L1 0.1777 → **0.0976**。
+#    ⚠️ 口径教训：这个数**不能**用前 60s 搜（分窗变调后第一窗比例最大，
+#       前 60s 是最坏样本，会过度补偿）。见 deploy/eq_search5.py 与 band_full.py。
+#    未变调（--no-pitch）时高频不过量，%g 用 -4；变调用 -9.5。
+EQ_MALE_TMPL = ("equalizer=f=800:t=q:w=1.2:g=-2,highshelf=f=1500:g=2.5,"
+                "highshelf=f=2500:g=-1.5,highshelf=f=4000:g=%g,lowpass=f=14000")
 # EL 实测 F0 中位（librosa.pyin / 16k 口径，与 tools 里的诊断同口径，不可换算法）：
 #   男（13 条 EL 案例）190.5~205.3 → 均值 197.7
 #   女（5 条 SOLA 案例）271.0~282.1 → 均值 276.0
@@ -128,6 +129,12 @@ def syl_rates(y, sr):
             if voiced > 0:
                 out.append(peaks / (voiced / 100.0))
             peaks, voiced = 0, 0
+    # 🔴 短文本（< 60s）一个整窗都凑不出来，out 会是空的，
+    #    下面 np.concatenate([]) 直接崩（P1 冒烟 172 字/20s 实测触发）。
+    #    只在**一个都没有**时补这个不足一窗的尾巴 —— 长篇仍按整窗切，
+    #    否则会给 470s 的成品多加一个 50s 的碎窗，改变已验证的节奏分布。
+    if not out and voiced > 0:
+        out.append(peaks / (voiced / 100.0))
     return out
 
 
@@ -158,6 +165,9 @@ def main():
                     help="跳过 F0 对齐（对照组用）")
     ap.add_argument("--eq-db", type=float, default=None,
                     help="覆盖男声 highshelf 增益(dB)。默认：变调时 -6.5，否则 -4")
+    ap.add_argument("--eq", default="",
+                    help="完整 EQ 滤镜串，覆盖默认模板（A/B 实验用）。"
+                         "传 'anull' 表示不做 EQ，用来产出「裸片」供网格搜索")
     ap.add_argument("--no-clean", action="store_true")
     a = ap.parse_args()
 
@@ -220,54 +230,67 @@ def main():
         segs.append(s2)
     buf = np.concatenate(segs)
     print("分段拉伸后 %.1fs" % (len(buf) / sr), flush=True)
-    t3 = os.path.join(tmpd, "st.wav")
-    sf.write(t3, buf, sr)
 
-    # ---- ② 变调：就地按实测 F0 算比例（只升音高、不改时长）----
-    #    🔴 2026-10-14 实测：VoxCPM2 / Qwen 男声 F0 系统性偏低
-    #      —— EL 男声 13 条案例 F0 中位 190.5~205.3（均值 ~198），
-    #         我们只有 168~172，低约 15%。女声（OmniVoice 277 vs EL 271~282）没问题。
-    #      🔴 必须在 atempo **之后**就地测：atempo 改了时间轴，
-    #        「前 60s」覆盖的文本变了，拿 raw 的 F0 算会少补 3.4%。
-    #      🔴 ffmpeg rubberband 的 pitch 是**频率比**，不是半音！
-    #        （踩坑：填 2.85 以为是半音，实际升了 17 个半音，声音变花栗鼠）
+    # ---- ② 变调：**分窗**校正，不再用全局单一比例 ------------------------
+    # 🔴 2026-10-14 实测（deploy/f0_drift.py）推翻了"全局变调"的写法：
+    #     VoxCPM2 的 F0 在长篇里会**往上漂**，EL 却是稳的：
+    #       Vox raw   169.7 → 174.7 → 176.7 → 190.5 → 190.5 → 193.8 → 184.0 → 188.3（+11%）
+    #       EL 8197   198.3 → 203.0 → 193.8 → 188.3 → 207.7 → 199.5 → 203.0 → 192.7（平）
+    #     而我们按「前 60s」定一个全局比例 1.213，于是：
+    #       base_p    196.1 → 205.3 → **222.6 → 212.6 → 233.2 → 225.2 → 229.2 → 226.5**
+    #     开头正好 197.7，后半段却比 EL 高 15%（极差 37Hz vs EL 19Hz）——
+    #     听感就是"发尖、发假、像捏着鼻子"，比 60-150Hz 那点差距重要得多。
+    #     这也顺带解释了"感冒音"：变调把共振峰一起搬高，后半段搬得最多。
+    #   ✅ 正确做法：每个窗按**自己的** F0 算比例，把整条 F0 曲线压平到 EL 水平。
     tf = a.target_f0 if a.target_f0 else DEFAULT_F0[g]
     if a.no_pitch:
-        a.pitch = 1.0
-    elif not a.pitch:
-        yv, _ = load16(t3)
-        f0r = f0_median(yv, sr)
-        if f0r and f0r > 0:
-            a.pitch = min(max(tf / f0r, 0.90), 1.30)
-            print("F0 实测(拉伸后前60s) %.1fHz → 目标 %.1fHz，变调 ×%.4f（%.2f 半音）"
-                  % (f0r, tf, a.pitch, 12 * np.log2(a.pitch)), flush=True)
-        else:
-            a.pitch = 1.0
-    if a.pitch and abs(a.pitch - 1.0) > 1e-6:
-        tp = os.path.join(tmpd, "pitch.wav")
-        # 🔴 变调用 asetrate+aresample，**不用 rubberband**：
-        #    rubberband 会把频谱平坦度压掉（0.050 → 0.035，而 EL 是 0.042），
-        #    声音变"过净"、发假 —— 2026-10-14 员工在 F0 已对齐(198.3=EL)的情况下
-        #    仍判「EL 更像真人」，怀疑就是这个副作用。
-        #    asetrate 只是重采样（等价磁带变速 + 恢复时长），波形结构保得住：
-        #      flat 0.049（EL 0.042）、发声段数 110（EL 110）、段长 0.291（EL 0.277）
-        #    🔴 顺序必须是 asetrate → aresample → atempo(1/R)，**三步缺一不可**：
-        #      asetrate=sr*R 改标记（音高×R，时长/R）→ aresample=sr 重采样（点数 N→N/R，
-        #      时长仍 /R）→ atempo=1/R 放慢才把时长补回来。
-        #      2026-10-14 踩坑：漏了 atempo，成品 440.9s 而应为 534.8s（短了 17.6%），
-        #      字/秒直接飙到 10.2。
-        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", t3, "-af",
-                        "asetrate=%d,aresample=%d,atempo=%.6f"
-                        % (int(round(sr * a.pitch)), sr, 1.0 / a.pitch),
-                        tp], check=True)
-        t3 = tp
-        # 🔴 必须把变调结果读回 buf：后面停顿清洗用的是 buf，不是 t3。
-        #    2026-10-14 踩坑：漏了这一行，变调白做（日志显示变调成功，
-        #    但成品 F0 仍是 171.7 没变），因为清洗直接拿未变调的 buf 覆盖了。
-        buf, _ = sf.read(t3, dtype="float32")
-        # 半音 = 12 * log2(频率比)，别写成 17.31
-        print("变调 ×%.4f（%.2f 半音）" % (a.pitch, 12 * np.log2(a.pitch)),
-              flush=True)
+        ratios = [1.0] * len(segs)
+    elif a.pitch:
+        ratios = [a.pitch] * len(segs)
+    else:
+        ratios = []
+        for s2 in segs:
+            f0w = f0_median(s2, sr, win=1e9)   # 该窗**全段**，不是前 60s
+            ratios.append(min(max(tf / f0w, 0.90), 1.30)
+                          if f0w and f0w > 0 else 1.0)
+        # 相邻窗之间 1:2:1 平滑，避免比例跳变在拼接点听出来
+        if len(ratios) > 2:
+            ratios = ([ratios[0]]
+                      + [(ratios[i - 1] + 2 * ratios[i] + ratios[i + 1]) / 4
+                         for i in range(1, len(ratios) - 1)]
+                      + [ratios[-1]])
+        print("分窗 F0: " + ", ".join(
+            "%.0f" % x for x in
+            [(f0_median(s2, sr, win=1e9) or 0) for s2 in segs]), flush=True)
+        print("分窗变调: " + ", ".join("%.3f" % r for r in ratios)
+              + " （目标 %.1f Hz）" % tf, flush=True)
+    if any(abs(r - 1.0) > 1e-6 for r in ratios):
+        new_segs = []
+        for i, s2 in enumerate(segs):
+            R = ratios[i]
+            if abs(R - 1.0) < 1e-6:
+                new_segs.append(s2)
+                continue
+            t1 = os.path.join(tmpd, "p%d_in.wav" % i)
+            t2 = os.path.join(tmpd, "p%d_out.wav" % i)
+            sf.write(t1, s2, sr)
+            # 🔴 变调用 asetrate 三步，**不用 rubberband**：
+            #    rubberband 会把频谱平坦度压掉（0.050 → 0.035，而 EL 是 0.042），
+            #    声音变"过净"、发假。asetrate 只是重采样，波形结构保得住
+            #    （flat 0.049、发声段数 110 = EL 110、段长 0.291 vs EL 0.277）。
+            #    🔴 三步缺一不可：asetrate=sr*R（音高×R、时长/R）
+            #      → aresample=sr（点数 N→N/R，时长仍 /R）→ atempo=1/R 补回时长。
+            #      漏了 atempo → 成品 440.9s 而应为 534.8s（短 17.6%）。
+            subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", t1, "-af",
+                            "asetrate=%d,aresample=%d,atempo=%.6f"
+                            % (int(round(sr * R)), sr, 1.0 / R),
+                            t2], check=True)
+            s3, _ = sf.read(t2, dtype="float32")
+            new_segs.append(s3)
+        buf = np.concatenate(new_segs)
+    t3 = os.path.join(tmpd, "st.wav")
+    sf.write(t3, buf, sr)
+    print("变调后 %.1fs" % (len(buf) / sr), flush=True)
 
     if a.no_clean:
         cur = t3
@@ -283,9 +306,12 @@ def main():
         cur = t4
 
 #    🔴 变调后高频需要额外回压（默认 -2.5dB，见 EQ_MALE_DB 注释）。
+    # 变调后频谱被整体搬高，高频档要加深。现在变调是**分窗**的，
+    # 所以按**最大**比例判断（只要有一段被明显抬过，高频就得压）。
+    _pmax = max(ratios) if ratios else 1.0
     eq_db = a.eq_db if a.eq_db is not None else (
-        -4.0 + (-4.0 if a.pitch and a.pitch > 1.02 else 0.0))
-    eq_m = EQ_MALE_TMPL % eq_db
+        -4.0 + (-5.5 if _pmax > 1.02 else 0.0))
+    eq_m = a.eq if a.eq else (EQ_MALE_TMPL % eq_db)
     gain = round(lufs_t - lufs(cur), 1)
     # 🔴 二次校正：EQ 会改变响度，按 EQ 前的响度算出来的增益是错的
     #   （实测男声目标 -25.0 结果落到 -25.4）。所以先粗调、再实测补一次。

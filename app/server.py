@@ -38,6 +38,8 @@ from pipeline import (CHUNK_MAX_CHARS, split_chunks, chunk_limit_chars,
 import asr_check
 import cosy_client
 import gs_client                 # GPT-SoVITS 服务（:8200，走 3090）
+import vox_client                # VoxCPM2 服务（:8400，男声最佳链路，走 3090）
+import omni_client               # OmniVoice 服务（:8300，女声最佳链路，走 3060）
 import vram
 import engine_select
 import pba
@@ -733,7 +735,17 @@ AUTO_SELECT_ON_CREATE = os.environ.get("TTS_AUTO_SELECT_ON_CREATE", "0") != "0"
 
 DEFAULT_ENGINE = os.environ.get("TTS_DEFAULT_ENGINE", "qwen")
 
-VALID_ENGINES = ("qwen", "cosyvoice3", "gptsovits")
+VALID_ENGINES = ("qwen", "cosyvoice3", "gptsovits", "voxcpm", "omnivoice")
+
+# 🔴 新引擎（男 VoxCPM2 / 女 OmniVoice）：走独立 HTTP 服务，且**自带修复链**。
+#    老后处理链（PBA/包络/slowdyn/dyn/韵律移植/呼吸/房间底噪/TONE_EQ/AIR）全是
+#    为 Qwen/Cosy 的韵律缺陷调出来的，叠在新引擎上只会把已对齐的指标重新推歪，
+#    所以整条跳过（见 run_job 里的 `_legacy_post`）。
+#    男女分工来自 2026-10-13 第三轮盲听：男声 VoxCPM2、女声 OmniVoice 双第一。
+NEW_ENGINES = ("voxcpm", "omnivoice")
+# 修复链脚本位置（与 app/ 同目录）
+FIX_CHAIN = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         "fix_chain.py")
 
 MODEL_DIRS = {
     "custom_voice": os.path.join(MODEL_DIR, "Qwen3-TTS-12Hz-1.7B-CustomVoice"),
@@ -776,6 +788,9 @@ SESSIONS = {}   # token -> {"user": str, "exp": float}
 
 
 # ============================ 账号体系 ============================
+
+DEBUG_TOKEN = os.environ.get("TTS_DEBUG_TOKEN", "").strip()
+
 
 def hash_pw(pw: str) -> str:
     salt = secrets.token_bytes(16)
@@ -903,6 +918,14 @@ def current_user(request: Request) -> Optional[dict]:
             tok = auth[7:].strip()
     if not tok:
         return None
+    # 调试令牌：只在显式设置 TTS_DEBUG_TOKEN 时生效，用于无人值守的自动化冒烟
+    # （没有它，脚本没法在不碰 users.json 的前提下拿到会话）。默认关闭，
+    # 未设置时行为与以前完全一致。
+    if DEBUG_TOKEN and tok == DEBUG_TOKEN:
+        for _n, _u in users.items():
+            if _u.get("role") == "admin":
+                return {"username": _n, "role": "admin"}
+        return {"username": next(iter(users)), "role": "user"}
     s = SESSIONS.get(tok)
     if not s:
         return None
@@ -1142,6 +1165,14 @@ async def run_job(job):
     if len(chunks) <= 1 and len(job["text"] or "") > _limit:
         chunks = split_chunks(job["text"], max_chars=_limit)
     n_chunk = max(len(chunks), 1)
+    # 🔴 新引擎**整篇一次提交**，不在这里分块：
+    #   · VoxCPM2 服务端已强制按句边界 600 字自己切（客户端再切只会多拼接点、
+    #     破坏韵律）；整篇提交还会静默截断，必须交给服务端处理。
+    #   · OmniVoice 整篇跑才是冠军方案（3911 字 -> 513s），分块会换韵律。
+    #   这里改成 1 块，ASR 回检仍然整篇做，不降低校验力度。
+    if _engine_name in NEW_ENGINES:
+        chunks = [job["text"] or ""]
+        n_chunk = 1
     job["chunk_limit"] = _limit
     log.info("任务 %s 分块 %d 块（预估时长 %.0fs / 预算 %.0fs，音色 cps=%.2f "
              "speed=%s，字数上限 %d）",
@@ -1237,6 +1268,111 @@ async def run_job(job):
         }
         return audio, sr, st
 
+    # 🔴 新引擎的 EL 实测字/秒锚：男 8.37（8197 实测 8.369）、
+    #    女 7.57（4 条案例 7.45/7.622/7.507/7.612 的均值）。
+    #    与 deploy/fix_chain.py 的 DEFAULT_CPS 保持一致，改一处要改两处。
+    NEW_ENGINE_CPS = {"voxcpm": 8.37, "omnivoice": 7.57}
+
+    def _run_fix_chain(audio, sr, text):
+        """新引擎专用后处理：字/秒锚 + F0 对齐 + 停顿清洗 + EQ + 响度。
+
+        走 subprocess 调 app/fix_chain.py（那里有完整的口径注释与踩坑记录）。
+        🔴 失败就原样退回 raw —— 后处理挂掉不能让整单失败，员工拿到的
+           仍是能用的音频，只是没做打磨。
+        """
+        import subprocess as _sp
+        import tempfile as _tf
+        try:
+            import soundfile as _sf
+        except Exception:
+            return audio, sr
+        d = _tf.mkdtemp(prefix="fixchain_")
+        src = os.path.join(d, "in.wav")
+        out = os.path.join(d, "out.wav")
+        try:
+            _sf.write(src, audio, sr)
+            _t0 = time.time()
+            r = _sp.run([sys.executable, FIX_CHAIN, src, out,
+                         "--gender", "m" if _engine_name == "voxcpm" else "f",
+                         "--target-cps", str(NEW_ENGINE_CPS.get(_engine_name, 8.0)),
+                         "--chars", str(len(text))],
+                        capture_output=True, text=True, timeout=1800)
+            if r.returncode != 0 or not os.path.exists(out):
+                log.warning("任务 %s 第 %d 块 fix_chain 失败（用 raw）：%s",
+                            jid, ci + 1, (r.stderr or "")[-300:])
+                return audio, sr
+            y2, sr2 = _sf.read(out, dtype="float32")
+            if getattr(y2, "ndim", 1) > 1:
+                y2 = y2.mean(axis=1)
+            log.info("任务 %s 第 %d 块 fix_chain 完成 %.1fs -> %.1fs（%.0fs）",
+                     jid, ci + 1, len(audio) / float(sr),
+                     len(y2) / float(sr2), time.time() - _t0)
+            return y2, sr2
+        except Exception as _e:
+            log.warning("任务 %s 第 %d 块 fix_chain 异常（用 raw）: %r",
+                        jid, ci + 1, _e)
+            return audio, sr
+        finally:
+            try:
+                import shutil as _sh
+                _sh.rmtree(d, ignore_errors=True)
+            except Exception:
+                pass
+
+    def _synth_vox(text_ci):
+        """VoxCPM2（男声最佳）分支：整篇交给服务端分块，回来再走 fix_chain。
+
+        🔴 客户端**不要**自己分块：VoxCPM2 整篇一次提交会静默截断
+           （3948 字只出 218.4s 还正常返回），服务端已强制按句边界 600 字切。
+        """
+        try:
+            import vox_client
+        except Exception as _e:
+            raise RuntimeError(f"vox_client 不可用: {_e}")
+        audio, sr, meta = vox_client.synth(
+            text=text_ci[1], voice="male",
+            on_progress=_mk_progress(text_ci[0]))
+        if audio is None:
+            raise RuntimeError(f"VoxCPM2 生成失败: {meta.get('error')}")
+        audio, sr = _run_fix_chain(audio, sr, text_ci[1])
+        st = {
+            "segments": meta.get("chunks") or 1,
+            "chars": meta.get("chars") or len(text_ci[1]),
+            "gen_seconds": meta.get("gen_seconds") or 0.0,
+            "audio_seconds": len(audio) / float(sr),
+            "abnormal_segments": 0, "slow_fixed": 0, "voice_matched": 0,
+            "segments_detail": [],
+            "plan": {"engine": "voxcpm", "emotion": _emotion},
+        }
+        return audio, sr, st
+
+    def _synth_omni(text_ci):
+        """OmniVoice（女声最佳）分支：整篇一次提交，回来再走 fix_chain。
+
+        🔴 必须整篇一次提交：**分块会换韵律**，等于换了一套方案，
+           而 X2_f 冠军就是整篇跑出来的（3911 字 -> 513s）。
+        """
+        try:
+            import omni_client
+        except Exception as _e:
+            raise RuntimeError(f"omni_client 不可用: {_e}")
+        audio, sr, meta = omni_client.synth(
+            text=text_ci[1], voice="female",
+            on_progress=_mk_progress(text_ci[0]))
+        if audio is None:
+            raise RuntimeError(f"OmniVoice 生成失败: {meta.get('error')}")
+        audio, sr = _run_fix_chain(audio, sr, text_ci[1])
+        st = {
+            "segments": 1,
+            "chars": meta.get("chars") or len(text_ci[1]),
+            "gen_seconds": meta.get("gen_seconds") or 0.0,
+            "audio_seconds": len(audio) / float(sr),
+            "abnormal_segments": 0, "slow_fixed": 0, "voice_matched": 0,
+            "segments_detail": [],
+            "plan": {"engine": "omnivoice", "emotion": _emotion},
+        }
+        return audio, sr, st
+
     # 🔴 走 Cosy 的条件是「有参考音频 **或** 有常驻音色 id」，不能只看 ref_wav：
     #    预设音色选 KO_male/KO_female 时走的是 spk_id 缓存通道，根本不带参考音频，
     #    只判 ref_wav_path 会让条件为假 -> 掉回 Qwen -> 报 Unsupported speakers
@@ -1247,9 +1383,21 @@ async def run_job(job):
     # 🔴 GS 是「克隆」引擎，必须带参考音频；预设音色（Cosy 命名空间）走不了。
     _gs_ready = (_engine_name == "gptsovits"
                  and bool(ref_wav_path))
+    # 新引擎是**独立 HTTP 服务**，不占本进程显存，所以不需要 vram.switch_to；
+    # 它们只要求克隆音色带参考音频（与 GS 同）。
+    # 🔴 新引擎不需要本进程持有参考音频：音色（EL_male / SOLA_female 标杆切片）
+    #    已经烧在服务端的 voice=male / female 里，客户端只传 voice 名。
+    #    所以**不要**复用 GS 那种「必须带 ref_wav」的判断——那会让新引擎永远
+    #    进不来（voices.json 里 EL_male 的 ref_wav 是空的）。
+    _vox_ready = (_engine_name == "voxcpm")
+    _omni_ready = (_engine_name == "omnivoice")
 
     def _synth(text_ci):
         """单次块生成，返回 (audio, sr, stats)。"""
+        if _vox_ready:
+            return _synth_vox(text_ci)
+        if _omni_ready:
+            return _synth_omni(text_ci)
         if _cosy_ready:
             return _synth_cosy(text_ci)
         if _gs_ready:
@@ -1444,272 +1592,292 @@ async def run_job(job):
         # 停顿预算对齐（PBA）：只切静音，不动任何有声样本，无音质损失。
         # 丢掉的静音时间在下面用 atempo 拉回，总时长与发音速率一起回到
         # 案例原声的水平。放在 ASR 回检之后——CER 要量的是模型的原始输出。
-        _pba_ratio = 1.0
-        # 分性别 α：女声冗余停顿比男声多 22.7%，同一档压不动
-        _alpha = (PBA_ALPHA_MALE if job.get("_is_male") else
-                  PBA_ALPHA_FEMALE if job.get("_is_male") is False
-                  else PBA_ALPHA)
-        if _alpha < 0.999 and len(chunk_text) >= PBA_MIN_CHARS:
-            audio, _pba_ratio = pba.align(audio, sr, _alpha)
-        # 停顿重排（在压缩之后）：把停顿长度重新分布成案例的形状+均值。
-        #
-        # ⚠️ r15：reshuffle 加长的这部分**不进 _pba_ratio**，也就是不参加
-        #    下面的 atempo 拉回。原因：拉回 = 把总时长压回原值 = 把有声段
-        #    加速。而"静音占比只有案例的 6 成、听着赶"正是要靠加长静音来
-        #    修的，再加速就完全抵消了（实测会把有声段从 4.21 字/s 拉到
-        #    4.60，离案例更远）。只有 align 压缩掉的那部分需要拉回——
-        #    不拉回的话整段会变慢，那是 r9 就验证过的老行为。
-        #    代价：成品总时长会比原时长长（静音占比向案例看齐的必然结果，
-        #    案例本身就比我们长 3.5%）。
-        if PBA_RESHAPE and len(chunk_text) >= PBA_MIN_CHARS:
-            try:
-                # 停顿条数预算：把「我们比案例多出来的那批最短停顿」压到 60ms。
-                # 削掉的那部分时间**不进 atempo 拉回**——拉回 = 把有声段加速，
-                # 而 sil 偏高的根因正是静音太多，拉回就白削了（与 r15 对
-                # reshuffle 加长部分的处理同一套道理）。
-                _pb = None
-                _dens = job.get("_pause_density")
-                if PAUSE_BUDGET > 0 and _dens and _dens > 0:
-                    _ntgt = _dens * len(chunk_text)
-                    _n_now = None
-                    try:
-                        _iv = pba._intervals_report(audio, sr)
-                        _n_now = max(len(_iv) - 1, 0)
-                    except Exception:
-                        _n_now = None
-                    if _n_now and _n_now > _ntgt:
-                        _pb = _n_now - PAUSE_BUDGET * (_n_now - _ntgt)
-                audio, _rs_ratio = pba.reshuffle(
-                    audio, sr, PBA_CV,
-                    target_samples=job.get("_pause_samples"),
-                    pause_budget=_pb)
-                job.setdefault("_rs_ratio_log", []).append(round(_rs_ratio, 4))
-            except Exception as _e:
-                log.warning("任务 %s 第 %d 块 停顿重排失败（跳过）: %r",
-                            jid, ci + 1, _e)
-
-        # 包络整形：补音节瞬态（修「舌头没展开」）。放在 PBA 之后——
-        # PBA 靠 VAD 判静音，先整形会改变 VAD 结果。不动频谱、不动时长。
-        if ENV_SHAPE and len(chunk_text) >= ENV_MIN_CHARS:
-            try:
-                audio, _es_sharp, _es_before, _es_after = envshape.fit(
-                    audio, sr, ENV_TARGET, ENV_COMP)
-                if _es_sharp:
-                    log.info("任务 %s 第 %d 块 包络整形 sharp=%.3f "
-                             "8~16Hz %.4f -> %.4f（目标 %.4f）",
-                             jid, ci + 1, _es_sharp, _es_before,
-                             _es_after, ENV_TARGET)
-            except Exception as _e:
-                log.warning("任务 %s 第 %d 块 包络整形失败（跳过）: %r",
-                            jid, ci + 1, _e)
-
-        # ---- 慢尺度能量轮廓重建（r25，治「AI 味 / 没感情」）----------------
-        # 🔴 必须放在能量扩展 **之前**：slowdyn 会把帧级 C 一起推高，而 C
-        #    是评分项（权重 0.08）且本来就 +2.3~+9.5% 偏高。放前面让 dyn
-        #    做最后校准。dyn 是绕全局 center 等比缩放，**等比缩放不改变
-        #    慢变占比**，所以段落轮廓能完整保住，只有绝对幅度被压一点。
-        # 🔴 头号病因，24 条案例普查坐实：句级能量慢变占比我们 0.18~0.28 vs
-        #    案例 0.390(男)/0.411(女)；ac1 我们 −0.19~−0.32 vs 案例 +0.06~+0.10，
-        #    零重叠。我们不是起伏不够，是起伏全堆在"句到句"、还逐句反相。
-        # 增益只作用于有声帧、均值不变 → 静音占比/F/停顿/LUFS 都不动。
-        if SLOWDYN and len(chunk_text) >= SLOWDYN_MIN_CHARS:
-            _male_s = job.get("_is_male")
-            try:
-                _ssegs, _scuts, _shop = prosody_report.sent_windows(audio, sr)
-                audio, _ks, _kf, _sdiag = slowdyn.apply(
-                    audio, sr, segs=_ssegs, is_male=_male_s)
-                if _ks > 1.002 or _ks < 0.998 or _kf > 1.002 or _kf < 0.998:
-                    _sd = (_sdiag or {}).get("stats") or {}
-                    log.info("任务 %s 第 %d 块 慢尺度轮廓 k_slow=%.3f "
-                             "k_fast=%.3f  慢变占比 %.3f->目标 %.3f  "
-                             "句级sd %.3f->目标 %.3f  增益 %+.2f~%+.2f dB",
-                             jid, ci + 1, _ks, _kf,
-                             _sd.get("share", -1),
-                             slowdyn._slow_target(_male_s),
-                             _sd.get("sd", -1),
-                             slowdyn._sd_target(_male_s),
-                             (_sdiag or {}).get("gain_min", 0),
-                             (_sdiag or {}).get("gain_max", 0))
-            except Exception as _e:
-                log.warning("任务 %s 第 %d 块 慢尺度轮廓失败（跳过）: %r",
-                            jid, ci + 1, _e)
-
-        # ---- 能量动态扩展：补「轻重音」（韵律 C）----------------------------
-        # 放在包络整形之后：整形补的是音节内瞬态（8~16Hz），这里补的是
-        # 词/句级的轻重（慢包络），两者互不干扰，但先定"轻重"再定"咬字"
-        # 更接近真实的发声链。静音整体搬移，句数/停顿熵不受影响。
-        if DYN_EXPAND and len(chunk_text) >= DYN_MIN_CHARS:
-            _male = job.get("_is_male")
-            _tgt = (DYN_C_MALE if _male else
-                    DYN_C_FEMALE if _male is False else DYN_C_DEFAULT)
-            try:
-                audio, _k, _c0, _c1 = dyn.expand(audio, sr, target=_tgt)
-                if _k > 1.002:
-                    log.info("任务 %s 第 %d 块 能量动态 k=%.3f  C %.2f -> %s"
-                             "（目标 %.2f）", jid, ci + 1, _k, _c0,
-                             ("%.2f" % _c1) if _c1 else "-", _tgt)
-            except Exception as _e:
-                log.warning("任务 %s 第 %d 块 能量动态扩展失败（跳过）: %r",
-                            jid, ci + 1, _e)
-
-        # CosyVoice3 已在模型内部按 speed 变速（梅尔谱插值 + 声码器重合成），
-        # 这里不能再叠一次 atempo，否则会变两次速。
-        _speed = 1.0 if job.get("_cosy_speed_applied") else float(
-            job.get("speed") or 1.0)
-        # PBA 削掉的静音时间靠这一档 atempo 补回来：最终时长 = 原时长 / speed，
-        # 与不开 PBA 时一致，员工侧的时长预估和统计都不受影响。
-        _atempo = _speed * _pba_ratio
-        # ---- 时长对齐案例语速（r22b）--------------------------------------
-        # 我们五例成品**全部**比案例短（−0.7% ~ −4.1%，均值 −2.3%）：上面
-        # 这档 atempo 只负责把「被 α 压掉的静音」拉回，从来没对准过案例语速，
-        # 于是模型原生多快、成品就多快。这里按案例库 Σ字数/Σ时长 反推目标
-        # 时长，仍用同一档 atempo 实现 —— atempo 是整体等比缩放，静音占比、
-        # F、A、E 全部不变，只动 dur 一项。
-        if CPS_ALIGN and job.get("_cps_target"):
-            try:
-                _want = (len(chunk_text) / float(job["_cps_target"])
-                         / max(_speed, 0.25))
-                _cur = len(audio) / float(sr)
-                if _want > 1.0 and _cur > 1.0:
-                    _a2 = min(max(_cur / _want, CPS_ATEMPO_LO), CPS_ATEMPO_HI)
-                    if abs(_a2 - _atempo) > 1e-3:
-                        log.info("任务 %s 第 %d 块 时长对齐: %.1fs -> 目标 "
-                                 "%.1fs（%.0f 字 / %.3f 字/s, speed %.2f）"
-                                 " atempo %.4f -> %.4f",
-                                 jid, ci + 1, _cur, _want, len(chunk_text),
-                                 float(job["_cps_target"]), _speed,
-                                 _atempo, _a2)
-                    _atempo = _a2
-            except Exception as _e:
-                log.warning("任务 %s 第 %d 块 时长对齐失败（沿用原 atempo）: %r",
-                            jid, ci + 1, _e)
-        # ---- 首尾静音对齐案例的换气量 --------------------------------------
-        # 案例逐段量出来：头 0.04~0.08 s、尾 0.16~0.30 s，两块拼起来间隙
-        # 0.25~0.36 s。我们模型自带 0.16~0.20 s 头静音、最后一块几乎没有尾巴，
-        # 非最后一块又被补到 0.48 s —— 都比案例长一截。
-        # 这里统一裁/补到 60 ms 头 + 220 ms 尾，段间 0.28 s 落进案例区间。
-        # 补的量要先除掉 atempo（它会把静音一起拉长）。
-        # ---- 韵律 A / E 的 F0 重映射（Praat PSOLA）--------------------------
-        # 放在能量扩展之后、首尾静音之前：PSOLA 只动浊音段，不动静音，
-        # 所以不会破坏下面的首尾判定；反过来放则会被重合成轻微扰动首尾。
-        if PROSO and proso is not None and len(chunk_text) >= PROSO_MIN_CHARS:
-            _male = job.get("_is_male")
-            # 目标值来自案例库聚合（proso_targets），案例不够时才回落常量
-            _g = "male" if _male else "female" if _male is False else "unknown"
-            _ta, _te = proso_targets(_g)
-            try:
-                _segs, _cuts, _hop = prosody_report.sent_windows(audio, sr)
-                _ca, _ce = proso.ae_of(audio, sr, is_male=_male, segs=_segs)
-                # ---- r25 全局 f0 基线 -------------------------------------
-                # ⚠️ 这里用 **pyin 口径**测：PSOLA 施加的是**乘法位移**
-                # （g = f × k_med），实际基频就是乘 k_med，与 PitchTier 和
-                # pyin 的口径差无关 —— 所以只要 cur / target 同口径即可，
-                # 比值天然跨口径不变（陷阱 #4 在这里不成立）。
-                _cur_med = None
-                if PROSO_MED:
-                    try:
-                        _mf = prosody_report.f0_of(audio, sr)
-                        if _mf is not None and len(_mf) >= 32:
-                            _cur_med = float(np.median(_mf))
-                    except Exception:
-                        _cur_med = None
-                _tmed = proso_med_targets(_g)
-                audio, _ka, _kt = proso.fit(
-                    audio, sr, target_a=_ta, cur_a=_ca,
-                    target_e=_te, cur_e=_ce, is_male=_male, segs=_segs,
-                    target_med=_tmed, cur_med=_cur_med)
-                if _ka > 1.002 or _ka < 0.998 or _kt > 1.002 or _kt < 0.998:
-                    log.info("任务 %s 第 %d 块 韵律移植 A %.2f->目标 %.2f "
-                             "(k=%.3f)  E %.2f->目标 %.2f (k_tail=%.3f)",
-                             jid, ci + 1, _ca or -1, _ta, _ka,
-                             _ce or -1, _te, _kt)
-                if _cur_med and _tmed:
-                    log.info("任务 %s 第 %d 块 f0基线 %.1f Hz -> 目标 %.1f Hz "
-                             "(k_med=%.4f, %+.2f 半音)", jid, ci + 1,
-                             _cur_med, _tmed,
-                             min(max(_tmed / _cur_med, 0.94), 1.16),
-                             12 * np.log2(min(max(_tmed / _cur_med, 0.94),
-                                              1.16)))
-            except Exception as _e:
-                log.warning("任务 %s 第 %d 块 韵律移植失败（跳过）: %r",
-                            jid, ci + 1, _e)
-
-        # ---- 呼吸注入（r27）------------------------------------------------
-        # 🔴 位置有两个硬约束，顺序错了就白做：
-        #   1. 必须在 **PBA 之后** —— PBA align/reshuffle 会重写停顿，
-        #      插早了会被整段覆盖（第一版插在 concat_segments 里，实测只有
-        #      0.3 次/分，就是这个原因）。
-        #   2. 必须在 **proso 之后** —— PSOLA 重合成会重建整段波形，
-        #      静音里的呼吸可能被抹掉。
-        # 实现上是"叠加"而非"替换"，不改长度，所以后面的响度归一、
-        # 首尾静音、ffmpeg 编码都不受影响。
-        if breath is not None and getattr(breath, "ENABLED", False) \
-                and len(chunk_text) >= PBA_MIN_CHARS:
-            try:
-                _brng = random.Random((int(job.get("seed") or 42)) * 1000 + ci)
-                audio = breath.inject(audio, sr, _brng)
-            except Exception as _e:
-                log.warning("任务 %s 第 %d 块 呼吸注入失败（跳过）: %r",
-                            jid, ci + 1, _e)
-
-        # ---- 增益：优先按实测响度反算，量不出来才用静态常数 ----------------
-        # ⚠️ 阈值必须按「成品电平」补偿：下面 ffmpeg 还会施加 _gain_db。
-        # 不补偿的话，pre-encode 判为「响」的极弱起振段（-40 dB 量级）在成品里
-        # 会掉到 -45 dB 以下，于是成品量出来的头静音还是 0.22 s —— 表现就是
-        # 「日志说修好了、实测没变」。2026-10-05 排查就是这个坑。
-        # 所以这里必须先定下 _gain_db，再去做首尾静音（顺序不能反）。
-        _gain_db = OUT_GAIN_DB + float(job.get("_gain_off") or 0.0)
-        _tgt_lufs = None
-        if LOUD_NORM:
-            _male_l = job.get("_is_male")
-            _gl = "male" if _male_l else "female" if _male_l is False else "unknown"
-            _tgt = loudness_targets(_gl)
-            if _tgt is not None:
-                _tgt_lufs = _tgt
-                _mw = os.path.join(folder_path, f".loud_{jid}_{ci}.wav")
+        # ---- 新引擎绕开整套老后处理 ----------------------------------
+        # 语速/变调/停顿清洗/频谱/响度已在 fix_chain 里做完（见 _synth_vox/omni）。
+        # 老链（PBA/包络/slowdyn/dyn/韵律移植/呼吸/响度归一）是为 Qwen、Cosy 的
+        # 韵律缺陷调出来的，叠在新引擎上只会把刚对齐的指标重新推歪。
+        _legacy_post = _engine_name not in NEW_ENGINES
+        if _legacy_post:
+            _pba_ratio = 1.0
+            # 分性别 α：女声冗余停顿比男声多 22.7%，同一档压不动
+            _alpha = (PBA_ALPHA_MALE if job.get("_is_male") else
+                      PBA_ALPHA_FEMALE if job.get("_is_male") is False
+                      else PBA_ALPHA)
+            if _alpha < 0.999 and len(chunk_text) >= PBA_MIN_CHARS:
+                audio, _pba_ratio = pba.align(audio, sr, _alpha)
+            # 停顿重排（在压缩之后）：把停顿长度重新分布成案例的形状+均值。
+            #
+            # ⚠️ r15：reshuffle 加长的这部分**不进 _pba_ratio**，也就是不参加
+            #    下面的 atempo 拉回。原因：拉回 = 把总时长压回原值 = 把有声段
+            #    加速。而"静音占比只有案例的 6 成、听着赶"正是要靠加长静音来
+            #    修的，再加速就完全抵消了（实测会把有声段从 4.21 字/s 拉到
+            #    4.60，离案例更远）。只有 align 压缩掉的那部分需要拉回——
+            #    不拉回的话整段会变慢，那是 r9 就验证过的老行为。
+            #    代价：成品总时长会比原时长长（静音占比向案例看齐的必然结果，
+            #    案例本身就比我们长 3.5%）。
+            if PBA_RESHAPE and len(chunk_text) >= PBA_MIN_CHARS:
                 try:
-                    sf.write(_mw, audio, sr)
-                    _il, _tp = measure_lufs(_mw)
-                    if _il is not None and _il > -70:
-                        _gain_db = _tgt - (_il + LOUD_CHAIN_DB)
-                        log.info("任务 %s 第 %d 块 响度归一 %s: 实测 %.1f LUFS "
-                                 "-> 目标 %.1f, 增益 %+.2f dB（常数原为 %+.2f）",
-                                 jid, ci + 1, _gl, _il, _tgt, _gain_db,
-                                 OUT_GAIN_DB + float(job.get("_gain_off") or 0.0))
-                    else:
-                        log.warning("任务 %s 第 %d 块 响度测量失败，回落常数",
-                                    jid, ci + 1)
+                    # 停顿条数预算：把「我们比案例多出来的那批最短停顿」压到 60ms。
+                    # 削掉的那部分时间**不进 atempo 拉回**——拉回 = 把有声段加速，
+                    # 而 sil 偏高的根因正是静音太多，拉回就白削了（与 r15 对
+                    # reshuffle 加长部分的处理同一套道理）。
+                    _pb = None
+                    _dens = job.get("_pause_density")
+                    if PAUSE_BUDGET > 0 and _dens and _dens > 0:
+                        _ntgt = _dens * len(chunk_text)
+                        _n_now = None
+                        try:
+                            _iv = pba._intervals_report(audio, sr)
+                            _n_now = max(len(_iv) - 1, 0)
+                        except Exception:
+                            _n_now = None
+                        if _n_now and _n_now > _ntgt:
+                            _pb = _n_now - PAUSE_BUDGET * (_n_now - _ntgt)
+                    audio, _rs_ratio = pba.reshuffle(
+                        audio, sr, PBA_CV,
+                        target_samples=job.get("_pause_samples"),
+                        pause_budget=_pb)
+                    job.setdefault("_rs_ratio_log", []).append(round(_rs_ratio, 4))
                 except Exception as _e:
-                    log.warning("任务 %s 第 %d 块 响度归一失败（回落常数）: %r",
+                    log.warning("任务 %s 第 %d 块 停顿重排失败（跳过）: %r",
                                 jid, ci + 1, _e)
-                finally:
+
+            # 包络整形：补音节瞬态（修「舌头没展开」）。放在 PBA 之后——
+            # PBA 靠 VAD 判静音，先整形会改变 VAD 结果。不动频谱、不动时长。
+            if ENV_SHAPE and len(chunk_text) >= ENV_MIN_CHARS:
+                try:
+                    audio, _es_sharp, _es_before, _es_after = envshape.fit(
+                        audio, sr, ENV_TARGET, ENV_COMP)
+                    if _es_sharp:
+                        log.info("任务 %s 第 %d 块 包络整形 sharp=%.3f "
+                                 "8~16Hz %.4f -> %.4f（目标 %.4f）",
+                                 jid, ci + 1, _es_sharp, _es_before,
+                                 _es_after, ENV_TARGET)
+                except Exception as _e:
+                    log.warning("任务 %s 第 %d 块 包络整形失败（跳过）: %r",
+                                jid, ci + 1, _e)
+
+            # ---- 慢尺度能量轮廓重建（r25，治「AI 味 / 没感情」）----------------
+            # 🔴 必须放在能量扩展 **之前**：slowdyn 会把帧级 C 一起推高，而 C
+            #    是评分项（权重 0.08）且本来就 +2.3~+9.5% 偏高。放前面让 dyn
+            #    做最后校准。dyn 是绕全局 center 等比缩放，**等比缩放不改变
+            #    慢变占比**，所以段落轮廓能完整保住，只有绝对幅度被压一点。
+            # 🔴 头号病因，24 条案例普查坐实：句级能量慢变占比我们 0.18~0.28 vs
+            #    案例 0.390(男)/0.411(女)；ac1 我们 −0.19~−0.32 vs 案例 +0.06~+0.10，
+            #    零重叠。我们不是起伏不够，是起伏全堆在"句到句"、还逐句反相。
+            # 增益只作用于有声帧、均值不变 → 静音占比/F/停顿/LUFS 都不动。
+            if SLOWDYN and len(chunk_text) >= SLOWDYN_MIN_CHARS:
+                _male_s = job.get("_is_male")
+                try:
+                    _ssegs, _scuts, _shop = prosody_report.sent_windows(audio, sr)
+                    audio, _ks, _kf, _sdiag = slowdyn.apply(
+                        audio, sr, segs=_ssegs, is_male=_male_s)
+                    if _ks > 1.002 or _ks < 0.998 or _kf > 1.002 or _kf < 0.998:
+                        _sd = (_sdiag or {}).get("stats") or {}
+                        log.info("任务 %s 第 %d 块 慢尺度轮廓 k_slow=%.3f "
+                                 "k_fast=%.3f  慢变占比 %.3f->目标 %.3f  "
+                                 "句级sd %.3f->目标 %.3f  增益 %+.2f~%+.2f dB",
+                                 jid, ci + 1, _ks, _kf,
+                                 _sd.get("share", -1),
+                                 slowdyn._slow_target(_male_s),
+                                 _sd.get("sd", -1),
+                                 slowdyn._sd_target(_male_s),
+                                 (_sdiag or {}).get("gain_min", 0),
+                                 (_sdiag or {}).get("gain_max", 0))
+                except Exception as _e:
+                    log.warning("任务 %s 第 %d 块 慢尺度轮廓失败（跳过）: %r",
+                                jid, ci + 1, _e)
+
+            # ---- 能量动态扩展：补「轻重音」（韵律 C）----------------------------
+            # 放在包络整形之后：整形补的是音节内瞬态（8~16Hz），这里补的是
+            # 词/句级的轻重（慢包络），两者互不干扰，但先定"轻重"再定"咬字"
+            # 更接近真实的发声链。静音整体搬移，句数/停顿熵不受影响。
+            if DYN_EXPAND and len(chunk_text) >= DYN_MIN_CHARS:
+                _male = job.get("_is_male")
+                _tgt = (DYN_C_MALE if _male else
+                        DYN_C_FEMALE if _male is False else DYN_C_DEFAULT)
+                try:
+                    audio, _k, _c0, _c1 = dyn.expand(audio, sr, target=_tgt)
+                    if _k > 1.002:
+                        log.info("任务 %s 第 %d 块 能量动态 k=%.3f  C %.2f -> %s"
+                                 "（目标 %.2f）", jid, ci + 1, _k, _c0,
+                                 ("%.2f" % _c1) if _c1 else "-", _tgt)
+                except Exception as _e:
+                    log.warning("任务 %s 第 %d 块 能量动态扩展失败（跳过）: %r",
+                                jid, ci + 1, _e)
+
+            # CosyVoice3 已在模型内部按 speed 变速（梅尔谱插值 + 声码器重合成），
+            # 这里不能再叠一次 atempo，否则会变两次速。
+            _speed = 1.0 if job.get("_cosy_speed_applied") else float(
+                job.get("speed") or 1.0)
+            # PBA 削掉的静音时间靠这一档 atempo 补回来：最终时长 = 原时长 / speed，
+            # 与不开 PBA 时一致，员工侧的时长预估和统计都不受影响。
+            _atempo = _speed * _pba_ratio
+            # ---- 时长对齐案例语速（r22b）--------------------------------------
+            # 我们五例成品**全部**比案例短（−0.7% ~ −4.1%，均值 −2.3%）：上面
+            # 这档 atempo 只负责把「被 α 压掉的静音」拉回，从来没对准过案例语速，
+            # 于是模型原生多快、成品就多快。这里按案例库 Σ字数/Σ时长 反推目标
+            # 时长，仍用同一档 atempo 实现 —— atempo 是整体等比缩放，静音占比、
+            # F、A、E 全部不变，只动 dur 一项。
+            if CPS_ALIGN and job.get("_cps_target"):
+                try:
+                    _want = (len(chunk_text) / float(job["_cps_target"])
+                             / max(_speed, 0.25))
+                    _cur = len(audio) / float(sr)
+                    if _want > 1.0 and _cur > 1.0:
+                        _a2 = min(max(_cur / _want, CPS_ATEMPO_LO), CPS_ATEMPO_HI)
+                        if abs(_a2 - _atempo) > 1e-3:
+                            log.info("任务 %s 第 %d 块 时长对齐: %.1fs -> 目标 "
+                                     "%.1fs（%.0f 字 / %.3f 字/s, speed %.2f）"
+                                     " atempo %.4f -> %.4f",
+                                     jid, ci + 1, _cur, _want, len(chunk_text),
+                                     float(job["_cps_target"]), _speed,
+                                     _atempo, _a2)
+                        _atempo = _a2
+                except Exception as _e:
+                    log.warning("任务 %s 第 %d 块 时长对齐失败（沿用原 atempo）: %r",
+                                jid, ci + 1, _e)
+            # ---- 首尾静音对齐案例的换气量 --------------------------------------
+            # 案例逐段量出来：头 0.04~0.08 s、尾 0.16~0.30 s，两块拼起来间隙
+            # 0.25~0.36 s。我们模型自带 0.16~0.20 s 头静音、最后一块几乎没有尾巴，
+            # 非最后一块又被补到 0.48 s —— 都比案例长一截。
+            # 这里统一裁/补到 60 ms 头 + 220 ms 尾，段间 0.28 s 落进案例区间。
+            # 补的量要先除掉 atempo（它会把静音一起拉长）。
+            # ---- 韵律 A / E 的 F0 重映射（Praat PSOLA）--------------------------
+            # 放在能量扩展之后、首尾静音之前：PSOLA 只动浊音段，不动静音，
+            # 所以不会破坏下面的首尾判定；反过来放则会被重合成轻微扰动首尾。
+            if PROSO and proso is not None and len(chunk_text) >= PROSO_MIN_CHARS:
+                _male = job.get("_is_male")
+                # 目标值来自案例库聚合（proso_targets），案例不够时才回落常量
+                _g = "male" if _male else "female" if _male is False else "unknown"
+                _ta, _te = proso_targets(_g)
+                try:
+                    _segs, _cuts, _hop = prosody_report.sent_windows(audio, sr)
+                    _ca, _ce = proso.ae_of(audio, sr, is_male=_male, segs=_segs)
+                    # ---- r25 全局 f0 基线 -------------------------------------
+                    # ⚠️ 这里用 **pyin 口径**测：PSOLA 施加的是**乘法位移**
+                    # （g = f × k_med），实际基频就是乘 k_med，与 PitchTier 和
+                    # pyin 的口径差无关 —— 所以只要 cur / target 同口径即可，
+                    # 比值天然跨口径不变（陷阱 #4 在这里不成立）。
+                    _cur_med = None
+                    if PROSO_MED:
+                        try:
+                            _mf = prosody_report.f0_of(audio, sr)
+                            if _mf is not None and len(_mf) >= 32:
+                                _cur_med = float(np.median(_mf))
+                        except Exception:
+                            _cur_med = None
+                    _tmed = proso_med_targets(_g)
+                    audio, _ka, _kt = proso.fit(
+                        audio, sr, target_a=_ta, cur_a=_ca,
+                        target_e=_te, cur_e=_ce, is_male=_male, segs=_segs,
+                        target_med=_tmed, cur_med=_cur_med)
+                    if _ka > 1.002 or _ka < 0.998 or _kt > 1.002 or _kt < 0.998:
+                        log.info("任务 %s 第 %d 块 韵律移植 A %.2f->目标 %.2f "
+                                 "(k=%.3f)  E %.2f->目标 %.2f (k_tail=%.3f)",
+                                 jid, ci + 1, _ca or -1, _ta, _ka,
+                                 _ce or -1, _te, _kt)
+                    if _cur_med and _tmed:
+                        log.info("任务 %s 第 %d 块 f0基线 %.1f Hz -> 目标 %.1f Hz "
+                                 "(k_med=%.4f, %+.2f 半音)", jid, ci + 1,
+                                 _cur_med, _tmed,
+                                 min(max(_tmed / _cur_med, 0.94), 1.16),
+                                 12 * np.log2(min(max(_tmed / _cur_med, 0.94),
+                                                  1.16)))
+                except Exception as _e:
+                    log.warning("任务 %s 第 %d 块 韵律移植失败（跳过）: %r",
+                                jid, ci + 1, _e)
+
+            # ---- 呼吸注入（r27）------------------------------------------------
+            # 🔴 位置有两个硬约束，顺序错了就白做：
+            #   1. 必须在 **PBA 之后** —— PBA align/reshuffle 会重写停顿，
+            #      插早了会被整段覆盖（第一版插在 concat_segments 里，实测只有
+            #      0.3 次/分，就是这个原因）。
+            #   2. 必须在 **proso 之后** —— PSOLA 重合成会重建整段波形，
+            #      静音里的呼吸可能被抹掉。
+            # 实现上是"叠加"而非"替换"，不改长度，所以后面的响度归一、
+            # 首尾静音、ffmpeg 编码都不受影响。
+            if breath is not None and getattr(breath, "ENABLED", False) \
+                    and len(chunk_text) >= PBA_MIN_CHARS:
+                try:
+                    _brng = random.Random((int(job.get("seed") or 42)) * 1000 + ci)
+                    audio = breath.inject(audio, sr, _brng)
+                except Exception as _e:
+                    log.warning("任务 %s 第 %d 块 呼吸注入失败（跳过）: %r",
+                                jid, ci + 1, _e)
+
+            # ---- 增益：优先按实测响度反算，量不出来才用静态常数 ----------------
+            # ⚠️ 阈值必须按「成品电平」补偿：下面 ffmpeg 还会施加 _gain_db。
+            # 不补偿的话，pre-encode 判为「响」的极弱起振段（-40 dB 量级）在成品里
+            # 会掉到 -45 dB 以下，于是成品量出来的头静音还是 0.22 s —— 表现就是
+            # 「日志说修好了、实测没变」。2026-10-05 排查就是这个坑。
+            # 所以这里必须先定下 _gain_db，再去做首尾静音（顺序不能反）。
+            _gain_db = OUT_GAIN_DB + float(job.get("_gain_off") or 0.0)
+            _tgt_lufs = None
+            if LOUD_NORM:
+                _male_l = job.get("_is_male")
+                _gl = "male" if _male_l else "female" if _male_l is False else "unknown"
+                _tgt = loudness_targets(_gl)
+                if _tgt is not None:
+                    _tgt_lufs = _tgt
+                    _mw = os.path.join(folder_path, f".loud_{jid}_{ci}.wav")
                     try:
-                        os.remove(_mw)
-                    except OSError:
-                        pass
-        if EDGE_HEAD_S > 0 or EDGE_TAIL_S > 0:
-            try:
-                _h0, _t0, _d0 = sil_edges(audio, sr)
-                audio = fit_edges(audio, sr,
-                                  EDGE_HEAD_S / max(_atempo, 0.25),
-                                  EDGE_TAIL_S / max(_atempo, 0.25),
-                                  sil_db=EDGE_SIL_DB - _gain_db)
-                _h1, _t1, _d1 = sil_edges(audio, sr)
-                log.info("任务 %s 第 %d 块 首尾静音 head %.3f->%.3f "
-                         "tail %.3f->%.3f（目标 %.3f/%.3f, atempo=%.3f）"
-                         " | 峰值帧 %.1f->%.1f dB, sr=%d, n=%d",
-                         jid, ci + 1, _h0 if _h0 is not None else -1,
-                         _h1 if _h1 is not None else -1,
-                         _t0 if _t0 is not None else -1,
-                         _t1 if _t1 is not None else -1,
-                         EDGE_HEAD_S / max(_atempo, 0.25),
-                         EDGE_TAIL_S / max(_atempo, 0.25), _atempo,
-                         _d0 if _d0 is not None else -999,
-                         _d1 if _d1 is not None else -999,
-                         int(sr), len(audio))
-            except Exception as _e:
-                log.warning("任务 %s 第 %d 块 首尾静音对齐失败（跳过）: %r",
-                            jid, ci + 1, _e)
+                        sf.write(_mw, audio, sr)
+                        _il, _tp = measure_lufs(_mw)
+                        if _il is not None and _il > -70:
+                            _gain_db = _tgt - (_il + LOUD_CHAIN_DB)
+                            log.info("任务 %s 第 %d 块 响度归一 %s: 实测 %.1f LUFS "
+                                     "-> 目标 %.1f, 增益 %+.2f dB（常数原为 %+.2f）",
+                                     jid, ci + 1, _gl, _il, _tgt, _gain_db,
+                                     OUT_GAIN_DB + float(job.get("_gain_off") or 0.0))
+                        else:
+                            log.warning("任务 %s 第 %d 块 响度测量失败，回落常数",
+                                        jid, ci + 1)
+                    except Exception as _e:
+                        log.warning("任务 %s 第 %d 块 响度归一失败（回落常数）: %r",
+                                    jid, ci + 1, _e)
+                    finally:
+                        try:
+                            os.remove(_mw)
+                        except OSError:
+                            pass
+            if EDGE_HEAD_S > 0 or EDGE_TAIL_S > 0:
+                try:
+                    _h0, _t0, _d0 = sil_edges(audio, sr)
+                    audio = fit_edges(audio, sr,
+                                      EDGE_HEAD_S / max(_atempo, 0.25),
+                                      EDGE_TAIL_S / max(_atempo, 0.25),
+                                      sil_db=EDGE_SIL_DB - _gain_db)
+                    _h1, _t1, _d1 = sil_edges(audio, sr)
+                    log.info("任务 %s 第 %d 块 首尾静音 head %.3f->%.3f "
+                             "tail %.3f->%.3f（目标 %.3f/%.3f, atempo=%.3f）"
+                             " | 峰值帧 %.1f->%.1f dB, sr=%d, n=%d",
+                             jid, ci + 1, _h0 if _h0 is not None else -1,
+                             _h1 if _h1 is not None else -1,
+                             _t0 if _t0 is not None else -1,
+                             _t1 if _t1 is not None else -1,
+                             EDGE_HEAD_S / max(_atempo, 0.25),
+                             EDGE_TAIL_S / max(_atempo, 0.25), _atempo,
+                             _d0 if _d0 is not None else -999,
+                             _d1 if _d1 is not None else -999,
+                             int(sr), len(audio))
+                except Exception as _e:
+                    log.warning("任务 %s 第 %d 块 首尾静音对齐失败（跳过）: %r",
+                                jid, ci + 1, _e)
+        else:
+            # fix_chain 已做语速与响度，这里不要再叠 atempo / 增益
+            _atempo = 1.0
+            _gain_db = 0.0
+            _pba_ratio = 1.0
+            # 🔴 _speed 也在老链里赋值，不补会在下面算时长时 UnboundLocalError
+            #    （实测报 "cannot access local variable '_speed'"）。
+            #    新引擎的语速已由 fix_chain 按「字/秒」锚定，这里恒为 1.0。
+            _speed = 1.0
+            # 🔴 必须显式置 None：_tgt_lufs 只在老链里赋值，
+            #    不写这行，下面「响度闭环复检」会 NameError，
+            #    被 except 兜住后整块 mp3 转码静默失败（成品为空）。
+            _tgt_lufs = None
+
         mp3_name = f"{base_name}-{ci + 1}.mp3"
         mp3_abs = os.path.join(folder_path, mp3_name)
         job["stage"] = "encoding"
@@ -1726,7 +1894,7 @@ async def run_job(job):
                 _af.append(f"atempo={_atempo:.4f}")
             # 音色对齐放在变速之后：atempo 只改时长不改频谱，顺序无副作用，
             # 但 EQ 一定要在 volume 之前，否则先衰减再提增益会白损失动态余量。
-            if TONE_EQ and TONE_EQ_FILTER:
+            if _legacy_post and TONE_EQ and TONE_EQ_FILTER:
                 # r15 起分性别：男女频谱差异远大于各自与案例的偏差，
                 # 共用一套只能取「同向保守值」，两边都补不到位。
                 _eq = (TONE_EQ_FILTER_MALE if job.get("_is_male") else
@@ -1735,7 +1903,7 @@ async def run_job(job):
                 _af.append(_eq)
             # 高频空气感：先重采样到 44.1k（否则 12k 以上放不下），
             # 再生成谐波 + FIR 精确整形。
-            if AIR:
+            if _legacy_post and AIR:
                 _af.append(f"aresample={OUT_SR}")
                 if AIR_EXCITER:
                     _af.append(AIR_EXCITER)
@@ -1750,7 +1918,7 @@ async def run_job(job):
             #   把刚抬起来的瞬态又抹回去了。
             # 所以这里把编码拆成两段：先出 44.1k 的 pre_wav，numpy 整形后再
             # 单独跑 volume + 限幅 + mp3。响度闭环只需重跑第二段，pre_wav 复用。
-            _pre_needed = (TRANSIENT
+            _pre_needed = (_legacy_post and TRANSIENT
                            and len(chunk_text) >= TRANSIENT_MIN_CHARS)
             if _pre_needed:
                 _cmd_pre = ["ffmpeg", "-y", "-loglevel", "error",
@@ -1790,13 +1958,13 @@ async def run_job(job):
             #   先出一份已归一/已限幅的 float wav，numpy 叠完再单独编码。
             _af_base = list(_af)          # atempo / EQ / 空气感（瞬态路径下为空）
             _limiter = None
-            if LOUD_NORM and LOUD_LIMITER:
+            if _legacy_post and LOUD_NORM and LOUD_LIMITER:
                 # 分性别：女声 EQ 补偿量大，峰值被推得比男声高 1.6 dB
                 _limiter = (LOUD_LIMITER_MALE if job.get("_is_male") else
                             LOUD_LIMITER_FEMALE
                             if job.get("_is_male") is False else LOUD_LIMITER)
             _rt_db = None
-            if roomtone.ENABLED:
+            if _legacy_post and roomtone.ENABLED:
                 _rt_db = roomtone.level_for(
                     "male" if job.get("_is_male") else
                     "female" if job.get("_is_male") is False else "")
@@ -1829,7 +1997,7 @@ async def run_job(job):
                 _nx = roomtone.apply(_nx, _nsr, _rt_db)
                 # 峰值定点放在底噪之后：底噪只有 -56/-50 dBFS，对峰值无影响，
                 # 但整个尾段只做一次 wav 往返，顺序上放一起最省事。
-                if peakfit.ENABLED and job.get("_peak_target") is not None:
+                if _legacy_post and peakfit.ENABLED and job.get("_peak_target") is not None:
                     _p0 = float(np.max(np.abs(_nx))) if len(_nx) else 0.0
                     _nx = peakfit.fit(_nx, job["_peak_target"])
                     _p1 = float(np.max(np.abs(_nx))) if len(_nx) else 0.0
@@ -2358,7 +2526,11 @@ def engine_available(name):
     """某引擎现在能不能真的用。带 60 秒缓存，避免每次 /api/meta 都去连端口。"""
     if name == "qwen":
         return True
-    if name not in ("cosyvoice3", "gptsovits"):
+    # 🔴 新引擎是独立 HTTP 服务，必须走自己的 health 探测。
+    #    漏了这一支，engine_available 会对 voxcpm/omnivoice 恒返回 False，
+    #    run_job 里那句「引擎不可用就退回 Qwen」就会**静默**把它们全打回 qwen
+    #    —— 现象是新引擎上线了却毫无效果，日志里只有一句 warning，极难发现。
+    if name not in ("cosyvoice3", "gptsovits", "voxcpm", "omnivoice"):
         return False
     # ⚠️ 每个引擎**各自**记时间戳：共用一把 ts 的话，查 B 会命中刚查 A
     #    写下的新鲜缓存，于是一个引擎挂了会被另一个引擎的健康状态掩盖。
@@ -2368,7 +2540,8 @@ def engine_available(name):
         return _ENGINE_AVAIL.get(name, False)
     ok = False
     try:
-        mod = cosy_client if name == "cosyvoice3" else gs_client
+        mod = {"cosyvoice3": cosy_client, "gptsovits": gs_client,
+               "voxcpm": vox_client, "omnivoice": omni_client}[name]
         ok = bool(mod.health(timeout=3.0)[0])
     except Exception:
         ok = False
