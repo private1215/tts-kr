@@ -25,10 +25,13 @@ import soundfile as sf
 import librosa
 
 
+SR = int(os.environ.get("NAT_SR", "16000"))
+
+
 def load16(path):
     t = tempfile.mktemp(suffix=".wav")
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", path,
-                    "-ar", "16000", "-ac", "1", t], check=True)
+                    "-ar", str(SR), "-ac", "1", t], check=True)
     y, _ = sf.read(t, dtype="float32")
     os.unlink(t)
     return y, 16000
@@ -36,13 +39,20 @@ def load16(path):
 
 def analyze(path, dur=60.0, chars=None):
     y, sr = load16(path)
+    # 高频占比一律按 EL 的带宽口径算：EL 案例是 24kHz（Nyquist 12k）。
+    # 我们成品若只有 16kHz，>4kHz 这一段本就被砍，数字不可比。
+    hf_lo = 4000
     n = int(dur * sr)
     y = y[:n]
-    out = {"path": path, "sec": round(len(y) / sr, 1)}
+    out = {"path": path, "sec": round(len(y) / sr, 1), "sr": sr}
 
     # ---- F0 (pyin) ----
+    # 🔴 帧长必须按采样率自适应：写死 1024 是 16k 的 64ms，
+    #    在 24k 下只有 42.7ms，pyin 会测出八度错误（EL 198 → 131.6）。
+    fl = int(0.064 * sr)
+    hl = max(fl // 4, 1)
     f0, vo, _ = librosa.pyin(y, fmin=60, fmax=400, sr=sr,
-                             frame_length=1024, hop_length=256)
+                             frame_length=fl, hop_length=hl)
     f0v = f0[(vo if vo is not None else np.zeros_like(f0, dtype=bool)) & np.isfinite(f0)]
     if len(f0v) > 50:
         out["f0_med"] = round(float(np.median(f0v)), 1)

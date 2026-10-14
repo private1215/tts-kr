@@ -58,8 +58,17 @@ DEFAULT_F0 = {"f": 276.0, "m": 197.7}
 #    所以变调后高频要压到 -6.5dB。未变调时保持默认 -4dB。
 #    ❌ rubberband 的 formant=preserved（只升基频不动声道）**不可用**：
 #       频谱平坦度 0.050 → 0.015（EL 0.042），声音发闷发假。
-EQ_MALE_DB = -4.0
-EQ_MALE = "highshelf=f=4000:g=-4,lowpass=f=14000"
+# 🔴 男声 EQ 三段式（2026-10-14 用 eq_search.py 网格搜出来的，不是拍脑袋）：
+#    原单段 highshelf(4000,-4) 只会把高频整体压掉，结果能量全堆在 100~1kHz：
+#      我们 100-1k 0.763 / 1k-4k 0.225，而 EL 是 0.712 / 0.275 —— 听感"厚而闷、不清晰"。
+#    三段：lowshelf 800 -1.0（减低频堆积）+ highshelf 1500 +1.5（补中频清晰度）
+#          + highshelf 4000 %g（压变调搬上来的高频）
+#    网格搜索结果（24k 口径 60s 频段能量 L1 偏差）：
+#      基线 0.1026 → 单提中频 0.033 → **加低频衰减+高频回压 0.0060**（flat 也 0.0378→0.0389）
+#    变调会把频谱整体搬高（hf 0.0064→0.0185，EL 只有 0.0104），
+#    所以变调时高频那一档要从 -4dB 加深到 -8dB。
+EQ_MALE_TMPL = ("lowshelf=f=800:g=-1.0,highshelf=f=1500:g=1.5,"
+                "highshelf=f=4000:g=%g,lowpass=f=14000")
 # EL 实测 F0 中位（librosa.pyin / 16k 口径，与 tools 里的诊断同口径，不可换算法）：
 #   男（13 条 EL 案例）190.5~205.3 → 均值 197.7
 #   女（5 条 SOLA 案例）271.0~282.1 → 均值 276.0
@@ -275,8 +284,8 @@ def main():
 
 #    🔴 变调后高频需要额外回压（默认 -2.5dB，见 EQ_MALE_DB 注释）。
     eq_db = a.eq_db if a.eq_db is not None else (
-        EQ_MALE_DB + (-2.5 if a.pitch and a.pitch > 1.02 else 0.0))
-    eq_m = "highshelf=f=4000:g=%g,lowpass=f=14000" % eq_db
+        -4.0 + (-4.0 if a.pitch and a.pitch > 1.02 else 0.0))
+    eq_m = EQ_MALE_TMPL % eq_db
     gain = round(lufs_t - lufs(cur), 1)
     # 🔴 二次校正：EQ 会改变响度，按 EQ 前的响度算出来的增益是错的
     #   （实测男声目标 -25.0 结果落到 -25.4）。所以先粗调、再实测补一次。
