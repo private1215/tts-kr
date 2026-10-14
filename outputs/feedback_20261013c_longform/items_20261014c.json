@@ -1,0 +1,70 @@
+{
+ "items": [
+  {"id": "ctrl_pace_20261014c", "dim": "热身", "title": "先热个身：听两段，哪段语速更快？",
+   "desc": "依次听第 1 段和第 2 段。\n\n🎯 问题：哪段念得**更快**？\n\n✅ 凭耳朵，不用想太多。",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": "h6_ctrl1.mp3", "label": "第 1 段更快"},
+    {"key": "B", "file": "h6_ctrl2.mp3", "label": "第 2 段更快"},
+    {"key": "C", "file": null, "label": "两段一样快"},
+    {"key": "D", "file": null, "label": "没听清"}]},
+
+  {"id": "m_pace_20261014c", "dim": "男声·语速", "title": "男声：语速合适吗",
+   "desc": "先听**标杆**（真人水准），再听**我们**。\n\n🎯 跟标杆比，我们这段**语速**怎么样？",
+   "ref": {"file": "j9_em.mp3", "label": "标杆（先听这个）"},
+   "options": [
+    {"key": "A", "file": "j9_m.mp3", "label": "合适，跟标杆差不多"},
+    {"key": "B", "file": null, "label": "偏快"},
+    {"key": "C", "file": null, "label": "偏慢"},
+    {"key": "D", "file": null, "label": "没听清"}]},
+
+  {"id": "m_problem_20261014c", "dim": "男声·问题定位", "title": "男声：最像机器人的地方是哪一个",
+   "desc": "还是这段男声。\n\n🎯 听起来**最像机器人**的是哪一点？（选一个最主要的）",
+   "ref": {"file": "j9_m.mp3", "label": "听这一段（男声）"},
+   "options": [
+    {"key": "A", "file": null, "label": "语速不对（太快或太慢）"},
+    {"key": "B", "file": null, "label": "停顿的位置或长度怪"},
+    {"key": "C", "file": null, "label": "声音本身不像真人（音色/腔调）"},
+    {"key": "D", "file": null, "label": "有杂音、怪音或咔哒声"},
+    {"key": "E", "file": null, "label": "咬字含混、像在赶"},
+    {"key": "F", "file": null, "label": "说不出具体哪里，就是不像"}]},
+
+  {"id": "m_ship_20261014c", "dim": "男声·能不能用", "title": "男声：这段能直接交给客户吗",
+   "desc": "🎯 这段**拿来直接交给客户**行不行？",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": null, "label": "可以直接用"},
+    {"key": "B", "file": null, "label": "还差一点，但接近了"},
+    {"key": "C", "file": null, "label": "还是不行"},
+    {"key": "D", "file": null, "label": "没听清"}]},
+
+  {"id": "f_pace_20261014c", "dim": "女声·语速", "title": "女声：语速合适吗",
+   "desc": "先听**标杆**（真人水准），再听**我们**。\n\n🎯 跟标杆比，我们这段**语速**怎么样？",
+   "ref": {"file": "j9_ef.mp3", "label": "标杆（先听这个）"},
+   "options": [
+    {"key": "A", "file": "j9_f.mp3", "label": "合适，跟标杆差不多"},
+    {"key": "B", "file": null, "label": "偏快"},
+    {"key": "C", "file": null, "label": "偏慢"},
+    {"key": "D", "file": null, "label": "没听清"}]},
+
+  {"id": "f_problem_20261014c", "dim": "女声·问题定位", "title": "女声：最像机器人的地方是哪一个",
+   "desc": "先听**标杆**，再听**我们**。\n\n🎯 听起来**最像机器人**的是哪一点？（选一个最主要的）",
+   "ref": {"file": "j9_ef.mp3", "label": "标杆（先听这个）"},
+   "options": [
+    {"key": "A", "file": "j9_f.mp3", "label": "语速不对（太快或太慢）"},
+    {"key": "B", "file": null, "label": "停顿的位置或长度怪"},
+    {"key": "C", "file": null, "label": "声音本身不像真人（音色/腔调）"},
+    {"key": "D", "file": null, "label": "有杂音、怪音或咔哒声"},
+    {"key": "E", "file": null, "label": "咬字含混、像在赶"},
+    {"key": "F", "file": null, "label": "说不出具体哪里，就是不像"}]},
+
+  {"id": "f_ship_20261014c", "dim": "女声·能不能用", "title": "女声：这段能直接交给客户吗",
+   "desc": "🎯 这段**拿来直接交给客户**行不行？",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": null, "label": "可以直接用"},
+    {"key": "B", "file": null, "label": "还差一点，但接近了"},
+    {"key": "C", "file": null, "label": "还是不行"},
+    {"key": "D", "file": null, "label": "没听清"}]}
+ ]
+}

@@ -25,6 +25,7 @@ import os
 import re
 import subprocess
 import sys
+import shutil
 import tempfile
 
 import numpy as np
@@ -39,8 +40,14 @@ for p in (HERE, os.path.join(HERE, "..", "..", "diag", "cross-20261013"),
 from pause_clean_v3 import clean_gaps, detect_gaps_wav, verify_pauses  # noqa: E402
 
 WIN = 60.0
-# EL 典型速率（实测均值）：女 8.51 / 男 8.93
+# EL 典型速率（音节核/秒，实测均值）：女 8.51 / 男 8.93
 DEFAULT_RATE = {"f": 8.5, "m": 8.9}
+# 🔴 EL 实测「字/秒」（chars per second）：女 7.45 / 男 8.37
+#   这才是**跨文案可比**的锚。2026-10-14 踩坑：用音节核速率当固定目标时，
+#   男声成品 9.17 字/秒 vs EL 8.37，快了 9.6%，员工直接判「不像真人」。
+#   老脚本没出事，是因为它们拿**同一篇文案的 EL** 逐窗对齐，量纲差互相抵消；
+#   一旦换成固定常数，音节核/秒 ≠ 字/秒 的差异就暴露了。
+DEFAULT_CPS = {"f": 7.45, "m": 8.37}
 # EL 实测响度：女 -22.6 / 男 -25.0
 DEFAULT_LUFS = {"f": -22.6, "m": -25.0}
 EQ_MALE = "highshelf=f=4000:g=-4,lowpass=f=14000"
@@ -94,6 +101,10 @@ def main():
     ap.add_argument("--gender", default="f", choices=["f", "m"])
     ap.add_argument("--el", default="")
     ap.add_argument("--target-rate", type=float, default=None)
+    ap.add_argument("--target-cps", type=float, default=None,
+                    help="按「字/秒」锚定（跨文案可比，推荐）。需配合 --chars")
+    ap.add_argument("--chars", type=int, default=0,
+                    help="raw 对应的正文字数，--target-cps 模式下必填")
     ap.add_argument("--lufs", type=float, default=None)
     ap.add_argument("--no-clean", action="store_true")
     a = ap.parse_args()
@@ -117,6 +128,14 @@ def main():
             er = float(np.interp(frac, centers, ec)) if ec else r
             fs.append(min(max(r / er if er > 0 else 1.0, 1.0), 1.30))
         mode = "EL逐窗对齐"
+    elif a.target_cps and a.chars > 0:
+        # 字/秒锚：先算全局该慢多少，再按各窗相对快慢分配，保留自然起伏
+        our_cps = a.chars / dur
+        f = our_cps / a.target_cps
+        mean_r = sum(rc) / len(rc) if rc else 1.0
+        fs = [min(max(f * (r / mean_r) if r > 0 else f, 1.0), 1.35) for r in rc]
+        mode = (f"字/秒锚 {a.target_cps}（当前 {our_cps:.2f} 字/秒，"
+                f"全局需慢 {f:.3f}×）")
     else:
         fs = [min(max(r / target if target > 0 else 1.0, 1.0), 1.30) for r in rc]
         mode = f"目标速率 {target}"
@@ -165,6 +184,7 @@ def main():
         verify_pauses(t4, "清洗后")
         cur = t4
 
+    gain = round(lufs_t - lufs(cur), 1)
     # 🔴 二次校正：EQ 会改变响度，按 EQ 前的响度算出来的增益是错的
     #   （实测男声目标 -25.0 结果落到 -25.4）。所以先粗调、再实测补一次。
     af = (EQ_MALE + "," if g == "m" else "") + "volume=%gdB" % gain
@@ -173,7 +193,8 @@ def main():
     delta = round(lufs_t - lufs(a.out), 2)
     if abs(delta) > 0.05:
         t5 = os.path.join(tmpd, "loud2.wav")
-        os.replace(a.out, t5)
+        # os.replace 跨设备会炸（/tmp → /mnt），必须 shutil.move
+        shutil.move(a.out, t5)
         subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", t5, "-af",
                         "volume=%gdB" % delta, a.out], check=True)
         print("响度二次校正 %+.2fdB（EQ 改变了响度）" % delta, flush=True)
