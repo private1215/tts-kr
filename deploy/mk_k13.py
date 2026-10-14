@@ -29,7 +29,13 @@ CUTS = [
     ("k13_a_t", DIAG + "/m_v5.wav", 300, DUR),
     ("k13_b_t", DIAG + "/m_v7.wav", 300, DUR),
     ("k13_el_t", EL, 300, DUR),
+    ("k13_b_h", DIAG + "/m_v7.wav", 120, DUR),
+    ("k13_el_h", EL, 120, DUR),
     ("k13_b_m", DIAG + "/m_v7.wav", 180, DUR),
+    ("k13_el_m", EL, 180, DUR),
+    ("k13_b_s", DIAG + "/m_v7.wav", 420, DUR),
+    ("k13_el_s", EL, 420, DUR),
+    ("k13_b_q", DIAG + "/m_v7.wav", 240, DUR),
 ]
 
 
