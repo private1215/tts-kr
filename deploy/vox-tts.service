@@ -1,0 +1,29 @@
+[Unit]
+Description=VoxCPM2 TTS Service (port 8400) - 男声最佳链路合成端
+After=network.target
+# 锁 3090(24G)：cosy-tts(5.2G) + gs-tts(0.65G) + 本服务。
+# 🔴 实测 allocated 5.12G，但长文本峰值 reserved 会冲到 10.87G（缓存分配器）。
+#    服务端每次生成后都 empty_cache()，常驻回到 ~5.3G；expandable_segments 减少碎片。
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/mnt/tts/projects/voxcpm
+# ⚠️ 必须用 voxcpm 自己的 venv（torch 2.14+cu130 / numpy 2.5）
+Environment=CUDA_VISIBLE_DEVICES=GPU-b67eee2c-c672-6915-910d-617c62abebee
+Environment=VOX_MODEL=/mnt/tts/projects/voxcpm/models/VoxCPM2
+Environment=VOX_PORT=8400
+# 分块大小：与盲听获胜的 X1_m 完全一致（句边界、600 字），不要改
+Environment=VOX_CHUNK_CHARS=600
+Environment=VOX_CFG=2.0
+Environment=VOX_STEPS=10
+Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/mnt/tts/projects/voxcpm/venv/bin/python /mnt/tts/projects/voxcpm/vox_server.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/mnt/tts/projects/voxcpm/vox.log
+StandardError=append:/mnt/tts/projects/voxcpm/vox.log
+
+[Install]
+WantedBy=multi-user.target

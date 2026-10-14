@@ -1,0 +1,24 @@
+[Unit]
+Description=OmniVoice TTS Service (port 8300) - 女声最佳链路合成端
+After=network.target
+# 锁 3060(12G) 生产卡：主服务 qwen-tts 常驻 4.24G，OmniVoice 仅 1.9G，合计 ~6.5G/12G。
+# 与 cosy(3090) 物理隔离，不需要串行调度。
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/mnt/tts/projects/omnivoice
+# ⚠️ 必须用 omnivoice 自己的 venv（torch 2.14+cu130 / numpy 2.5）
+Environment=CUDA_VISIBLE_DEVICES=GPU-94853612-464c-9177-c374-a9a82e321229
+Environment=OMNI_MODEL=/mnt/tts/projects/omnivoice/models/OmniVoice
+Environment=OMNI_PORT=8300
+Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/mnt/tts/projects/omnivoice/venv/bin/python /mnt/tts/projects/omnivoice/omni_server.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/mnt/tts/projects/omnivoice/omni.log
+StandardError=append:/mnt/tts/projects/omnivoice/omni.log
+
+[Install]
+WantedBy=multi-user.target
