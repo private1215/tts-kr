@@ -25,6 +25,7 @@ CUTS = [
     ("k12_v5_tail", DIAG + "/m_v5.wav", 300, 35),
     ("k12_v7_tail", DIAG + "/m_v7.wav", 300, 35),
     ("k12_el_tail", EL, 300, 35),
+    ("k12_v7_mid", DIAG + "/m_v7.wav", 180, 35),
     ("k12_c1", DIAG + "/m_v7.wav", 300, 35),
     ("k12_c2", DIAG + "/m_v7.wav", 300, 35),
 ]
