@@ -1,0 +1,46 @@
+{
+ "items": [
+  {"id": "ctrl_pace_20261014a", "dim": "热身", "title": "先热个身：听两段，哪段语速更快？",
+   "desc": "依次听第 1 段和第 2 段。\n\n🎯 问题：哪段念得**更快**？\n\n✅ 凭耳朵，不用想太多。",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": "h6_ctrl1.mp3", "label": "第 1 段更快"},
+    {"key": "B", "file": "h6_ctrl2.mp3", "label": "第 2 段更快"},
+    {"key": "C", "file": null, "label": "两段一样快"},
+    {"key": "D", "file": null, "label": "没听清"}]},
+
+  {"id": "f_number_ab_20261014a", "dim": "女声·电话号码：A/B 对比", "title": "电话号码：哪段念得更清楚",
+   "desc": "两段都念了同一个电话号码（逐位念的）。\n\n先听第 1 段、再听第 2 段。\n\n🎯 哪段的**号码念得更清楚、更自然**？（只看号码那几句）",
+   "ref": null,
+   "options": [
+    {"key": "A", "file": "h8_fn.mp3", "label": "第 1 段号码更清楚"},
+    {"key": "B", "file": "h8_en.mp3", "label": "第 2 段号码更清楚"},
+    {"key": "C", "file": null, "label": "差不多，分不出"},
+    {"key": "D", "file": null, "label": "没听清"}]},
+
+  {"id": "f_number_ok_20261014a", "dim": "女声·电话号码：单独确认", "title": "再听一遍我们的：号码念清楚了吗",
+   "desc": "单独听我们这版的号码那几句。\n\n🎯 现在**念得清楚了吗**？（和上一次比）",
+   "ref": {"file": "h8_fn.mp3", "label": "听这一段（注意号码部分）"},
+   "options": [
+    {"key": "A", "file": null, "label": "清楚了，能听明白"},
+    {"key": "B", "file": null, "label": "还是有点含混"},
+    {"key": "C", "file": null, "label": "比上次明显好，但还差一点"},
+    {"key": "D", "file": null, "label": "没听清"}]},
+
+  {"id": "f_head_ship_20261014a", "dim": "女声·新段落（开头段）", "title": "换一段没听过的：能直接用吗",
+   "desc": "这是女声**开头部分**的一段（之前没听过，用来确认整篇都行，不只是听过的那几段）。\n\n先听目标声音的开头段，再听我们的。\n\n🎯 这段**拿来直接交给客户**行不行？",
+   "ref": {"file": "h8_eh.mp3", "label": "目标声音·开头段（先听这个）"},
+   "options": [
+    {"key": "A", "file": "h8_fh.mp3", "label": "可以直接用"},
+    {"key": "B", "file": "h8_fh.mp3", "label": "还有点问题，但接近了"},
+    {"key": "C", "file": null, "label": "还是不行"}]},
+
+  {"id": "m_head_ship_20261014a", "dim": "男声·新段落（开头段）", "title": "男声也换一段没听过的：能直接用吗",
+   "desc": "这是男声**开头部分**的一段（之前没听过）。\n\n先听目标声音的开头段，再听我们的。\n\n🎯 这段**拿来直接交给客户**行不行？",
+   "ref": {"file": "h8_em.mp3", "label": "目标声音·开头段（先听这个）"},
+   "options": [
+    {"key": "A", "file": "h8_mh.mp3", "label": "可以直接用"},
+    {"key": "B", "file": "h8_mh.mp3", "label": "还有点问题，但接近了"},
+    {"key": "C", "file": null, "label": "还是不行"}]}
+ ]
+}
