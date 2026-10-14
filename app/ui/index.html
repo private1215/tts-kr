@@ -36,7 +36,7 @@ body{margin:0;color:var(--txt);
 ::-webkit-scrollbar-thumb:hover{background:#313B4C}
 
 .wrap{max-width:1180px;margin:0 auto;padding:28px 24px 48px}
-.head{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;margin-bottom:22px;flex-wrap:wrap}
+.head{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:22px;flex-wrap:wrap}
 .head-left{display:flex;align-items:center;gap:13px}
 .logo{width:38px;height:38px;border-radius:11px;flex:none;display:grid;place-items:center;
   background:linear-gradient(145deg,var(--accent-h),var(--accent) 55%,#3F7FD6);
@@ -46,8 +46,13 @@ h1{font-size:19px;font-weight:600;margin:0;letter-spacing:-.015em}
 .sub{color:var(--dim);font-size:12.5px;margin-top:2px}
 .head-right{display:flex;gap:9px;align-items:center;flex:none}
 
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
-@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+.employee-main,.employee-side{min-width:0}
+.employee-side .sticky-action{position:sticky;top:18px}
+@media(max-width:900px){
+  .grid{grid-template-columns:1fr}
+  .employee-side .sticky-action{position:static}
+}
 .card{background:linear-gradient(180deg,var(--panel) 0%,#131720 100%);
   border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin-bottom:16px;
   box-shadow:var(--shadow)}
@@ -86,14 +91,16 @@ button.danger{color:var(--err)}
   font-size:13px;font-weight:500;background:transparent;transition:all .16s var(--ease)}
 .tab:hover{color:var(--txt2)}
 .tab.on{background:var(--panel3);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.3)}
-/* 性别二选一：员工日常只碰这两个按钮，其余全部收进「高级设置」 */
-.gsel{display:flex;gap:8px;margin:2px 0 8px}
-.gbtn{flex:1;padding:11px 8px;border-radius:10px;border:1px solid var(--line);
-  background:var(--panel2);color:var(--dim);cursor:pointer;text-align:center;
-  font-size:14px;transition:.15s}
-.gbtn:hover{color:var(--txt2);border-color:var(--dim)}
-.gbtn.on{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:600}
-.gbtn .gsub{display:block;font-size:11px;opacity:.75;margin-top:2px}
+/* 性别二选一：员工日常只碰这两个按钮，其余全部收进管理员设置 */
+.gsel{display:flex;gap:10px;margin:2px 0 10px}
+.gbtn{flex:1;min-height:72px;padding:12px;border-radius:11px;border:1px solid var(--line2);
+  background:var(--panel2);color:var(--txt2);cursor:pointer;text-align:left;
+  font-size:15px;transition:.15s}
+.gbtn:hover{color:var(--txt);border-color:#46556d;background:var(--panel3)}
+.gbtn.on{background:var(--accent-soft);color:var(--txt);border-color:var(--accent);font-weight:600;
+  box-shadow:inset 0 0 0 1px rgba(91,159,255,.10)}
+.gbtn .gsub{display:block;font-size:11.5px;color:var(--dim);font-weight:400;margin-top:4px}
+.gbtn.on .gsub{color:var(--accent-h)}
 .adv{margin-top:10px;font-size:12px;color:var(--dim);cursor:pointer;user-select:none}
 .adv:hover{color:var(--txt2)}
 .advbody{margin-top:8px;padding-top:10px;border-top:1px dashed var(--line)}
@@ -118,13 +125,30 @@ button.danger{color:var(--err)}
 .fbtag{font-size:11px;padding:2px 8px;border-radius:11px;background:var(--panel3);color:var(--txt2)}
 .hint{font-size:12px;color:var(--dim);margin-top:7px;line-height:1.55}
 
-/* ---- 2026-09-30 易用性微调：只加样式，不动结构 ---- */
-#text{min-height:190px;font-size:14.5px;line-height:1.75}   /* 员工主输入区，字大一点好校对 */
-#submit{padding:11px 22px;font-size:14.5px;font-weight:600;letter-spacing:.3px}
+/* 员工主流程：操作卡固定在右侧，提交前给出明确摘要与恢复提示 */
+#text{min-height:260px;font-size:14.5px;line-height:1.75}
+#submit{width:100%;min-height:46px;padding:11px 22px;font-size:14.5px;font-weight:650;letter-spacing:0}
+#clear{width:100%;margin-top:8px;background:transparent;color:var(--dim)}
 #count{font-size:12.5px;color:var(--txt2);margin-top:9px}
-button.primary:disabled{opacity:.55;cursor:not-allowed}
+.submit-summary{margin:2px 0 14px;padding:9px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:10px}
+.summary-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;font-size:12.5px;color:var(--dim)}
+.summary-row+.summary-row{border-top:1px solid rgba(45,53,67,.65)}
+.summary-row strong{color:var(--txt2);font-weight:560;text-align:right}
+.submit-state{display:none;margin-top:10px;padding:9px 11px;border-radius:9px;font-size:12.5px;line-height:1.5}
+.submit-state.show{display:block}
+.submit-state.ok{color:#7EDDB7;background:rgba(63,185,138,.09);border:1px solid rgba(63,185,138,.28)}
+.submit-state.bad{color:#FF9B9B;background:rgba(236,108,108,.09);border:1px solid rgba(236,108,108,.28)}
+.submit-help{margin-top:10px;color:var(--dim);font-size:11.5px;line-height:1.55;text-align:center}
+.employee-recovery{display:flex;gap:7px;margin-top:15px;padding-top:13px;border-top:1px solid var(--line);color:var(--dim);font-size:11.5px;line-height:1.5}
+.employee-recovery svg{width:15px;height:15px;flex:none;margin-top:2px}
+button.primary:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
 .card h2{letter-spacing:1.2px}
 label{font-size:12.5px}
+@media(max-width:600px){
+  .gsel{display:grid;grid-template-columns:1fr}
+  #text{min-height:220px}
+  .head-right{width:100%;justify-content:flex-end}
+}
 
 .job{border:1px solid var(--line);border-radius:12px;padding:13px 15px;margin-bottom:10px;
   background:linear-gradient(180deg,var(--panel2) 0%,#171C25 100%);
@@ -247,16 +271,144 @@ details.adv summary:hover{color:var(--txt2)}
   border:1px solid var(--line2);border-radius:11px;padding:11px 20px;font-size:13px;z-index:200;
   box-shadow:var(--shadow-lg);animation:pop .18s var(--ease)}
 </style>
+<!-- ==========================================================================
+     员工端视觉升级 v2（2026-10-14）
+     来源：outputs/员工端网页优化预览.html 的设计系统。
+     做法：**只叠样式 + 微调结构，不动任何 id / JS 钩子**，所以功能零风险。
+     放独立 <style> 且在原样式之后 —— 同权重下后来者胜，无需 !important。
+
+     🔴 国际化注意（改这里必看）：
+       - 韩文正文必须走韩文字体栈（Malgun Gothic / Apple SD Gothic Neo /
+         Noto Sans KR），否则会回退到中文字形（"变丑"最常见原因）；
+       - 韩文不能按字断行，必须 word-break:keep-all + word-wrap:break-word；
+       - 界面文案语言由 #langBtn 切换（lang 属性由 JS 同步），不要写死。
+     ========================================================================== -->
+<style>
+:root{
+  --bg-soft:#11151c; --surface:#151a22; --surface-raised:#1a202a; --surface-hover:#202733;
+  --line-strong:#354052; --blue:#65a6ff; --blue-strong:#4d92f2; --blue-soft:rgba(101,166,255,.12);
+  --green:#49c493; --amber:#e8ac4b; --red:#ef7676;
+  --r-lg:16px; --r-md:11px; --r-sm:8px;
+  --shadow-xl:0 18px 48px rgba(0,0,0,.24);
+  --font-kr:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR","Nanum Gothic",sans-serif;
+}
+body{
+  background:
+    radial-gradient(900px 420px at 8% -8%, rgba(69,102,150,.22), transparent 64%),
+    radial-gradient(760px 360px at 94% 0%, rgba(45,73,113,.18), transparent 62%),
+    var(--bg);
+  background-attachment:fixed;
+}
+.wrap{max-width:1180px;padding:22px 24px 56px}
+
+/* ---------- 主流程卡：把「文案 → 声音 → 生成」合成一张卡 ---------- */
+.employee-main{display:block}
+.employee-main .card{
+  background:rgba(21,26,34,.94);
+  border:1px solid var(--line);
+  border-radius:var(--r-lg);
+  box-shadow:var(--shadow-xl);
+  padding:20px 22px;
+}
+.employee-main .card h2{
+  font-size:13px;font-weight:650;letter-spacing:0;text-transform:none;
+  color:var(--txt);margin:0 0 14px;display:flex;align-items:center;gap:9px;
+}
+.employee-main .card h2::before{
+  content:"";width:3px;height:13px;border-radius:2px;
+  background:linear-gradient(180deg,var(--blue),var(--blue-strong));
+}
+/* 步骤指示：1 粘贴文案 → 2 选声音 → 3 生成 */
+.flowsteps{display:flex;align-items:center;gap:8px;margin:0 0 16px;color:var(--dim);font-size:12px;flex-wrap:wrap}
+.flowsteps .s{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.flowsteps .s b{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;
+  background:var(--surface-raised);border:1px solid var(--line-strong);font-size:11px;color:var(--txt2)}
+.flowsteps .s.on{color:var(--txt2)}
+.flowsteps .s.on b{border-color:var(--blue);background:var(--blue-soft);color:var(--blue)}
+.flowsteps .ln{width:26px;height:1px;background:var(--line-strong)}
+
+/* ---------- 文案输入 ---------- */
+#title,#text,input,textarea{
+  border:1px solid var(--line-strong);background:#1a202a;color:var(--txt);
+  border-radius:var(--r-md);padding:11px 12px;
+  transition:border-color .15s,background .15s,box-shadow .15s;
+}
+input:hover,textarea:hover{border-color:#46536a}
+input:focus,textarea:focus{border-color:var(--blue);background:#1d2430;
+  box-shadow:0 0 0 3px var(--blue-soft);outline:none}
+input::placeholder,textarea::placeholder{color:#667181}
+#text{min-height:230px;line-height:1.74;font-size:14.5px;resize:vertical;
+  /* 🔴 韩文排版：字体栈 + 不按字断行 */
+  font-family:inherit;}
+#text[lang="ko"],.kr-text,[lang="ko"]{
+  font-family:var(--font-kr);
+  /* 🔴 韩文不能按字断行，否则每行末尾会被硬切 */
+  word-break:keep-all;word-wrap:break-word;line-break:strict;
+}
+#count{font-size:12px;color:var(--dim);margin-top:8px}
+
+/* ---------- 声音卡片（数据驱动，见 renderVoiceCards） ---------- */
+.gsel{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:2px 0 10px}
+.gbtn{
+  min-height:78px;border:1px solid var(--line-strong);border-radius:var(--r-md);
+  background:var(--surface-raised);display:flex;align-items:center;gap:12px;
+  padding:12px;text-align:left;cursor:pointer;
+  transition:border-color .15s,background .15s,transform .15s;
+}
+.gbtn .vname{display:block;font-size:14px;font-weight:650;color:var(--txt)}
+.gbtn .vwrap{min-width:0}
+.gbtn:hover{border-color:#53627b;background:var(--surface-hover)}
+.gbtn:active{transform:translateY(1px)}
+.gbtn.on{border-color:var(--blue);background:var(--blue-soft);
+  box-shadow:inset 0 0 0 1px rgba(101,166,255,.12)}
+.gbtn .vic{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;flex:none;
+  background:#232b37;border:1px solid var(--line-strong);color:var(--txt2)}
+.gbtn.on .vic{color:var(--blue);border-color:rgba(101,166,255,.46);background:rgba(101,166,255,.1)}
+.gbtn .vic svg{width:21px;height:21px}
+.gbtn .gsub{display:block;font-size:12px;color:var(--dim);font-weight:400;margin-top:2px}
+.gbtn.on .gsub{color:var(--txt2)}
+.gbtn .vchk{margin-left:auto;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;
+  border:1px solid var(--line-strong);color:transparent;flex:none}
+.gbtn.on .vchk{background:var(--blue);border-color:var(--blue);color:#08111f}
+.gbtn .vchk svg{width:13px;height:13px;stroke-width:2.5}
+
+/* ---------- 右侧确认卡 ---------- */
+.sticky-action{position:sticky;top:16px;background:rgba(21,26,34,.94)}
+.submit-summary{background:var(--bg-soft);border:1px solid var(--line);
+  border-radius:var(--r-md);padding:12px 13px;margin:2px 0 14px}
+.summary-row{padding:7px 0;font-size:12.5px;color:var(--dim)}
+.summary-row+.summary-row{border-top:1px solid rgba(53,64,82,.48)}
+.summary-row strong{color:var(--txt2);font-weight:580;text-align:right}
+button.primary,#submit{
+  width:100%;min-height:46px;border:0;border-radius:10px;font-weight:700;cursor:pointer;
+  background:linear-gradient(180deg,#8abaff,var(--blue) 58%,var(--blue-strong));
+  color:#07111f;box-shadow:0 5px 17px rgba(77,146,242,.28),inset 0 1px 0 rgba(255,255,255,.28);
+  transition:filter .15s,transform .15s,opacity .15s;
+}
+button.primary:hover:not(:disabled),#submit:hover:not(:disabled){filter:brightness(1.05)}
+button.primary:active:not(:disabled),#submit:active:not(:disabled){transform:translateY(1px)}
+button.primary:disabled,#submit:disabled{opacity:.42;cursor:not-allowed;box-shadow:none}
+.submit-help{text-align:center;color:var(--dim);font-size:11.5px;margin-top:8px}
+button:focus-visible,input:focus-visible,textarea:focus-visible{
+  outline:3px solid rgba(101,166,255,.28);outline-offset:2px}
+
+@media(max-width:900px){
+  .gsel{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none !important;animation:none !important}
+}
+</style>
 </head>
 <body>
 
 <div class="mask" id="loginMask" style="display:none">
   <div class="modal loginbox">
-    <div class="brand" data-i18n="loginTitle">登录</div>
-    <div class="bsub" data-i18n="loginSub">Qwen3-TTS 语音生成平台</div>
+    <div class="brand" data-i18n="loginTitle">登录工作台</div>
+    <div class="bsub" data-i18n="loginSub">使用公司分配的账号继续</div>
     <div class="mbody">
       <label data-i18n="username">账号</label>
-      <input id="luser" autocomplete="username" value="admin">
+      <input id="luser" autocomplete="username">
       <label data-i18n="password">密码</label>
       <input id="lpwd" type="password" autocomplete="current-password">
       <div class="err" id="lerr"></div>
@@ -264,7 +416,7 @@ details.adv summary:hover{color:var(--txt2)}
     <div class="acts">
       <button class="primary" id="lbtn" data-i18n="loginBtn">登录</button>
     </div>
-    <div class="hint" data-i18n="loginHint">默认管理员：admin / aaaa1234（首次登录后请及时修改密码）</div>
+    <div class="hint" data-i18n="loginHint">如忘记账号或密码，请联系管理员。</div>
   </div>
 </div>
 
@@ -353,7 +505,7 @@ details.adv summary:hover{color:var(--txt2)}
     <!-- 列表 / 上传 / 详情三个视图都在这一层里滚，标题常驻、操作栏吸底 -->
     <div class="mbody" id="caseBody">
     <!-- 上传入口：案例越多，拆出来的规律越稳（后端上传后会自动跑韵律六维拆解） -->
-    <div id="caseTop" style="display:flex;align-items:center;gap:10px;margin:10px 0">
+    <div id="caseTop" class="admin-only" style="display:flex;align-items:center;gap:10px;margin:10px 0">
       <button class="mini primary" id="csAdd" data-i18n="upBtn">+ 上传案例</button>
       <button class="mini" id="csExtract" data-i18n="csExtractBtn">⟳ 重新拆解音色</button>
       <span class="hint" data-i18n="upTip">多上传几份，拆出来的规律才稳</span>
@@ -459,12 +611,12 @@ details.adv summary:hover{color:var(--txt2)}
 <div class="wrap">
   <div class="head">
     <div>
-      <h1 data-i18n="title">Qwen3-TTS 语音生成</h1>
-      <div class="sub" data-i18n="subtitle">Qwen3-TTS-12Hz-1.7B · RTX 3060 · 任务排队串行推理</div>
+      <h1 data-i18n="title">韩语配音工作台</h1>
+      <div class="sub" data-i18n="subtitle">粘贴文案，选择男声或女声，生成后即可试听与下载</div>
     </div>
     <div class="head-right">
       <!-- 案例库是「数据资产」入口，原来只藏在任务队列那一栏，太深，提到页头 -->
-      <button class="menubtn" id="btnCasesTop" data-i18n="caseBtn"
+      <button class="menubtn admin-only" id="btnCasesTop" data-i18n="caseBtn"
               style="margin-right:6px">标杆案例</button>
       <div class="menuwrap">
         <button class="menubtn" id="langBtn">
@@ -490,34 +642,59 @@ details.adv summary:hover{color:var(--txt2)}
   </div>
 
   <div class="grid">
-    <div>
+    <div class="employee-main">
+      <!-- 步骤指示：让员工一眼知道总共就三步（文案 → 声音 → 生成） -->
+      <div class="flowsteps" aria-hidden="true">
+        <div class="s on"><b>1</b><span data-i18n="script">文案</span></div>
+        <div class="ln"></div>
+        <div class="s"><b>2</b><span data-i18n="voice">声音</span></div>
+        <div class="ln"></div>
+        <div class="s"><b>3</b><span data-i18n="submit">开始生成</span></div>
+      </div>
       <div class="card">
         <h2 data-i18n="script">文案</h2>
         <label data-i18n="jobTitle">语音标题</label>
         <input id="title" data-i18n-ph="titlePh">
         <label data-i18n="scriptText">正文</label>
-        <textarea id="text" data-i18n-ph="scriptPh"></textarea>
+        <textarea id="text" data-i18n-ph="scriptPh" lang="ko" spellcheck="false"></textarea>
         <div class="hint" id="count">0</div>
       </div>
 
       <div class="card">
         <h2 data-i18n="voice">声音</h2>
-        <!-- 员工只要点「男声 / 女声」：代码自动落到该性别下实测最佳的克隆音色
-             （BEST_CLONE），并对标那个人自己的案例取目标值。下面那一大堆
-             音色 / 情感 / 语速 全部收进「高级」，默认不用碰。 -->
-        <div class="gsel" id="gsel">
-          <button class="gbtn" type="button" data-g="male">
-            <span data-i18n="gMale">男声</span>
-            <span class="gsub" id="gsubM"></span>
+        <!-- 员工只要点「男声 / 女声」：代码自动落到该性别下的当前生产音色。
+             ⚠️ 2026-10-14 状态：新链路（男 VoxCPM2 / 女 OmniVoice）已服务化，
+             但**默认仍是 cosyvoice3**，要等第九轮盲听（20261014b）通过后才切。
+             所以这里一律不写「实测最佳 / 已验收」，员工侧不承诺质量。
+
+             🔴 以后要加新音色：往这个 .gsel 里再加一张卡即可（结构照抄，
+             data-g 换成新音色的 gender/标识），JS 只依赖 `#gsel .gbtn` + `data-g`
+             两个钩子；卡片渲染见 renderVoiceCards()。未通过盲听验收的音色
+             **不要**加进来 —— 员工页面只放验收过的声音。 -->
+        <div class="gsel" id="gsel" role="radiogroup" aria-label="选择声音性别">
+          <button class="gbtn" type="button" data-g="male" role="radio" aria-checked="false">
+            <span class="vic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 14a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M5 21c.7-4.1 3.1-6 7-6s6.3 1.9 7 6"/></svg></span>
+            <span>
+              <span class="vname" data-i18n="gMale">男声</span>
+              <span class="gsub" id="gsubM" data-i18n="gMaleNote">沉稳清晰，适合财经播报</span>
+            </span>
+            <span class="vchk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m5 12 4 4L19 6"/></svg></span>
           </button>
-          <button class="gbtn" type="button" data-g="female">
-            <span data-i18n="gFemale">女声</span>
-            <span class="gsub" id="gsubF"></span>
+          <button class="gbtn" type="button" data-g="female" role="radio" aria-checked="false">
+            <span class="vic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 14a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M5 21c.7-4.1 3.1-6 7-6s6.3 1.9 7 6"/></svg></span>
+            <span>
+              <span class="vname" data-i18n="gFemale">女声</span>
+              <span class="gsub" id="gsubF" data-i18n="gFemaleNote">自然明亮，适合资讯解说</span>
+            </span>
+            <span class="vchk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m5 12 4 4L19 6"/></svg></span>
           </button>
         </div>
-        <div class="hint" id="gpick"></div>
+        <div class="hint admin-only" id="gpick"></div>
+        <!-- 🔴 员工侧不承诺质量：新链路第九轮盲听未回收前不写「实测最佳」。
+             只做两件事：说清还在调优 + 把问题引到听感反馈台（裁决只能靠员工盲听）。 -->
+        <div class="hint" style="margin-top:10px" data-i18n="tuningNote">音质还在持续调优中；听到不自然的地方，请到右上角「听感反馈」告诉我们。</div>
 
-        <details class="adv" id="advVoice">
+        <details class="adv admin-only" id="advVoice">
           <summary data-i18n="voiceAdv">换音色 / 语速（高级）</summary>
           <div class="advbody">
         <!-- 🔴 统一成一个音色下拉。原先「预设音色 / 录入音色克隆」是两个 tab
@@ -573,12 +750,22 @@ details.adv summary:hover{color:var(--txt2)}
       </div>
     </div>
 
-    <div>
-      <div class="card">
-        <h2 data-i18n="params">生成</h2>
-        <div class="row" style="margin-top:2px">
-          <button class="primary" id="submit" data-i18n="submit">提交生成</button>
-          <button id="clear" data-i18n="clear">清空</button>
+    <div class="employee-side">
+      <div class="card sticky-action" id="generateCard">
+        <h2 data-i18n="params">确认生成</h2>
+        <div class="submit-summary">
+          <div class="summary-row"><span data-i18n="sumLanguage">输出语言</span><strong id="sumLanguage">韩语</strong></div>
+          <div class="summary-row"><span data-i18n="sumVoice">当前声音</span><strong id="sumVoice">男声</strong></div>
+          <div class="summary-row"><span data-i18n="sumAudio">预计音频</span><strong id="sumAudio">0:00</strong></div>
+          <div class="summary-row"><span data-i18n="sumWait">预计等待</span><strong id="sumWait">0:00</strong></div>
+        </div>
+        <button class="primary" id="submit" data-i18n="submit">开始生成</button>
+        <button id="clear" data-i18n="clear">清空输入</button>
+        <div class="submit-help" data-i18n="shortcutHint">快捷键：Ctrl / ⌘ + Enter</div>
+        <div class="submit-state" id="submitState" role="status" aria-live="polite"></div>
+        <div class="employee-recovery">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4 6v5c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6l-8-3Z"/><path d="m9 12 2 2 4-5"/></svg>
+          <span data-i18n="recoveryHint">提交失败时会保留文案；页面刷新后也会自动恢复未提交草稿。</span>
         </div>
         <details class="adv" id="advBox">
           <summary data-i18n="advanced">高级设置（分段 / 批量）</summary>
@@ -595,7 +782,7 @@ details.adv summary:hover{color:var(--txt2)}
            由 tools/mkcase_voices.py 自动挑最佳 15 秒 + 对齐文字稿生成音色，
            员工根本不需要自己录音、自己剪、自己抄文字稿。留着只会让人纠结
            「我到底该用哪个」。要加全新说话人时走案例上传即可。 -->
-      <div class="card">
+      <div class="card admin-only" id="voiceLibraryCard">
         <div class="row" style="margin-bottom:8px">
           <h2 style="margin:0" data-i18n="savedVoices">已录入音色</h2>
           <span class="hint" style="margin-left:auto" id="vcount"></span>
@@ -617,7 +804,7 @@ details.adv summary:hover{color:var(--txt2)}
     <div class="stat" style="margin:0 0 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span id="statsLine"></span>
       <button class="mini" id="btnReport" data-i18n="report">产出明细</button>
-      <button class="mini" id="btnCases" data-i18n="caseBtn">标杆案例</button>
+      <button class="mini admin-only" id="btnCases" data-i18n="caseBtn">标杆案例</button>
     </div>
     <div class="filters">
       <input id="q" data-i18n-ph="searchPh">
@@ -642,9 +829,9 @@ const $$ = s => Array.from(document.querySelectorAll(s));
 const I18N = {
   zh: {
     _name:'简体中文',
-    title:'Qwen3-TTS 语音生成', subtitle:'Qwen3-TTS-12Hz-1.7B · RTX 3060 · 任务排队串行推理',
-    loginTitle:'登录', loginSub:'Qwen3-TTS 语音生成平台', username:'账号', password:'密码',
-    loginBtn:'登录', loginHint:'默认管理员：admin / aaaa1234（首次登录后请及时修改密码）',
+    title:'韩语配音工作台', subtitle:'粘贴文案，选择男声或女声，生成后即可试听与下载',
+    loginTitle:'登录工作台', loginSub:'使用公司分配的账号继续', username:'账号', password:'密码',
+    loginBtn:'登录', loginHint:'如忘记账号或密码，请联系管理员。',
     loginErr:'账号或密码错误', netErr:'网络错误',
     changePw:'修改密码', oldPwd:'当前密码', newPwd:'新密码', confirmPwd:'确认新密码',
     pwMismatch:'两次输入的新密码不一致', pwShort:'密码至少 6 位', pwOk:'密码已修改，请重新登录',
@@ -664,8 +851,8 @@ const I18N = {
     resetPw:'重置密码', deleteUser:'删除', confirmDel:(n)=>`确定删除账号「${n}」？`, cannotDelSelf:'不能删除自己',
     newPwdPrompt:(n)=>`为「${n}」设置新密码`, delDone:'已删除', resetDone:'密码已重置', created:(n)=>`账号 ${n} 已创建`,
     save:'保存', cancel:'取消', close:'关闭',
-    script:'文案', jobTitle:'语音标题', titlePh:'给这条语音起个名字，便于日后检索',
-    scriptText:'正文', scriptPh:'粘贴要合成的文案。长文本会自动按句读切段、逐段生成再做韵律拼接。',
+    script:'文案', jobTitle:'任务标题（可选）', titlePh:'例如：10月14日财经早报',
+    scriptText:'韩语文案', scriptPh:'在这里粘贴要生成的韩语文案。长文本会自动分段处理。',
     voice:'声音', presetVoice:'预设音色', cloneVoice:'录入音色克隆',
     timbre:'音色',
     spkGroupRec:(l)=>`千问 Qwen 内置 · 推荐（${l} 母语）`, spkGroupOther:'千问 Qwen 内置 · 其他音色',
@@ -678,10 +865,14 @@ const I18N = {
     savedVoices:'已录入音色', cloneNoInstruct:'克隆模式不支持语气指令，语气由参考音频本身的情绪决定。',
     speed:'语速', speedHint:'1.0 为正常速度，调大更快（1.1 / 1.2 …）。变速不变调，生成后统一处理，不影响音色与清晰度。',
     emotion:'情感', emotionHint:'选一种语气即可，引擎和参数由系统自动匹配。「平稳」准确度最高；需要情绪起伏时选其它项。',
-    language:'语言', params:'生成', segChars:'分段字数', batchSize:'批量大小',
+    language:'语言', params:'确认生成', segChars:'分段字数', batchSize:'批量大小',
+    sumLanguage:'输出语言', sumVoice:'当前声音', sumAudio:'预计音频', sumWait:'预计等待',
+    shortcutHint:'快捷键：Ctrl / ⌘ + Enter', recoveryHint:'提交失败时会保留文案；页面刷新后也会自动恢复未提交草稿。',
+    tuningNote:'音质还在持续调优中；听到不自然的地方，请到右上角「听感反馈」告诉我们。',
+    submitting:'正在提交…', submitOk:'已加入任务队列，可继续填写下一条文案。', clearConfirm:'清空当前标题和文案？未提交内容将被移除。',
     advanced:'高级设置（分段 / 批量）',
     paramHint:'保持默认即可：后端会按显存自动收敛到安全值（分段 ≤60、批量 ≤8）。调大不会更快，只会被自动压回。',
-    submit:'提交生成', clear:'清空', enroll:'录入声音（声音克隆用）',
+    submit:'开始生成', clear:'清空输入', enroll:'录入声音（声音克隆用）',
     vnamePh:'音色名称，例：韩语女声-知妍', refAudio:'参考音频（整段录音直接上传，无需自己剪辑）',
     engineLabel:'这个音色用哪个引擎', engineQwen:'千问 Qwen（第一代，发音稳但没有情感选项）', engineCosy:'CosyVoice3（推荐：有情感，可选激昂/亲切/严肃）',
     vEngine:'引擎', engQwen:'千问 Qwen（无情感）', engCosy:'CosyVoice3（有情感）', engSaved:'引擎已保存', engFail:'引擎保存失败',
@@ -704,11 +895,11 @@ const I18N = {
     cmpCase:'并排听案例', cmpCaseName:(n)=>`案例原声：${n}`,
     cmpTip:'上面是本次成品，下面是案例原声。建议同一段来回切换着听，重点听音色、轻重起伏和句尾落音。',
     delVoice:'删除', confirmDelVoice:(n)=>`删除音色「${n}」？参考音频会一起删掉，删除后需要重新录入才能再用。`,
-    upload:'上传录入', queue:'任务队列', noJobs:'暂无任务', scopeMine:'我的', scopeAll:'全部',
+    upload:'上传录入', queue:'最近任务', noJobs:'暂无任务', scopeMine:'我的', scopeAll:'全部',
     searchPh:'搜索标题或内容…', allStatus:'全部状态', allOwner:'全部成员',
     stRunning:'生成中', stQueued:'排队中', stDone:'已完成', stError:'失败',
     countFmt:(n,seg)=>`${n} 字 · 约 ${seg} 段`,
-    gMale:'男声', gFemale:'女声', voiceAdv:'换音色 / 语速（高级）',
+    gMale:'男声', gFemale:'女声', gMaleNote:'沉稳清晰，适合财经播报', gFemaleNote:'自然明亮，适合资讯解说', voiceAdv:'换音色 / 语速（高级）',
     grpCase:'案例克隆（还原度最高）', grpOther:'其他克隆音色',
     grpQwen:'千问自带音色（还原度低于案例克隆）',
     qwenSpkNote:(n)=>`当前：${n} —— 千问出厂音色，未针对案例调优，还原度通常比案例克隆低 2~3 分`,
@@ -719,7 +910,7 @@ const I18N = {
     hintOtherLine:(b)=>`非最佳${b?`，最佳是「${b}」`:''}`,
     hintBench:(c)=>`对标案例：${c}`,
     hintRefDur:(d)=>`参考音频 ${d} 秒`,
-    needText:'请先粘贴文案', needVoice:'请先在右侧录入一个音色',
+    needText:'请先粘贴文案', needVoice:'当前没有可用的声音，请联系管理员。',
     needName:'请填写音色名称并选择音频', uploading:'上传中...',
     enrolled:(n,d)=>`已录入：${n}（${d}s）`,
     enrolledTrim:(n,d,a,b)=>`已录入：${n}（从 ${a}s–${b}s 自动截出 ${d}s，文字同步截取）`,
@@ -786,9 +977,9 @@ const I18N = {
   },
   en: {
     _name:'English',
-    title:'Qwen3-TTS Studio', subtitle:'Qwen3-TTS-12Hz-1.7B · RTX 3060 · Queued serial inference',
-    loginTitle:'Sign in', loginSub:'Qwen3-TTS speech platform', username:'Username', password:'Password',
-    loginBtn:'Sign in', loginHint:'Default admin: admin / aaaa1234 — please change it after first login',
+    title:'Korean Voice Workspace', subtitle:'Paste a script, choose male or female, then preview and download the result',
+    loginTitle:'Sign in to workspace', loginSub:'Use your company account to continue', username:'Username', password:'Password',
+    loginBtn:'Sign in', loginHint:'Contact your administrator if you forgot your account or password.',
     loginErr:'Wrong username or password', netErr:'Network error',
     changePw:'Change password', oldPwd:'Current password', newPwd:'New password', confirmPwd:'Confirm new password',
     pwMismatch:'New passwords do not match', pwShort:'Password must be at least 6 characters',
@@ -809,8 +1000,8 @@ const I18N = {
     resetPw:'Reset password', deleteUser:'Delete', confirmDel:(n)=>`Delete account "${n}"?`, cannotDelSelf:'You cannot delete yourself',
     newPwdPrompt:(n)=>`New password for "${n}"`, delDone:'Deleted', resetDone:'Password reset', created:(n)=>`Account ${n} created`,
     save:'Save', cancel:'Cancel', close:'Close',
-    script:'Script', jobTitle:'Title', titlePh:'Name this clip so you can find it later',
-    scriptText:'Body', scriptPh:'Paste your script. Long text is split by sentence, generated per segment, then joined with prosody.',
+    script:'Script', jobTitle:'Task title (optional)', titlePh:'e.g. October 14 market briefing',
+    scriptText:'Korean script', scriptPh:'Paste the Korean script here. Long text is split automatically.',
     voice:'Voice', presetVoice:'Preset voice', cloneVoice:'Cloned voice',
     spkGroupRec:(l)=>`Qwen built-in · recommended (native ${l})`, spkGroupOther:'Qwen built-in · others',
     spkGroupCosy:'CosyVoice3 voices (emotional excited / warm / serious)', cosyOff:' (engine offline)',
@@ -822,10 +1013,14 @@ const I18N = {
     savedVoices:'Enrolled voices', cloneNoInstruct:'Voice clone does not support style instructions — emotion comes from the reference audio.',
     speed:'Speed', speedHint:'1.0 is normal; higher is faster (1.1 / 1.2 …). Tempo-only — pitch and timbre stay unchanged.',
     emotion:'Emotion', emotionHint:'Pick a tone — engine and parameters are chosen automatically. Standard is most accurate; use the others when you want emotional colour.',
-    language:'Language', params:'Generate', segChars:'Chars per segment', batchSize:'Batch size',
+    language:'Language', params:'Confirm generation', segChars:'Chars per segment', batchSize:'Batch size',
+    sumLanguage:'Output language', sumVoice:'Selected voice', sumAudio:'Estimated audio', sumWait:'Estimated wait',
+    shortcutHint:'Shortcut: Ctrl / ⌘ + Enter', recoveryHint:'Your script is preserved if submission fails, and unfinished drafts return after refresh.',
+    tuningNote:'Voice quality is still being tuned. If something sounds off, tell us via “Listening feedback” in the top-right menu.',
+    submitting:'Submitting…', submitOk:'Added to the queue. You can start the next script.', clearConfirm:'Clear the current title and script? Unsubmitted content will be removed.',
     advanced:'Advanced (segment / batch)',
     paramHint:'Keep defaults: the backend auto-tunes a safe plan (seg ≤60, batch ≤8) from free VRAM. Larger values get clamped, not faster.',
-    submit:'Generate', clear:'Clear', enroll:'Enroll a voice (for cloning)',
+    submit:'Start generation', clear:'Clear input', enroll:'Enroll a voice (for cloning)',
     vnamePh:'Voice name, e.g. Korean female — Jiyeon', refAudio:'Reference audio (upload the whole recording — no need to trim it yourself)',
     engineLabel:'Engine for this voice', engineQwen:'Qwen (most accurate, calm)', engineCosy:'CosyVoice3 (more expressive; excited / warm / serious available)',
     vEngine:'Engine', engQwen:'Qwen (most accurate)', engCosy:'CosyVoice3 (expressive)', engSaved:'Engine saved', engFail:'Failed to save engine',
@@ -848,11 +1043,11 @@ const I18N = {
     cmpCase:'Play case side by side', cmpCaseName:(n)=>`Case audio: ${n}`,
     cmpTip:'Top is your output, bottom is the reference case. Switch back and forth on the same passage — listen for timbre, dynamics, and sentence-final pitch.',
     delVoice:'Delete', confirmDelVoice:(n)=>`Delete voice "${n}"? The reference audio is removed too — you must enroll again to use it.`,
-    upload:'Enroll', queue:'Job queue', noJobs:'No jobs yet', scopeMine:'Mine', scopeAll:'All',
+    upload:'Enroll', queue:'Recent jobs', noJobs:'No jobs yet', scopeMine:'Mine', scopeAll:'All',
     searchPh:'Search title or text…', allStatus:'All status', allOwner:'All members',
     stRunning:'running', stQueued:'queued', stDone:'done', stError:'error',
     countFmt:(n,seg)=>`${n} chars · ~${seg} segments`,
-    gMale:'Male', gFemale:'Female', voiceAdv:'Change voice / speed (advanced)',
+    gMale:'Male', gFemale:'Female', gMaleNote:'Steady and clear, for market briefings', gFemaleNote:'Bright and natural, for news narration', voiceAdv:'Change voice / speed (advanced)',
     grpCase:'Case clones (best fidelity)', grpOther:'Other cloned voices',
     grpQwen:'Qwen built-in voices (lower fidelity than case clones)',
     qwenSpkNote:(n)=>`Now: ${n} — a stock Qwen voice, not tuned to our cases; usually 2~3 points below case clones`,
@@ -863,7 +1058,7 @@ const I18N = {
     hintOtherLine:(b)=>`Not the best${b?`; best is "${b}"`:''}`,
     hintBench:(c)=>`Benchmarked against: ${c}`,
     hintRefDur:(d)=>`Reference audio ${d}s`,
-    needText:'Please paste a script first', needVoice:'Please enroll a voice on the right first',
+    needText:'Please paste a script first', needVoice:'No voice is available right now. Please contact the admin.',
     needName:'Please enter a voice name and choose an audio file', uploading:'Uploading...',
     enrolled:(n,d)=>`Enrolled: ${n} (${d}s)`,
     enrolledTrim:(n,d,a,b)=>`Enrolled: ${n} (auto-cut ${a}s–${b}s → ${d}s, transcript cut to match)`,
@@ -930,9 +1125,9 @@ const I18N = {
   },
   ko: {
     _name:'한국어',
-    title:'Qwen3-TTS 음성 생성', subtitle:'Qwen3-TTS-12Hz-1.7B · RTX 3060 · 대기열 순차 추론',
-    loginTitle:'로그인', loginSub:'Qwen3-TTS 음성 생성 플랫폼', username:'아이디', password:'비밀번호',
-    loginBtn:'로그인', loginHint:'기본 관리자: admin / aaaa1234 (첫 로그인 후 비밀번호를 변경하세요)',
+    title:'한국어 음성 작업대', subtitle:'원고를 붙여넣고 남성 또는 여성을 선택하면, 생성 후 바로 듣고 다운로드할 수 있습니다',
+    loginTitle:'작업대 로그인', loginSub:'회사에서 받은 계정으로 계속하세요', username:'아이디', password:'비밀번호',
+    loginBtn:'로그인', loginHint:'계정이나 비밀번호를 잊었다면 관리자에게 문의하세요.',
     loginErr:'아이디 또는 비밀번호가 잘못되었습니다', netErr:'네트워크 오류',
     changePw:'비밀번호 변경', oldPwd:'현재 비밀번호', newPwd:'새 비밀번호', confirmPwd:'새 비밀번호 확인',
     pwMismatch:'새 비밀번호가 일치하지 않습니다', pwShort:'비밀번호는 6자 이상이어야 합니다',
@@ -953,8 +1148,8 @@ const I18N = {
     resetPw:'비밀번호 초기화', deleteUser:'삭제', confirmDel:(n)=>`계정 "${n}"을(를) 삭제할까요?`, cannotDelSelf:'본인 계정은 삭제할 수 없습니다',
     newPwdPrompt:(n)=>`"${n}"의 새 비밀번호`, delDone:'삭제되었습니다', resetDone:'비밀번호가 초기화되었습니다', created:(n)=>`계정 ${n} 생성 완료`,
     save:'저장', cancel:'취소', close:'닫기',
-    script:'원고', jobTitle:'음성 제목', titlePh:'나중에 찾기 쉽게 제목을 붙여 주세요',
-    scriptText:'본문', scriptPh:'원고를 붙여넣으세요. 긴 텍스트는 문장 단위로 나누어 생성한 뒤 리듬을 보정해 이어붙입니다.',
+    script:'원고', jobTitle:'작업 제목 (선택)', titlePh:'예: 10월 14일 금융 브리핑',
+    scriptText:'한국어 원고', scriptPh:'생성할 한국어 원고를 붙여넣으세요. 긴 원고는 자동으로 나뉩니다.',
     voice:'음성', presetVoice:'기본 음색', cloneVoice:'녹음 음성 클론',
     spkGroupRec:(l)=>`Qwen 내장 · 추천 (${l} 원어민)`, spkGroupOther:'Qwen 내장 · 기타 음색',
     spkGroupCosy:'CosyVoice3 음색 (감정 지원 격앙/다정/엄숙)', cosyOff:' (엔진 미가동)',
@@ -966,10 +1161,14 @@ const I18N = {
     savedVoices:'등록된 음성', cloneNoInstruct:'음성 클론은 톤 지시문을 지원하지 않습니다. 톤은 참고 음성의 감정으로 결정됩니다.',
     speed:'말하기 속도', speedHint:'1.0이 기본입니다. 값이 클수록 빨라집니다(1.1 / 1.2 …). 속도만 바뀌고 음높이·음색은 그대로입니다.',
     emotion:'감정', emotionHint:'톤만 고르면 엔진과 파라미터는 자동으로 맞춰집니다. 「차분」이 가장 정확하고, 감정 기복이 필요할 때 다른 항목을 고르세요.',
-    language:'언어', params:'생성', segChars:'분할 글자 수', batchSize:'배치 크기',
+    language:'언어', params:'생성 확인', segChars:'분할 글자 수', batchSize:'배치 크기',
+    sumLanguage:'출력 언어', sumVoice:'현재 음성', sumAudio:'예상 오디오', sumWait:'예상 대기',
+    shortcutHint:'단축키: Ctrl / ⌘ + Enter', recoveryHint:'전송에 실패해도 원고는 유지되며, 새로 고침 후에도 미완성 초안이 복원됩니다.',
+    tuningNote:'음질은 계속 다듬는 중입니다. 어색한 부분을 들으셨다면 오른쪽 위 「청감 피드백」으로 알려주세요.',
+    submitting:'전송 중…', submitOk:'작업 대기열에 추가했습니다. 다음 원고를 작성할 수 있습니다.', clearConfirm:'현재 제목과 원고를 지울까요? 제출하지 않은 내용은 삭제됩니다.',
     advanced:'고급 설정 (분할 / 배치)',
     paramHint:'기본값 유지: 백엔드가 여유 VRAM에 따라 안전한 값(분할 ≤60, 배치 ≤8)으로 자동 조정합니다. 크게 해도 빨라지지 않습니다.',
-    submit:'생성 요청', clear:'지우기', enroll:'음성 등록 (클론용)',
+    submit:'생성 시작', clear:'입력 지우기', enroll:'음성 등록 (클론용)',
     vnamePh:'음성 이름, 예: 한국어 여성-지연', refAudio:'참고 음성 (녹음 전체를 그대로 올리세요. 직접 자를 필요 없습니다)',
     engineLabel:'이 음성에 사용할 엔진', engineQwen:'Qwen (가장 정확하고 차분함)', engineCosy:'CosyVoice3 (감정 표현이 풍부함 · 격양/부드러움/진지함 선택 가능)',
     vEngine:'엔진', engQwen:'Qwen (가장 정확)', engCosy:'CosyVoice3 (감정 표현)', engSaved:'엔진이 저장되었습니다', engFail:'엔진 저장 실패',
@@ -992,11 +1191,11 @@ const I18N = {
     cmpCase:'케이스 함께 듣기', cmpCaseName:(n)=>`케이스 원본: ${n}`,
     cmpTip:'위는 생성 결과, 아래는 기준 케이스입니다. 같은 구간을 번갈아 들으며 음색·강약·문장 끝 억양을 비교해 보세요.',
     delVoice:'삭제', confirmDelVoice:(n)=>`음성 "${n}"을(를) 삭제할까요? 참고 음성도 함께 삭제되며, 다시 사용하려면 재등록해야 합니다.`,
-    upload:'등록하기', queue:'작업 대기열', noJobs:'작업이 없습니다', scopeMine:'내 작업', scopeAll:'전체',
+    upload:'등록하기', queue:'최근 작업', noJobs:'작업이 없습니다', scopeMine:'내 작업', scopeAll:'전체',
     searchPh:'제목이나 내용 검색…', allStatus:'전체 상태', allOwner:'전체 멤버',
     stRunning:'생성중', stQueued:'대기중', stDone:'완료', stError:'실패',
     countFmt:(n,seg)=>`${n}자 · 약 ${seg}개 구간`,
-    gMale:'남성', gFemale:'여성', voiceAdv:'음성 / 속도 변경 (고급)',
+    gMale:'남성', gFemale:'여성', gMaleNote:'차분하고 또렷함, 시황 브리핑에 적합', gFemaleNote:'밝고 자연스러움, 정보 해설에 적합', voiceAdv:'음성 / 속도 변경 (고급)',
     grpCase:'케이스 클론 (재현도 최고)', grpOther:'기타 클론 음성',
     grpQwen:'Qwen 기본 음성 (케이스 클론보다 재현도 낮음)',
     qwenSpkNote:(n)=>`현재: ${n} — 케이스에 맞춰 조정되지 않은 Qwen 기본 음성입니다. 재현도는 보통 케이스 클론보다 2~3점 낮습니다`,
@@ -1007,7 +1206,7 @@ const I18N = {
     hintOtherLine:(b)=>`최고 아님${b?`, 최고는 "${b}"`:''}`,
     hintBench:(c)=>`비교 기준 케이스: ${c}`,
     hintRefDur:(d)=>`참고 오디오 ${d}초`,
-    needText:'원고를 먼저 붙여넣어 주세요', needVoice:'오른쪽에서 음성을 먼저 등록해 주세요',
+    needText:'원고를 먼저 붙여넣어 주세요', needVoice:'사용할 수 있는 음성이 없습니다. 관리자에게 문의해 주세요.',
     needName:'음성 이름과 오디오 파일을 선택해 주세요', uploading:'업로드 중...',
     enrolled:(n,d)=>`등록 완료: ${n} (${d}초)`,
     enrolledTrim:(n,d,a,b)=>`등록 완료: ${n} (${a}초~${b}초에서 ${d}초 자동 절단, 대사도 함께 절단)`,
@@ -1074,9 +1273,9 @@ const I18N = {
   },
   ja: {
     _name:'日本語',
-    title:'Qwen3-TTS 音声生成', subtitle:'Qwen3-TTS-12Hz-1.7B · RTX 3060 · キュー順次推論',
-    loginTitle:'ログイン', loginSub:'Qwen3-TTS 音声生成プラットフォーム', username:'ユーザー名', password:'パスワード',
-    loginBtn:'ログイン', loginHint:'初期管理者: admin / aaaa1234（初回ログイン後にパスワードを変更してください）',
+    title:'韓国語音声ワークスペース', subtitle:'原稿を貼り付け、男性または女性を選ぶと、生成後すぐに試聴・ダウンロードできます',
+    loginTitle:'ワークスペースにログイン', loginSub:'会社から発行されたアカウントを使用してください', username:'ユーザー名', password:'パスワード',
+    loginBtn:'ログイン', loginHint:'アカウントまたはパスワードを忘れた場合は管理者に連絡してください。',
     loginErr:'ユーザー名またはパスワードが違います', netErr:'通信エラー',
     changePw:'パスワード変更', oldPwd:'現在のパスワード', newPwd:'新しいパスワード', confirmPwd:'新しいパスワード（確認）',
     pwMismatch:'新しいパスワードが一致しません', pwShort:'パスワードは6文字以上で入力してください',
@@ -1097,8 +1296,8 @@ const I18N = {
     resetPw:'パスワード再設定', deleteUser:'削除', confirmDel:(n)=>`アカウント「${n}」を削除しますか？`, cannotDelSelf:'自分自身は削除できません',
     newPwdPrompt:(n)=>`「${n}」の新しいパスワード`, delDone:'削除しました', resetDone:'パスワードを再設定しました', created:(n)=>`アカウント ${n} を作成しました`,
     save:'保存', cancel:'キャンセル', close:'閉じる',
-    script:'原稿', jobTitle:'タイトル', titlePh:'後で探しやすいよう名前を付けてください',
-    scriptText:'本文', scriptPh:'原稿を貼り付けてください。長文は文ごとに分割して生成し、韻律を整えて連結します。',
+    script:'原稿', jobTitle:'タスク名（任意）', titlePh:'例：10月14日 市況ブリーフィング',
+    scriptText:'韓国語原稿', scriptPh:'生成する韓国語原稿を貼り付けてください。長文は自動で分割されます。',
     voice:'音声', presetVoice:'プリセット音色', cloneVoice:'録音音色のクローン',
     spkGroupRec:(l)=>`Qwen 内蔵 · 推奨 (${l} 母語)`, spkGroupOther:'Qwen 内蔵 · その他の音色',
     spkGroupCosy:'CosyVoice3 音色（感情対応 熱烈/親しみ/厳粛）', cosyOff:'（エンジン未起動）',
@@ -1110,10 +1309,14 @@ const I18N = {
     savedVoices:'登録済みの音色', cloneNoInstruct:'ボイスクローンはスタイル指示に対応していません。感情は参照音声から引き継がれます。',
     speed:'話速', speedHint:'1.0 が標準です。数値を上げると速くなります（1.1 / 1.2 …）。速度のみ変化し、音程と音色は保たれます。',
     emotion:'感情', emotionHint:'トーンを選ぶだけで、エンジンとパラメータは自動で選ばれます。「標準」が最も正確です。感情の起伏が必要なときは他を選んでください。',
-    language:'言語', params:'生成', segChars:'分割文字数', batchSize:'バッチサイズ',
+    language:'言語', params:'生成内容を確認', segChars:'分割文字数', batchSize:'バッチサイズ',
+    sumLanguage:'出力言語', sumVoice:'選択中の音声', sumAudio:'音声の目安', sumWait:'待ち時間の目安',
+    shortcutHint:'ショートカット：Ctrl / ⌘ + Enter', recoveryHint:'送信に失敗しても原稿は保持され、更新後も未送信の下書きが復元されます。',
+    tuningNote:'音質は継続的に改善中です。不自然な箇所を聞いたら、右上の「聴感フィードバック」からお知らせください。',
+    submitting:'送信中…', submitOk:'キューに追加しました。次の原稿を入力できます。', clearConfirm:'現在のタイトルと原稿を消去しますか？未送信の内容は削除されます。',
     advanced:'詳細設定（分割 / バッチ）',
     paramHint:'既定値のまま：バックエンドが空き VRAM に応じて安全な値（分割 ≤60、バッチ ≤8）へ自動調整します。大きくしても速くなりません。',
-    submit:'生成する', clear:'クリア', enroll:'音色を登録（クローン用）',
+    submit:'生成を開始', clear:'入力をクリア', enroll:'音色を登録（クローン用）',
     vnamePh:'音色名、例：韓国語女性-ジヨン', refAudio:'参照音声（録音をそのままアップロード。自分で切る必要はありません）',
     engineLabel:'この音色に使うエンジン', engineQwen:'Qwen（最も正確、抑揚は穏やか）', engineCosy:'CosyVoice3（感情表現が豊か・激昂/穏やか/真剣を選べます）',
     vEngine:'エンジン', engQwen:'Qwen（最も正確）', engCosy:'CosyVoice3（感情表現）', engSaved:'エンジンを保存しました', engFail:'エンジンの保存に失敗',
@@ -1135,11 +1338,11 @@ const I18N = {
     cmpCase:'ケースと聴き比べ', cmpCaseName:(n)=>`ケース原音: ${n}`,
     cmpTip:'上が今回の生成結果、下が基準ケースです。同じ区間を聞き比べ、音色・強弱・文末のイントネーションを確認してください。',
     delVoice:'削除', confirmDelVoice:(n)=>`音色「${n}」を削除しますか？参照音声も一緒に削除され、再利用には再登録が必要です。`,
-    upload:'登録', queue:'ジョブキュー', noJobs:'ジョブはありません', scopeMine:'自分の', scopeAll:'すべて',
+    upload:'登録', queue:'最近のジョブ', noJobs:'ジョブはありません', scopeMine:'自分の', scopeAll:'すべて',
     searchPh:'タイトル・本文を検索…', allStatus:'すべての状態', allOwner:'全メンバー',
     stRunning:'生成中', stQueued:'待機中', stDone:'完了', stError:'失敗',
     countFmt:(n,seg)=>`${n}文字 · 約${seg}セグメント`,
-    gMale:'男性', gFemale:'女性', voiceAdv:'音色 / 速度を変更（詳細）',
+    gMale:'男性', gFemale:'女性', gMaleNote:'落ち着いて明瞭、市況解説向け', gFemaleNote:'明るく自然、情報ナレーション向け', voiceAdv:'音色 / 速度を変更（詳細）',
     grpCase:'ケースクローン（再現度最高）', grpOther:'その他のクローン音色',
     grpQwen:'Qwen 標準音色（ケースクローンより再現度が低い）',
     qwenSpkNote:(n)=>`現在: ${n} — ケースに合わせて調整していない Qwen 標準音色です。再現度は通常ケースクローンより 2~3 点低くなります`,
@@ -1150,7 +1353,7 @@ const I18N = {
     hintOtherLine:(b)=>`最高ではない${b?`、最高は「${b}」`:''}`,
     hintBench:(c)=>`比較基準ケース: ${c}`,
     hintRefDur:(d)=>`参照音声 ${d} 秒`,
-    needText:'先に原稿を貼り付けてください', needVoice:'先に右側で音色を登録してください',
+    needText:'先に原稿を貼り付けてください', needVoice:'利用できる音声がありません。管理者にご連絡ください。',
     needName:'音色名と音声ファイルを指定してください', uploading:'アップロード中...',
     enrolled:(n,d)=>`登録完了: ${n}（${d}秒）`,
     enrolledTrim:(n,d,a,b)=>`登録完了: ${n}（${a}秒〜${b}秒から ${d}秒を自動切断、書き起こしも連動）`,
@@ -1401,11 +1604,16 @@ function renderLanguages(){
   const lg = $('#language'), list = META.languages || ['korean'], prev = lg.value;
   lg.innerHTML = list.length ? list.map(l=>`<option value="${l}">${langName(l)}</option>`).join('')
                              : '<option value="korean">korean</option>';
-  /* 输出语言默认跟随界面语言；用户手动改过之后尊重手选 */
-  const target = outLangTouched ? (prev && list.includes(prev) ? prev : 'korean')
-                                : (UI2OUT[UI] || 'korean');
+  /* 🔴 2026-10-14：这是韩语配音工作台，输出语言默认必须是韩语。
+     原来是「默认跟随界面语言」→ 中文界面会落到 chinese，员工粘的是韩语文案
+     却被按中文合成，整篇读音不对还得重跑（长稿几十分钟）。
+     现在只要后端支持韩语就默认韩语；手动改过之后仍然尊重手选。 */
+  const ko = list.find(l => /korean/i.test(l));
+  const target = outLangTouched
+    ? (prev && list.includes(prev) ? prev : (ko || 'korean'))
+    : (ko || UI2OUT[UI] || 'korean');
   if(list.includes(target)) lg.value = target;
-  else { const k = list.find(l=>/korean/i.test(l)); if(k) lg.value = k; }
+  else if(ko) lg.value = ko;
   renderSpeakers();   /* 音色跟着输出语言走 */
   renderChips();
 }
@@ -1461,6 +1669,7 @@ function applyGender(g){
   else { setMode('clone'); $('#voice').value = want; syncGender(); }
   markGender(g);
   updateGpick();
+  renderCount();          /* 右侧摘要的「当前声音」要跟着切 */
 }
 
 /* ---------- 统一音色下拉：员工只看到一个列表 ---------- */
@@ -1558,6 +1767,25 @@ function updateVselHint(){
 }
 function markGender(g){
   $$('#gsel .gbtn').forEach(b => b.classList.toggle('on', b.dataset.g === g && !!g));
+  renderVoiceCards();
+}
+/* 声音卡片（2026-10-14 视觉升级）
+   🔴 以后要加新音色：**不用改 JS**。往 #gsel 里再插一张 .gbtn[data-g="新音色标识"]
+   的卡（结构照抄现有两张），然后在后端音色表里登记即可。员工页面只放
+   **通过盲听验收** 的音色 —— 没验收的别加进来，否则员工会选到我们没验证过的声音。
+   这里只同步无障碍状态与顶部步骤高亮，业务逻辑一律走 applyGender()。 */
+function renderVoiceCards(){
+  const on = $$('#gsel .gbtn').filter(b => b.classList.contains('on'));
+  const g = on.length ? on[0].dataset.g : '';
+  $$('#gsel .gbtn').forEach(b => {
+    b.setAttribute('aria-checked', String(b.dataset.g === g && !!g));
+    if(b.classList.contains('on')) b.setAttribute('aria-checked', 'true');
+  });
+  const st = $$('.flowsteps .s');
+  if(st.length >= 2){
+    st[0].classList.add('on');            /* 第 1 步「文案」始终是当前步 */
+    st[1].classList.toggle('on', !!g);    /* 选了声音才点亮第 2 步 */
+  }
 }
 /* 员工手动在高级里换了音色 → 高亮跟着变，避免「按钮显示女声、实际是男声」 */
 function syncGender(){
@@ -1616,11 +1844,29 @@ function renderCount(){
   /* 韩语实测模型：audio_seconds = 字数/6.15，gen_seconds = 8.40 + 0.07374×字数
      让员工提交前就知道要等多久、成品多长，不用干等 */
   let extra = '';
+  const spd = +($('#speed') && $('#speed').value) || 1.0;
   if(n > 0){
-    const spd = +($('#speed') && $('#speed').value) || 1.0;
     extra = t('estFmt')(fmtDur(n / 6.15 / spd), fmtDur(8.40 + 0.07374 * n));
   }
   $('#count').textContent = t('countFmt')(n, seg) + extra;
+  renderSummary(n, spd);
+}
+/* 右侧「确认生成」四行摘要。预估沿用上面同一个实测模型，
+   避免「字数条」和「确认卡」两个数字对不上。 */
+function renderSummary(n, spd){
+  if(n == null) n = $('#text').value.length;
+  if(spd == null) spd = +($('#speed') && $('#speed').value) || 1.0;
+  const lg = $('#language');
+  if(lg && lg.value){
+    /* 只显示本地化名（「韩语」）：langName 会带出 korean 这个 id，员工不需要看 */
+    const el = $('#sumLanguage'), m = (I18N[UI] && I18N[UI].l10n) || {};
+    if(el) el.textContent = m[lg.value] || lg.value;
+  }
+  const g = genderOf($('#voice') ? $('#voice').value : ''), ev = $('#sumVoice');
+  if(ev && g) ev.textContent = (g === 'male') ? t('gMale') : t('gFemale');
+  const ea = $('#sumAudio'), ew = $('#sumWait');
+  if(ea) ea.textContent = n > 0 ? fmtDur(n / 6.15 / spd) : '0:00';
+  if(ew) ew.textContent = n > 0 ? fmtDur(8.40 + 0.07374 * n) : '0:00';
 }
 async function loadMeta(){
   try{ META = await (await api('/api/meta')).json(); }catch(e){ return; }
@@ -1629,6 +1875,7 @@ async function loadMeta(){
   renderSpeakers(); renderLanguages(); renderVoices(); renderVoiceList(); renderVsel();
   await loadCaseIndex(); updateGpick(); updateVselHint();   /* 案例名要等这一份才显示得出来 */
   renderSpeeds();
+  renderCount();          /* 音色/语速/语言都填好了，摘要这才有正确值 */
   /* 2026-10-12：情感下拉已下架——情绪由案例参考音频复刻，员工不选。
      renderEmotions() 一并移除；提交处不传 emotion，后端落 standard。 */
 }
@@ -1746,6 +1993,22 @@ function showLogin(err){
 $('#lbtn').onclick = login;
 $('#lpwd').onkeydown = e => { if(e.key === 'Enter') login(); };
 $('#luser').onkeydown = e => { if(e.key === 'Enter') $('#lpwd').focus(); };
+/* ---------- 角色显隐 ----------
+   员工只做三件事：粘贴文案 → 选男声/女声 → 开始生成。
+   管理员才需要：音色库、标杆案例、调参（音色/语速/分段）、全员任务范围。
+   🔴 2026-10-14：以前是登录和刷新两条路径各写一遍 id 列表，加新元素必漏。
+     现在统一走 class .admin-only + 这一处函数，新增管理员入口只要挂 class。 */
+function applyRole(){
+  const admin = !!(ME && ME.role === 'admin');
+  $('#userRole').className = 'role' + (admin ? ' admin' : '');
+  $('#scopeBox').classList.toggle('hide', !admin);
+  $('#fOwner').classList.toggle('hide', !admin);
+  $('#advBox').classList.toggle('hide', !admin);
+  $('#miUsers').classList.toggle('hide', !admin);
+  $$('.admin-only').forEach(el => el.classList.toggle('hide', !admin));
+  scope = admin ? 'all' : 'mine';
+  $$('#scopeBox .tab').forEach(x => x.classList.toggle('on', x.dataset.scope === scope));
+}
 async function login(){
   const fd = new FormData();
   fd.append('username', $('#luser').value.trim());
@@ -1758,12 +2021,7 @@ async function login(){
     $('#lpwd').value = '';
     $('#loginMask').style.display = 'none';
     $('#userName').textContent = ME.username;
-    $('#userRole').className = 'role' + (ME.role === 'admin' ? ' admin' : '');
-    $('#scopeBox').classList.toggle('hide', ME.role !== 'admin');
-    $('#fOwner').classList.toggle('hide', ME.role !== 'admin');
-    $('#advBox').classList.toggle('hide', ME.role !== 'admin');
-    scope = ME.role === 'admin' ? 'all' : 'mine';
-    $$('#scopeBox .tab').forEach(x=>x.classList.toggle('on', x.dataset.scope === scope));
+    applyRole();
     /* loadMeta 是异步的：不 await 的话选项还没填好，参数记忆恢复不上 */
     applyStatic(); await loadMeta(); resetJobs(); poll(); loadStats(); loadUsersSilent();
     restoreDraft(); restorePref();
@@ -2224,7 +2482,7 @@ $('#text').addEventListener('keydown', e => {
 /* 语速变了，预估时长要跟着变 */
 $('#speed').addEventListener('change', renderCount);
 $('#maxChars').oninput = renderCount;
-$('#language').onchange = () => { outLangTouched = true; renderChips(); syncSpeakerToLang(); };
+$('#language').onchange = () => { outLangTouched = true; renderChips(); syncSpeakerToLang(); renderCount(); };
 $('#speaker').onchange = () => { spkTouched = true; };   /* 手动挑过就不再被语言切换覆盖 */
 /* 性别二选一：点一下就落到该性别下实测最佳的克隆音色 */
 $$('#gsel .gbtn').forEach(b => { b.onclick = () => applyGender(b.dataset.g); });
@@ -2236,12 +2494,20 @@ $('#fOwner').onchange = ()=>{ page = 1; resetJobs(); poll(); };
 $('#fStatus').onchange = ()=>{ page = 1; resetJobs(); poll(); };
 function debounce(fn, ms){ let x; return (...a)=>{ clearTimeout(x); x=setTimeout(()=>fn(...a), ms); }; }
 
+/* 提交反馈写在按钮下面，不再用 alert 弹窗打断：
+   弹窗一关，员工就不知道自己到底提交成功没有，失败时也不知文案还在不在。 */
+function setSubmitState(cls, msg){
+  const st = $('#submitState'); if(!st) return;
+  st.className = 'submit-state' + (msg ? ' show' : '') + (cls ? ' ' + cls : '');
+  st.textContent = msg || '';
+}
 $('#submit').onclick = async () => {
   const text = $('#text').value.trim();
-  if(!text){ alert(t('needText')); return; }
+  const btn = $('#submit');
+  if(!text){ setSubmitState('bad', t('needText')); return; }
   if(mode==='clone'){
-    if(!$('#voice').value){ alert(t('needVoice')); return; }
-    if(!voiceOk($('#voice').value)){ alert(t('voiceBad')); return; }
+    if(!$('#voice').value){ setSubmitState('bad', t('needVoice')); return; }
+    if(!voiceOk($('#voice').value)){ setSubmitState('bad', t('voiceBad')); return; }
   }
   const fd = new FormData();
   fd.append('title', $('#title').value.trim());
@@ -2255,17 +2521,25 @@ $('#submit').onclick = async () => {
   fd.append('batch_size', $('#batchSize').value);
   fd.append('speed', ($('#speed') && $('#speed').value) || '1.0');
   fd.append('emotion', ($('#emotion') && $('#emotion').value) || 'standard');
-  $('#submit').disabled = true;
+  setSubmitState('', '');
+  btn.disabled = true; btn.textContent = t('submitting');
   try{
     await api('/api/jobs', {method:'POST', body:fd});
     savePref();                       /* 记住这次的设置，下次打开自动恢复 */
     $('#title').value = ''; $('#text').value = '';
     localStorage.removeItem(DRAFT);
     renderCount(); page = 1; resetJobs(); poll(); loadStats();
-  }catch(e){ if(e.message !== '401') alert(t('submitFail')+e); }
-  $('#submit').disabled = false;
+    setSubmitState('ok', t('submitOk'));
+  }catch(e){ if(e.message !== '401') setSubmitState('bad', t('submitFail') + ((e && e.message) || e)); }
+  btn.disabled = false; btn.textContent = t('submit');
 };
-$('#clear').onclick = ()=>{ $('#text').value=''; $('#title').value=''; localStorage.removeItem(DRAFT); renderCount(); };
+/* 清空是唯一会丢东西的操作，必须先问一句。 */
+$('#clear').onclick = ()=>{
+  if(!$('#text').value.trim() && !$('#title').value.trim()) return;
+  if(!confirm(t('clearConfirm'))) return;
+  $('#text').value=''; $('#title').value=''; localStorage.removeItem(DRAFT);
+  renderCount(); setSubmitState('', '');
+};
 
 /* 手动录入音色的整套逻辑（probeDuration / #vfile / #vupload）随卡片一起移除：
    音色现在只有一条来源 —— 顶部「标杆案例 → + 上传案例」，
@@ -2561,12 +2835,7 @@ renderCount();
     if(r.status === 401){ showLogin(''); return; }
     ME = await r.json();
     $('#userName').textContent = ME.username;
-    $('#userRole').className = 'role' + (ME.role==='admin'?' admin':'');
-    $('#scopeBox').classList.toggle('hide', ME.role !== 'admin');
-    $('#fOwner').classList.toggle('hide', ME.role !== 'admin');
-    $('#advBox').classList.toggle('hide', ME.role !== 'admin');
-    scope = ME.role === 'admin' ? 'all' : 'mine';
-    $$('#scopeBox .tab').forEach(x=>x.classList.toggle('on', x.dataset.scope===scope));
+    applyRole();
     /* loadMeta 是异步的：不 await 的话选项还没填好，参数记忆恢复不上 */
     applyStatic(); await loadMeta(); resetJobs(); poll(); loadStats(); loadUsersSilent();
     restoreDraft(); restorePref();
