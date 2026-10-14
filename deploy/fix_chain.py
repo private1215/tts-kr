@@ -80,18 +80,29 @@ EQ_MALE_TMPL = ("equalizer=f=90:t=q:w=1.1:g=7.5,"
 #    文件不存在 / 解析失败就回退到上面的硬编码模板（行为不变）。
 #    字符串里带 %g 的仍会按变调幅度填 highshelf 增益。
 EQ_MALE_JSON = "/mnt/tts/data/eq_male.json"
+# 女声默认不加 EQ（与 2026-10-14 之前的行为一致）；写了这个文件才生效。
+EQ_FEMALE_JSON = "/mnt/tts/data/eq_female.json"
 
 
-def eq_male_tmpl():
+def _eq_json(path):
+    """读 {"eq": "..."} 配置；不存在/解析失败都返回空串（= 行为不变）。"""
     try:
-        if os.path.exists(EQ_MALE_JSON):
-            d = json.load(open(EQ_MALE_JSON, encoding="utf-8"))
+        if os.path.exists(path):
+            d = json.load(open(path, encoding="utf-8"))
             if d.get("eq"):
                 return str(d["eq"])
     except Exception as e:
-        sys.stderr.write("[warn] 读 %s 失败，回退内置 EQ: %r\n"
-                         % (EQ_MALE_JSON, e))
-    return EQ_MALE_TMPL
+        sys.stderr.write("[warn] 读 %s 失败，不加 EQ: %r\n" % (path, e))
+    return ""
+
+
+def eq_male_tmpl():
+    s = _eq_json(EQ_MALE_JSON)
+    return s or EQ_MALE_TMPL
+
+
+def eq_female_tmpl():
+    return _eq_json(EQ_FEMALE_JSON)
 # EL 实测 F0 中位（librosa.pyin / 16k 口径，与 tools 里的诊断同口径，不可换算法）：
 #   男（13 条 EL 案例）190.5~205.3 → 均值 197.7
 #   女（5 条 SOLA 案例）271.0~282.1 → 均值 276.0
@@ -334,10 +345,17 @@ def main():
     eq_db = a.eq_db if a.eq_db is not None else -1.0
     _t = eq_male_tmpl()
     eq_m = a.eq if a.eq else (_t % eq_db if "%g" in _t else _t)
+    # 🔴 女声此前**完全不加 EQ**（这里原来写死 `if g == "m" else ""`）。
+    #    2026-10-14 实测女声偏离比男声更大（Σz²=86.2 vs 男声 19.2），
+    #    而且方向相反：男声太干净(flat -3.51σ)，女声**太噪(flat +5.26σ)**。
+    #    现在也走配置驱动：写了 /mnt/tts/data/eq_female.json 才生效，
+    #    没写就是空串 —— 与改之前的行为完全一致，可安全上线。
+    eq_f = "" if g == "m" else eq_female_tmpl()
+    _eq = eq_m if g == "m" else eq_f
     gain = round(lufs_t - lufs(cur), 1)
     # 🔴 二次校正：EQ 会改变响度，按 EQ 前的响度算出来的增益是错的
     #   （实测男声目标 -25.0 结果落到 -25.4）。所以先粗调、再实测补一次。
-    af = (eq_m + "," if g == "m" else "") + "volume=%gdB" % gain
+    af = (_eq + "," if _eq else "") + "volume=%gdB" % gain
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", cur, "-af", af, a.out],
                    check=True)
     delta = round(lufs_t - lufs(a.out), 2)
