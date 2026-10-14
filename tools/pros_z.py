@@ -24,11 +24,22 @@ NAME = {"A": "句内动态", "B": "音高跨度", "C": "能量动态",
         "D": "语速CV", "E": "句尾多样", "F": "停顿熵"}
 
 # (标签, 路径, 性别)
+# 🔴 改成命令行可覆盖（2026-10-14）：每次换候选都要改代码太慢。
+#    用法： pros_z.py "v10:/mnt/tts/diag/x8197/m_v10.wav:male" ...
+#    不传参数就用下面的默认表。
 TARGETS = [
     ("EL原文8197", "/mnt/tts/data/cases/8197d9ac8a35/merged.wav", "male"),
     ("v7分窗变调", "/mnt/tts/diag/x8197/m_v7.wav", "male"),
     ("v5全局变调", "/mnt/tts/diag/x8197/m_v5.wav", "male"),
 ]
+if len(sys.argv) > 1:
+    TARGETS = []
+    for _a in sys.argv[1:]:
+        _p = _a.split(":")
+        if len(_p) == 3:
+            TARGETS.append((_p[0], _p[1], _p[2]))
+        else:
+            sys.stderr.write("忽略无法解析的参数：%s\n" % _a)
 
 
 def dist(g):

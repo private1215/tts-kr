@@ -60,6 +60,8 @@ def main():
     ap.add_argument("--windowed", action="store_true",
                     help="分窗变调：每窗按自己的 F0 算比例（抗长篇漂移）")
     ap.add_argument("--win", type=float, default=60.0)
+    ap.add_argument("--sub", type=float, default=10.0,
+                    help="分窗平滑时的细窗步长(秒)，越小台阶越细")
     a = ap.parse_args()
 
     if a.ratio is None and a.target_f0 is None:
@@ -78,19 +80,36 @@ def main():
                                snd.xmin, snd.xmax, a.ratio)
         print("全局比例 %.4f" % a.ratio, flush=True)
     elif a.windowed:
-        # 分窗：逐窗算比例，写回 pitch tier
+        # 🔴 分窗必须用**插值后的连续比例**，不能每窗一个常数（2026-10-14 修）：
+        #    常数比例会在窗边界留下音高台阶——实测相邻窗差最多 8%
+        #    （窗3 x1.121 -> 窗4 x1.038），60s 处听得出来。
+        #    asetrate 那套分窗当年就是靠 1:2:1 平滑解决的，PSOLA 同样要。
+        #    做法：先按 --win 算出各窗比例，再在窗**中心**之间线性插值，
+        #    用 --sub（默认 10s）的细窗逐个施加，台阶被切成听不出的小步。
         n = max(int(snd.duration / a.win), 1)
-        ratios = []
+        win_r = []
         for i in range(n):
             t0 = snd.xmin + i * a.win
             t1 = min(t0 + a.win, snd.xmax)
             f = f0_median(snd, t0, t1)
-            r = min(max(a.target_f0 / f, 0.90), 1.30) if f and f > 0 else 1.0
-            ratios.append(r)
-            parselmouth.praat.call(pt, "Multiply frequencies...", t0, t1, r)
+            win_r.append(min(max(a.target_f0 / f, 0.90), 1.30)
+                         if f and f > 0 else 1.0)
             print("  窗 %d [%.0f~%.0f] F0=%.1f -> x%.4f"
-                  % (i, t0, t1, f or 0, r), flush=True)
-        print("分窗比例 %s" % ["%.3f" % r for r in ratios], flush=True)
+                  % (i, t0, t1, f or 0, win_r[-1]), flush=True)
+        centers = [snd.xmin + (i + 0.5) * a.win for i in range(n)]
+
+        def ratio_at(t):
+            return float(np.interp(t, centers, win_r))
+
+        step = a.sub
+        t = snd.xmin
+        while t < snd.xmax - 1e-6:
+            t2 = min(t + step, snd.xmax)
+            parselmouth.praat.call(pt, "Multiply frequencies...",
+                                   t, t2, ratio_at((t + t2) / 2))
+            t = t2
+        print("分窗比例 %s -> 按 %.0fs 细窗插值施加（平滑）"
+              % (["%.3f" % r for r in win_r], step), flush=True)
     else:
         f = f0_median(snd)
         r = min(max(a.target_f0 / f, 0.90), 1.30)

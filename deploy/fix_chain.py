@@ -21,6 +21,7 @@
                [--target-rate 8.5] [--lufs -22.6] [--no-clean]
 """
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -72,6 +73,25 @@ EQ_MALE_TMPL = ("equalizer=f=90:t=q:w=1.1:g=7.5,"
                 "equalizer=f=350:t=q:w=1.1:g=3,"
                 "equalizer=f=1400:t=q:w=1.1:g=3,"
                 "highshelf=f=4000:g=%g,lowpass=f=14000")
+
+# 🔴 男声 EQ 改成**外部配置驱动**（2026-10-14）：
+#    每次 eq_search6.py 搜出新参数都要改代码 + 重启，容易漏、也不好回滚。
+#    现在只要把 {"eq": "..."} 写进 /mnt/tts/data/eq_male.json 即可生效，
+#    文件不存在 / 解析失败就回退到上面的硬编码模板（行为不变）。
+#    字符串里带 %g 的仍会按变调幅度填 highshelf 增益。
+EQ_MALE_JSON = "/mnt/tts/data/eq_male.json"
+
+
+def eq_male_tmpl():
+    try:
+        if os.path.exists(EQ_MALE_JSON):
+            d = json.load(open(EQ_MALE_JSON, encoding="utf-8"))
+            if d.get("eq"):
+                return str(d["eq"])
+    except Exception as e:
+        sys.stderr.write("[warn] 读 %s 失败，回退内置 EQ: %r\n"
+                         % (EQ_MALE_JSON, e))
+    return EQ_MALE_TMPL
 # EL 实测 F0 中位（librosa.pyin / 16k 口径，与 tools 里的诊断同口径，不可换算法）：
 #   男（13 条 EL 案例）190.5~205.3 → 均值 197.7
 #   女（5 条 SOLA 案例）271.0~282.1 → 均值 276.0
@@ -312,7 +332,8 @@ def main():
     # 所以按**最大**比例判断（只要有一段被明显抬过，高频就得压）。
     _pmax = max(ratios) if ratios else 1.0
     eq_db = a.eq_db if a.eq_db is not None else -1.0
-    eq_m = a.eq if a.eq else (EQ_MALE_TMPL % eq_db)
+    _t = eq_male_tmpl()
+    eq_m = a.eq if a.eq else (_t % eq_db if "%g" in _t else _t)
     gain = round(lufs_t - lufs(cur), 1)
     # 🔴 二次校正：EQ 会改变响度，按 EQ 前的响度算出来的增益是错的
     #   （实测男声目标 -25.0 结果落到 -25.4）。所以先粗调、再实测补一次。

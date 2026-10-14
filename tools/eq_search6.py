@@ -46,8 +46,41 @@ BASE = {
 #                  声音过净发假，比频段偏差更致命。
 #    ✅ 单向护栏：只在 flat 掉破 FLAT_MIN 时加惩罚，不奖励它变高。
 NOFLAT = {"flat"}
-FLAT_MIN = 0.030        # 低于此值开始罚（EL 0.0461，裸片 ~0.042）
-FLAT_W = 0.5            # 惩罚权重
+# 🔴 护栏改成「掉破 EL 的 1.5σ 下界就罚」（2026-10-14 三次修正）：
+#    原来是 FLAT_MIN=0.030（约 -5.4σ）太松——v10 现役 flat=0.0356(-3.51σ)
+#    是当前**最差的一项**，却是"合规"的，搜索完全不管它。
+#    验收口径是「所有维度落在 EL 1.5σ 内」（EL 原文 8197 自己也有 ±1.5σ 抖动），
+#    所以护栏就设在同一个门槛上：EL 0.0461 - 1.5*0.0030 = 0.0416。
+FLAT_MIN = 0.0416
+FLAT_W = 1.0            # 与频段项同量纲（都是 sigma^2），不再打折
+
+# 🎯 共振峰目标（2026-10-14）：**用 EL 真实分布，不再拍脑袋**。
+#    el_formant_base.py 实测 EL 男声 n=13：F1 412.3±5.1 / F2 1556.2±8.6
+#    （之前手拍的 SD=(25,90) 松了 5~10 倍，共振峰项在 J 里约等于 0，白加。）
+#    换成真实 sigma 后，共振峰与 7 个频段项**同量纲**（都是「偏离几个 EL sigma」），
+#    FORMANT_W 保持 1.0 即可，不需要人为调权重。
+#    实测：v10 的 F2 偏 +3.8% = **+6.9σ**，是全部维度里最大的一项，
+#    这就是员工三轮都说「像感冒」的量化证据（共振峰偏高=声道变短）。
+FORMANT_TARGET = (412.3, 1556.2)
+FORMANT_SD = (5.1, 8.6)        # el_formant_male.json 实测，勿手改
+# 🔴🔴 F1 必须剔出目标函数（2026-10-14 晚，formant_stability.py 实测推翻）：
+#    同一个文件只改 Praat 参数/换分析段，F1 抖动 **46~200Hz**，
+#    段内前后半段自身就差 23Hz —— 而 EL 的自然 sigma 只有 **5.1Hz**。
+#    **测量误差 >> 被测量**，F1 的 z 是噪声，放进去只会把搜索带偏。
+#    F2 稍稳（固定 maxf=5000/n=5/ts=0.01 时段内差 ~16Hz，EL sigma 8.6Hz），
+#    勉强可用，但**不能再当"最大偏差项"**——之前说「F2 +3σ = 感冒音」是过度解读。
+FORMANT_USE = (0.0, 1.0)       # 逐维权重：F1 关闭、F2 启用
+FORMANT_W = 1.0                # 总开关，0 = 完全不看共振峰
+FORMANT_JSON = "el_formant_male.json"
+
+_p = os.path.join(HERE, FORMANT_JSON)
+if os.path.exists(_p):
+    _j = json.load(open(_p, encoding="utf-8"))
+    FORMANT_TARGET = (_j["F1"]["mean"], _j["F2"]["mean"])
+    FORMANT_SD = (_j["F1"]["sd"], _j["F2"]["sd"])
+    print("共振峰基线来自 %s：F1 %.1f±%.1f  F2 %.1f±%.1f (n=%d)"
+          % (_p, FORMANT_TARGET[0], FORMANT_SD[0],
+             FORMANT_TARGET[1], FORMANT_SD[1], _j["n"]), flush=True)
 # 频点加密到 8 个（2026-10-14）：PSOLA 版用 7 点搜完仍有 4 项超 2σ
 # （b300_500/b500_1000/b4000_8000/b2000_4000），说明固定频点不足以拟合。
 # 加密区间：300~1000 补 450/800，4000~8000 补 4500/6500。
@@ -66,6 +99,58 @@ def to24(path):
     return y
 
 
+def load16(path):
+    """降采样到 16k（flat 必须 16k 口径，与 EL 基线一致）。"""
+    t = tempfile.mktemp(suffix=".wav")
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", path,
+                    "-ar", "16000", "-ac", "1", t], check=True)
+    y, _ = sf.read(t, dtype="float32")
+    os.unlink(t)
+    return y, 16000
+
+
+def formants(path):
+    """F1/F2 中位（Praat Burg 16k）。
+
+    🔴 口径必须和 el_formant_base.py 完全一致：取 [10% 时长, +180s]。
+       之前这里是绝对 [60,150s]，跟基线的相对窗口不是一段，
+       「频段分布随文本位置变化」同样适用于共振峰，口径不一致就不可比。
+    """
+    import parselmouth
+    pr = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=nw=1:nk=1", path],
+        capture_output=True, text=True)
+    dur = float(pr.stdout.strip() or 0)
+    start = max(0.0, 0.10 * dur)
+    length = min(180.0, max(5.0, dur - start))
+    t = tempfile.mktemp(suffix=".wav")
+    subprocess.run(["ffmpeg", "-y", "-v", "error",
+                    "-ss", "%.2f" % start, "-t", "%.2f" % length,
+                    "-i", path, "-ar", "16000", "-ac", "1", t], check=True)
+    s = parselmouth.Sound(t)
+    os.unlink(t)
+    pit = s.to_pitch(time_step=0.01, pitch_floor=60, pitch_ceiling=400)
+    fm = s.to_formant_burg(time_step=0.01, max_number_of_formants=5,
+                           maximum_formant=5000)
+    ts = np.arange(0.05, s.duration - 0.05, 0.01)
+    F1, F2 = [], []
+    for tt in ts:
+        f0 = pit.get_value_at_time(tt)
+        if f0 is None or np.isnan(f0) or f0 <= 0:
+            continue
+        a = fm.get_value_at_time(1, tt)
+        b = fm.get_value_at_time(2, tt)
+        if a is None or b is None or np.isnan(a) or np.isnan(b) \
+                or a <= 0 or b <= 0:
+            continue
+        F1.append(a)
+        F2.append(b)
+    if len(F1) < 100:
+        return None, None
+    return float(np.median(F1)), float(np.median(F2))
+
+
 def measure(path):
     y = to24(path)
     S = np.abs(librosa.stft(y, n_fft=2048, hop_length=512)) ** 2
@@ -74,9 +159,12 @@ def measure(path):
     out = {}
     for lo, hi in BANDS:
         out["b%d_%d" % (lo, hi)] = float(S[(f >= lo) & (f < hi)].sum() / tot)
-    n = min(len(y), 60 * 24000)
+    y16, _ = load16(path)
     out["flat"] = float(librosa.feature.spectral_flatness(
-        y=y[:n], hop_length=256)[0].mean())
+        y=y16[:60 * 16000], hop_length=256)[0].mean())
+    if FORMANT_W > 0:
+        f1, f2 = formants(path)
+        out["F1"], out["F2"] = f1, f2
     return out
 
 
@@ -86,6 +174,10 @@ def cost(m):
     fl = m.get("flat")
     if fl is not None and fl < FLAT_MIN:
         j += FLAT_W * (((FLAT_MIN - fl) / BASE["flat"][1]) ** 2)
+    if FORMANT_W > 0 and m.get("F1") and m.get("F2"):
+        j += FORMANT_W * sum(
+            FORMANT_USE[i] * ((m[nm] - FORMANT_TARGET[i]) / FORMANT_SD[i]) ** 2
+            for i, nm in enumerate(("F1", "F2")))
     return j
 
 
@@ -119,8 +211,21 @@ def main():
     assert len(gains) == len(FREQS), "init 长度应为 %d" % len(FREQS)
 
     tmp = os.path.join(HERE, "_eq6_tmp.wav")
-    best = cost(measure(src))
-    print("起点 J=%.1f  (不做 EQ)" % best, flush=True)
+    # 🔴 必须先在 init 上量一次（2026-10-14 修）：
+    #    之前 best = cost(不加 EQ 的原始片)，--init 传进来的现役 EQ 从来没被评估过，
+    #    贪心是从零点重走的。结果 v11 搜出 J=33.0，反而比起点 v10 的 24.6 更差，
+    #    而脚本还"以为"自己一直在变好。现在：先量 init，再和裸片取较优者。
+    if a.init:
+        apply(src, gains, tmp)
+        best = cost(measure(tmp))
+        print("起点 J=%.1f  (init=%s)" % (best, a.init), flush=True)
+    else:
+        best = cost(measure(src))
+        print("起点 J=%.1f  (不做 EQ)" % best, flush=True)
+    _raw = cost(measure(src))
+    if _raw < best:
+        gains, best = [0.0] * len(FREQS), _raw
+        print("  裸片更优 J=%.1f，改用全零起点" % best, flush=True)
 
     for rnd in range(a.rounds):
         improved = False
@@ -161,11 +266,27 @@ def main():
         flag = "[X]" if abs(z) > 2 else ("[!]" if abs(z) > 1.5 else "[ok]")
         print("  %-4s %-12s 我们 %8.4f  EL %8.4f  z=%+6.2f"
               % (flag, k, v, mm, z))
+    if m.get("F1"):
+        for i, nm in enumerate(("F1", "F2")):
+            z = (m[nm] - FORMANT_TARGET[i]) / FORMANT_SD[i]
+            flag = "[X]" if abs(z) > 2 else ("[!]" if abs(z) > 1.5 else "[ok]")
+            print("  %-4s %-12s 我们 %8.1f  EL %8.1f  (%+5.1f%%)  z=%+6.2f%s"
+                  % (flag, nm, m[nm], FORMANT_TARGET[i],
+                     100 * (m[nm] / FORMANT_TARGET[i] - 1), z,
+                     "  (不入J)" if FORMANT_USE[i] == 0 else ""))
+    zs = {k: (m[k] - BASE[k][0]) / BASE[k][1] for k in BASE}
+    if m.get("F1"):
+        for i, nm in enumerate(("F1", "F2")):
+            if FORMANT_USE[i] != 0:
+                zs[nm] = (m[nm] - FORMANT_TARGET[i]) / FORMANT_SD[i]
+    zs["_max"] = max(abs(v) for v in zs.values())
     json.dump({"gains": gains, "freqs": FREQS, "eq": eq_str(gains),
-               "J": cost(m),
-               "z": {k: (m[k] - BASE[k][0]) / BASE[k][1] for k in BASE}},
+               "J": cost(m), "z": zs},
               open(os.path.join(HERE, "eq6_result.json"), "w"),
               ensure_ascii=False, indent=1)
+    print("\n最差偏离 max|z| = %.2f  (%s)"
+          % (zs["_max"], max((k for k in zs if k != "_max"),
+                             key=lambda k: abs(zs[k]))))
     if os.path.exists(tmp):
         os.unlink(tmp)
 
