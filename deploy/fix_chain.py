@@ -68,8 +68,10 @@ DEFAULT_F0 = {"f": 276.0, "m": 197.7}
 #    ⚠️ 口径教训：这个数**不能**用前 60s 搜（分窗变调后第一窗比例最大，
 #       前 60s 是最坏样本，会过度补偿）。见 deploy/eq_search5.py 与 band_full.py。
 #    未变调（--no-pitch）时高频不过量，%g 用 -4；变调用 -9.5。
-EQ_MALE_TMPL = ("equalizer=f=800:t=q:w=1.2:g=-2,highshelf=f=1500:g=2.5,"
-                "highshelf=f=2500:g=-1.5,highshelf=f=4000:g=%g,lowpass=f=14000")
+EQ_MALE_TMPL = ("equalizer=f=90:t=q:w=1.1:g=7.5,"
+                "equalizer=f=350:t=q:w=1.1:g=3,"
+                "equalizer=f=1400:t=q:w=1.1:g=3,"
+                "highshelf=f=4000:g=%g,lowpass=f=14000")
 # EL 实测 F0 中位（librosa.pyin / 16k 口径，与 tools 里的诊断同口径，不可换算法）：
 #   男（13 条 EL 案例）190.5~205.3 → 均值 197.7
 #   女（5 条 SOLA 案例）271.0~282.1 → 均值 276.0
@@ -309,8 +311,7 @@ def main():
     # 变调后频谱被整体搬高，高频档要加深。现在变调是**分窗**的，
     # 所以按**最大**比例判断（只要有一段被明显抬过，高频就得压）。
     _pmax = max(ratios) if ratios else 1.0
-    eq_db = a.eq_db if a.eq_db is not None else (
-        -4.0 + (-5.5 if _pmax > 1.02 else 0.0))
+    eq_db = a.eq_db if a.eq_db is not None else -1.0
     eq_m = a.eq if a.eq else (EQ_MALE_TMPL % eq_db)
     gain = round(lufs_t - lufs(cur), 1)
     # 🔴 二次校正：EQ 会改变响度，按 EQ 前的响度算出来的增益是错的
