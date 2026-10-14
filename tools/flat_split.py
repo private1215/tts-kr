@@ -23,14 +23,21 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import eq_search6 as E  # noqa: E402
 
+# 🔴 改成命令行可覆盖（2026-10-14）：男女都要看，写死一张表不够用。
+#    用法： flat_split.py <wav> [wav...]
 TARGETS = [
-    ("EL8197", "/mnt/tts/data/cases/8197d9ac8a35/merged.wav"),
-    ("EL1a6c", "/mnt/tts/data/cases/1a6c20a60481/merged.wav"),
-    ("base_pw(无EQ)", "base_pw.wav"),
-    ("v10", "m_v10.wav"),
-    ("v11", "m_v11.wav"),
-    ("PSOLA_v2", "m_psola_v2.wav"),
+    "EL8197", "EL5272", "base_pw", "m_v10", "m_v11",
 ]
+_ALIAS = {
+    "EL8197": "/mnt/tts/data/cases/8197d9ac8a35/merged.wav",
+    "EL5272": "/mnt/tts/data/cases/52727ec43154/merged.wav",
+    "ELa795": "/mnt/tts/data/cases/a79503d0b0ca/merged.wav",
+    "base_pw": "base_pw.wav",
+    "m_v10": "m_v10.wav",
+    "m_v11": "m_v11.wav",
+}
+if len(sys.argv) > 1:
+    TARGETS = sys.argv[1:]
 
 
 def frames(path, dur=120.0):
@@ -52,7 +59,8 @@ def main():
           % ("文件", "flat总", "发声flat", "发声dB", "占比",
              "静音flat", "静音dB"))
     print("-" * 78)
-    for name, p in TARGETS:
+    for name in TARGETS:
+        p = _ALIAS.get(name, name)
         p = p if os.path.isabs(p) else os.path.join(HERE, p)
         if not os.path.exists(p):
             print("%-16s 缺失" % name)

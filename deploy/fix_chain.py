@@ -74,6 +74,46 @@ EQ_MALE_TMPL = ("equalizer=f=90:t=q:w=1.1:g=7.5,"
                 "equalizer=f=1400:t=q:w=1.1:g=3,"
                 "highshelf=f=4000:g=%g,lowpass=f=14000")
 
+# 自适应高频用的「只有 boost、没有高频档」的第一段（见 adaptive_hf_db 注释）
+EQ_MALE_BOOSTS = ("equalizer=f=90:t=q:w=1.1:g=7.5,"
+                  "equalizer=f=350:t=q:w=1.1:g=3,"
+                  "equalizer=f=1400:t=q:w=1.1:g=3,lowpass=f=14000")
+HF_FREQ = 4000
+HF_TARGET = 0.0129      # EL 男声 b4000_8000 均值（el_base_clean_male.json）
+HF_DB_MIN, HF_DB_MAX = -9.5, 0.0
+
+
+def _band_ratio(path, lo, hi):
+    """24k / n_fft 2048 / hop 512 的频段能量占比，与 el_baseline2 同口径。"""
+    import librosa
+    y, _ = librosa.load(path, sr=24000, mono=True)
+    S = np.abs(librosa.stft(y, n_fft=2048, hop_length=512)) ** 2
+    f = librosa.fft_frequencies(sr=24000, n_fft=2048)
+    return float(S[(f >= lo) & (f < hi)].sum() / (S.sum() + 1e-12))
+
+
+def adaptive_hf_ratio(path):
+    return _band_ratio(path, 4000, 8000)
+
+
+def adaptive_hf_db(path):
+    """按实测 b4000_8000 反算 highshelf 增益。
+
+    为什么必须**先上 boost 再量**：三个 boost（+7.5/+3/+3 dB）会把总能量
+    分母撑大，从而间接压低所有频段的占比。拿裸片直接算会低估实际过量程度，
+    补偿就偏浅。钳位 [-9.5, 0]：超过 -9.5dB 说明素材本身高频严重过量，
+    再深就会像当年 -9.5 那版一样把 flat 打到 -6σ（发假）。
+    """
+    try:
+        r = adaptive_hf_ratio(path)
+    except Exception as e:
+        sys.stderr.write("[warn] 自适应高频测量失败，回退 -1dB: %r\n" % e)
+        return -1.0
+    if r <= 0:
+        return -1.0
+    db = 10.0 * np.log10(HF_TARGET / r)
+    return float(np.clip(db, HF_DB_MIN, HF_DB_MAX))
+
 # 🔴 男声 EQ 改成**外部配置驱动**（2026-10-14）：
 #    每次 eq_search6.py 搜出新参数都要改代码 + 重启，容易漏、也不好回滚。
 #    现在只要把 {"eq": "..."} 写进 /mnt/tts/data/eq_male.json 即可生效，
@@ -202,6 +242,9 @@ def main():
                     help="完整 EQ 滤镜串，覆盖默认模板（A/B 实验用）。"
                          "传 'anull' 表示不做 EQ，用来产出「裸片」供网格搜索")
     ap.add_argument("--no-clean", action="store_true")
+    ap.add_argument("--no-adaptive-hf", dest="adaptive_hf",
+                    action="store_false", default=True,
+                    help="关掉男声自适应高频档，回到固定 -1dB（对照/回退用）")
     a = ap.parse_args()
 
     g = a.gender
@@ -350,14 +393,44 @@ def main():
     #    而且方向相反：男声太干净(flat -3.51σ)，女声**太噪(flat +5.26σ)**。
     #    现在也走配置驱动：写了 /mnt/tts/data/eq_female.json 才生效，
     #    没写就是空串 —— 与改之前的行为完全一致，可安全上线。
+    # 🔴 男声高频档改成**自适应**（2026-10-14）：
+    #    固定 -1dB 在两篇文案上分别是 b4000_8000 = -1.67σ(8197) 和 +3.73σ(cf9)，
+    #    差 5.4σ —— 一篇压过头、一篇没压够，固定值不可能同时满足。
+    #    做法：先施加三个 boost（它们会把总能量分母撑大，间接压低该频段比值），
+    #    **然后**实测 b4000_8000，按 10*log10(EL目标/实测) 反算 highshelf 增益。
+    #    ⚠️ 顺序不能反：拿裸片直接算会因为分母没被撑大而得出过浅的补偿。
     eq_f = "" if g == "m" else eq_female_tmpl()
-    _eq = eq_m if g == "m" else eq_f
+    if g == "m":
+        # 🔴 只有「内置模板里带 %g 高频档」时才走自适应：
+        #    传了 --eq、或配置里是不带 %g 的定串时，一律保持原行为，
+        #    不能拿 BOOSTS 把用户指定的 EQ 顶掉。
+        # 🔴 另：非自适应分支**必须**做 %g 代入 —— 我第一版重构时漏了这步，
+        #    结果滤镜串里带着字面量 `g=%g` 直接喂给 ffmpeg，退出码 234。
+        _t = eq_male_tmpl()
+        _plain = a.eq if a.eq else (_t % eq_db if "%g" in _t else _t)
+        _adaptive = (not a.eq) and a.adaptive_hf and ("%g" in _t)
+        _eq = EQ_MALE_BOOSTS if _adaptive else _plain
+    else:
+        _adaptive = False
+        _eq = eq_f
     gain = round(lufs_t - lufs(cur), 1)
     # 🔴 二次校正：EQ 会改变响度，按 EQ 前的响度算出来的增益是错的
     #   （实测男声目标 -25.0 结果落到 -25.4）。所以先粗调、再实测补一次。
-    af = (_eq + "," if _eq else "") + "volume=%gdB" % gain
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", cur, "-af", af, a.out],
-                   check=True)
+    if _adaptive:
+        # 第一段：只上 boost -> 实测 b4000_8000 -> 反算 highshelf 增益
+        t5 = os.path.join(tmpd, "boosted.wav")
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", cur,
+                        "-af", _eq, t5], check=True)
+        hf_db = adaptive_hf_db(t5)
+        print("自适应高频：boost 后 b4000_8000=%.5f (目标 %.5f) -> highshelf %+.2f dB"
+              % (adaptive_hf_ratio(t5), HF_TARGET, hf_db), flush=True)
+        af = ("highshelf=f=%d:g=%g," % (HF_FREQ, hf_db)) + "volume=%gdB" % gain
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", t5, "-af", af,
+                        a.out], check=True)
+    else:
+        af = (_eq + "," if _eq else "") + "volume=%gdB" % gain
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", cur, "-af", af,
+                        a.out], check=True)
     delta = round(lufs_t - lufs(a.out), 2)
     if abs(delta) > 0.05:
         t5 = os.path.join(tmpd, "loud2.wav")

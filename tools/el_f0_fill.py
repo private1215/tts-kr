@@ -17,6 +17,12 @@ import numpy as np
 CACHE = "/mnt/tts/diag/x8197/el_feats.json"
 CASE_DIR = "/mnt/tts/data/cases"
 ONLY_GENDER = sys.argv[1] if len(sys.argv) > 1 else "female"
+# 🔴 --force：覆盖已有的 f0_med。
+#    必须做一次：男声的 f0_med 是当年从 elbase.log 解析回来的**旧口径**，
+#    实测比 pyin 口径低 7~13Hz（EL 案例用 pyin 量是 200.7/204.2/207.7，
+#    而缓存里写的是 189.4~200.7）。两套口径混着比会得出「我们 F0 偏高 1.9σ」
+#    这种假结论。统一到 pyin 后男女才可比。
+FORCE = "--force" in sys.argv
 
 
 def f0_median(path):
@@ -34,7 +40,7 @@ def main():
     cache = json.load(open(CACHE, encoding="utf-8"))
     todo = [(k, v) for k, v in cache.items()
             if (v.get("gender") or "") == ONLY_GENDER
-            and not v.get("f0_med")]
+            and (FORCE or not v.get("f0_med"))]
     print("待算 %d 条（%s）" % (len(todo), ONLY_GENDER), flush=True)
     for i, (k, v) in enumerate(todo, 1):
         p = os.path.join(CASE_DIR, k, "merged.wav")
