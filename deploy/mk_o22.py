@@ -49,7 +49,7 @@ DUR = 30.0
 #   ⚠️ 换目录后**必须重启 qwen-tts**，且旧目录不要删（留作备份）。
 
 CUR = os.path.join(TMPD, "cur_fix.wav")     # 当前链路 + 候选补频
-RAW = os.path.join(TMPD, "cur_raw.wav")      # 当前链路原样（还没生成，先占位）
+RAW = os.path.join(TMPD, "cur_raw.mp3")      # 当前链路原样（未加补频）
 EL = "/mnt/tts/data/cases/8197d9ac8a35/seg0.wav"
 
 # 每题两个位置：开头 / 中后段（fix_chain 收益常只在中后段显现）
@@ -107,13 +107,15 @@ def main():
             made[nm] = emit(cut(src, st, DUR), nm,
                             "clip %s" % nm)
 
-    # ---- 素材：候选解 vs 当前原状（同一份生成逆运算，避免生成波动）----
+    # ---- 第2题的参考音频：用**当前原状**（不加补频）----
+    # 🔴 员工要判断的是「我们现在的闷是哪种」，不能给他听已改过的候选版，
+    #    否则等于让他评价一个还没上线的东西。位置 60s（与 40/85/120 都不重叠）。
     if os.path.exists(RAW):
-        for pos, st in (("e", P_EARLY), ("l", P_LATE)):
-            nm = "p2_raw_%s" % pos
-            made[nm] = emit(cut(RAW, st, DUR), nm, "clip %s" % nm)
+        made["p2_ref"] = emit(cut(RAW, 60.0, DUR), "p2_ref", "current raw")
+    else:
+        print("🔴 缺 %s，第2题没有参考音频——**不要发布**" % RAW)
 
-    # ---- 控制题：同一段放两遍（第 200s，与所有其他素材不重叠）----
+    # ---- 控制题：同一段放两遍（P_CTRL，与上面所有起点都不重叠）----
     ctrl = cut(CUR, P_CTRL, DUR)
     made["p2_ctrl1"] = emit(ctrl, "p2_ctrl1", "ctrl A")
     made["p2_ctrl2"] = emit(ctrl, "p2_ctrl2", "ctrl B")
@@ -158,13 +160,15 @@ def main():
          "desc": "一段男声，30 秒。听 10 秒左右就够。\n\n"
                  "这一题只想搞清楚你听到的「闷」具体是什么感觉，"
                  "**没有正确答案**，按你听到的说就行。",
-         "ref": None,
+         "ref": {"label": "点这个播放", "file": "p2_ref.wav",
+                 "note": "就是我们的当前版本，不是 EL。听完再选。"},
          "note": "核心定位题。四种选项分别对应不同的物理量：\n"
                  " A 听不清字 → 高频/清晰度问题（查4k~8k）\n"
                  " B 像感冒鼻塞、声音出不来 → 共振峰/声道形状（查F1F2）\n"
                  " C 一口气念到底、没有换气 → 停顿结构（查pause分布）\n"
                  " D 忽闷忽亮、前后不一致 → 长文案稳定性（查沿时间轴极差）\n"
-                 "预期我们最可能是 D（实测我们极差47% vs EL 12~16%）。",
+                 "预期我们最可能是 D（实测我们极差47% vs EL 12~16%）。\n"
+                 "⚠️ 这题必须给音频：只给文字员工无法判断，2026-10-15 首版漏了。",
          "options": [
              {"key": "A", "file": None, "label": "① 声音发暗，字听不太清"},
              {"key": "B", "file": None, "label": "② 像感冒鼻塞，声音出不来"},
@@ -208,6 +212,23 @@ def main():
              {"key": "C", "file": None, "label": "差不多"}]},
     ]
 
+    # ---- 完整性校验：只有文字的题=废题（2026-10-15 首版第2题漏了音频）----
+    print("\n=== 题目完整性 ===")
+    empty = []
+    for it in items:
+        has_file = any(o.get("file") for o in it.get("options") or [])
+        has_ref = bool(it.get("ref") and it["ref"].get("file"))
+        if not (has_file or has_ref):
+            empty.append(it["id"])
+        print("  %-32s 选项音频=%s  参考音频=%s"
+              % (it["id"], "有" if has_file else "无",
+                 "有" if has_ref else "无"))
+    if empty:
+        print("  🔴 以下题目既无选项音频也无参考音频=**废题**: %s" % empty)
+        print("     纯文字题员工无法作答，必须补音频后再发布")
+    else:
+        print("  ✅ 每题都有音频")
+
     p = os.path.join(FB_DIR, "items.json")
     if os.path.exists(p):
         shutil.copyfile(p, p + ".bak-before-o")
@@ -215,12 +236,13 @@ def main():
     json.dump({"items": items}, open(p, "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
     print("题库已写入", p, "共 %d 题" % len(items))
-    if bad:
-        print("🔴 有撞车，请修素材起点后重跑，**当前 items.json 已被覆盖**")
+    if bad or empty:
+        print("🔴 存在拦截项，请修完再让员工答题")
     print("\n=== 发布前请确认 ===")
-    print(" 1. 上面 md5 自检无撞车")
+    print(" 1. md5 自检无撞车")
     print(" 2. 所有 LUFS 都在 %.1f ±1.0" % TGT_LUFS)
     print(" 3. 同一维度 A/B 语义一致（A 恒为候选）")
+    print(" 4. 打 http://服务器:8000/api/fb/where 确认 missing 为空")
 
 
 if __name__ == "__main__":
