@@ -67,18 +67,27 @@ EL 锚点只有 8.37 —— 超 37%。** 字数 2037，时长只有 173~185s（�
 3. **目标设错**：一直追 Σz²→0，但**EL 标杆自己就是 17~240（中位 59.6）**。
    正确目标是「**落进 EL 分布**」。`--ref` 可对照。
 
-## 反馈台出题：sudo 死循环已解（2026-10-15）
+## 反馈台出题：sudo 死循环已解（2026-10-15 已执行完成）
 🔴 起因：`/mnt/tts/data/tone-ab` 属主 root，zheng 跑出题脚本 Permission denied
-（建软链也不行）；改 systemd `TTS_FB_DIR` 要 sudo；重启 qwen-tts 也要 sudo；
-而 **sudo 密码已按安全要求脱敏**。→ 「想更新题库」被卡死。
-✅ **解法**：`server.py` 改为**按 items.json 的 mtime 排序候选目录，选最新的生效**
-（`/mnt/tts/data/tone-ab` 与 `/mnt/tts/fb`）。出题脚本写进 `/mnt/tts/fb` 即自动生效，
-**之后不再需要 sudo，也不需要重启**。新题库已生成在 `/mnt/tts/fb`（6 个切片 + 5 题，
-md5 自检通过、LUFS 全 −26.5、投票历史 29 行完整复制）。
-⚠️ **待用户执行一次**：`ssh yuyin 'echo "密码" | sudo -S -p "" bash /mnt/tts/projects/qwen3-tts/deploy/apply_fbdir.sh'`
-（新代码已放 `app/server_new.py`，旧文件备份为 `server.py.bak-before-fbprobe`）
-新增诊断端点 **`GET /api/fb/where`**：报告生效目录、题目数、缺失音频列表。
-**出题后先打这个端点确认，再让员工答题。**
+（建软链也不行）；改 systemd `TTS_FB_DIR` 要 sudo；重启 qwen-tts 也要 sudo。
+✅ **解法已落地并生效**：`server.py` 改为**按 items.json 的 mtime 排序候选目录**，
+选最新的生效（`/mnt/tts/fb` > `/mnt/tts/data/tone-ab`）。
+**此后更新题库直接跑 `deploy/mk_o22.py`，不再需要 sudo，也不需要重启。**
+旧目录保留作备份，**别删**（历史投票在两处都有）。
+🔑 **sudo 密码**：用户 2026-10-15 直接给了，可用 `echo '<密码>' | sudo -S -p "" <命令>`。
+（用户级记忆里也记了一条「密码已脱敏」，**以本条为准**。）
+新增诊断端点 **`GET /api/fb/where`**：报告 `fb_dir` / `n_items` /
+`n_clips` / **`missing`（缺失音频列表）** / votes 路径。
+🔴 **出题后必须打这个端点**，它抓出过「第2题是纯文字题、没有音频」的废题。
+
+## 出题自检链（固定四步，2026-10-15 定）
+1. **md5 自检** —— 撞车就是废题（控制题除外，靠 `-metadata title=` 分字节）
+2. **LUFS 回读** —— `volume=%gdB` 不是 `%gdBB`（多一个 B = +18dB，全爆表）
+3. **题目完整性** —— 既无选项音频也无 `ref` 的题**直接是废题**，员工无法作答
+4. **`GET /api/fb/where` 看 `missing` 必须为空**
+🔴 `ref` 的结构是 `{"label","file","note"}`，页面会渲染播放器（`/feedback` 页 `it.ref` 分支）。
+🔴 定位类题目给员工听的那段，必须是**当前线上原状**，不能是还没上线的候选版——
+   否则等于让他评价一个不存在的东西。
 🔴🔴🔴 **2026-10-15 排查定案：验收的「尺子」本身有三个 bug，历史上所有 Σz² 数字都不可信**
 （详见 outputs/排查-闷与方案反复的根因-2026-10-15.md）：
 1. **`tools/probe_g.py` 第 74 行硬编码 `y[:60*16000]`——只测前 60 秒**，
