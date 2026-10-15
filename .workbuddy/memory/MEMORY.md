@@ -73,7 +73,21 @@
 - 「闷」不在静态频谱轴上：HNR/质心/F1/F2 全部落在 EL 分布内。真问题是**时域组织**（断句停顿、长文一致性）与整体质感。
   长文跨窗极差%：4k~8k 我们 94.9% vs EL 31.9%（最严重）；150~300 我们 31.6% vs EL 11.9%；跨窗 Σz² 中位 783 vs 50。
 
-## 🔴 卡顿/硬切（2026-10-15 第28~29轮定案，当前主战场）
+## 🔴🔴 声音/引擎映射（2026-10-15 实测，别再搞错）
+- `vox-tts :8400` 只有 `["male"]`；`omni-tts :8300` 只有 `["female"]`。**一一对应，别混。**
+- `EL_male.engine = voxcpm`（第30轮从 omnivoice **回退**回来）
+- `EL_female.engine = omnivoice`
+- 🔴 **案例性别**：`6cdd25bc75f2` 是**男声**（F0 179.9Hz，不是我以前记的"女声"）；
+  `8197d9ac8a35` 也是男声。`omni-1block` / `longprobe-r30-6cdd` 是**女声**素材。
+- 🔴 **第29轮的回归（已修）**：`swap_engine.py` 把 EL_male 换成 omnivoice 后，
+  两处按**引擎名**判性别的硬编码（`--gender "m" if voxcpm else "f"`、
+  `_synth_omni` 写死 `voice="female"`）使**男声被当女声处理**：
+  F0 277Hz vs EL 180Hz、语速锚 7.57（应 8.37）、EQ/LUFS 全用女声档。
+  而 omnivoice **根本没有男声模型** → 产出就是女声。
+  → **第 28/29 轮员工在拿「我们的女声」跟「EL 男声」比，反馈被污染。**
+  ✅ 已改按音色配置判性别（`deploy/apply_gender_fix.py`），男声配 omnivoice 会 log.error 报警。
+
+## 🔴 卡顿/硬切（2026-10-15 第28~30轮，当前主战场）
 **根因**：停顿处电平接近数字零（−85 ~ −146 dBFS）→ 听感「咔」。
 真实停顿是低电平**但有环境声**。
 | | 最陡落差 | 硬切(>60dB) | 全零帧 |
@@ -87,6 +101,9 @@
   硬切 10→0、最陡 −101.3→−30.7dB（EL −25.3）、Σz² 166.0→149.7。
 - 🔴 **插入位置必须在 `if _rt_db is None:` 之前**（OmniVoice 属 `NEW_ENGINES` → `_legacy_post=False` → 走快路径绕开 roomtone）。v1 插错位置导致完全没生效。
 - 🔴 **mp3 会抹掉硬切**（-154.9dB → -41.1dB 经 libmp3lame）→ 验证/给员工听的 A/B 素材必须 **wav**。
+- 🔴 **「响度归一会把硬切抹平」是错的**（第30轮实测纠正）：`emit()` 用的是**静态**
+  `volume=XdB`，只改整体增益、相对落差不变。实测归一后旧源仍是 `硬切5/真零29/最陡−209.3dB`。
+  真凶是 mp3。**对照题既要 wav 又要归一**，否则员工会按「哪个声音大」选。
 - **第二来源：停顿起伏不足**（换引擎引入）。σ（10ms 帧电平）：EL 6.83~7.84、旧 VoxCPM 7.84（=EL）、**OmniVoice 2.87**（掉到 1/3）。
   整体分布：处理前 14.20 / EL 13.19 / 当前 declick 后 **7.99** ← 仍偏低，待精调。
 - 🔴 **起伏不能用慢调制**：慢周期 0.55~2.9s，而停顿段中位只有 **0.07s**，装不下 → 必须用宽带随机噪声。
@@ -135,6 +152,9 @@
 - 🔴 zheng 可写：`/mnt/tts/data`(含 output)、`/mnt/tts/projects`、`/mnt/tts/fb`、`/mnt/tts/diag`。
   root 属主写不进：`/mnt/tts/data/tone-ab`、systemd service.d、systemctl 操作 → 需 sudo。
 - 🔴 临时文件不能放 `/tmp`（跨设备 `os.replace` 报 EXDEV），放 `/mnt/tts/diag`。
+- 🔴🔴 **永远不要整目录 rsync** —— 本地仓库是**旧快照**，服务器才是最新的。
+  我 10-15 一次误 rsync 把服务器 `app/server.py` 覆盖成旧版，declick 集成丢失。
+  **只能按文件 scp**。误操作后用 `rsync -avnc` 校验和比对定位受损文件（当时只有 server.py）。
 - 🔴 git push 到 github 间歇失败（502），重试 2~4 次通常能成。
 - 停顿用可听口径 `pause_targets_audible.json`；A/B 片段裸切不 loudnorm；分块按时长 ~250s。
 - 24k/16k 采样率不一致会让时长 247s→371s，全链必须统一 SR。
