@@ -51,11 +51,22 @@ NEW_ = "/mnt/tts/output/longprobe-declick-6cdd/longprobe-declick-6cdd-1.mp3"
 OLD_ = "/mnt/tts/output/longprobe-omni-1block/longprobe-omni-1block-1.mp3"
 EL_S = "/mnt/tts/data/cases/6cdd25bc75f2/merged.wav"
 
-# 🔴 位置选择：**避开 330s 附近**。
-#    第 28 轮 디아 说「EL 标杆那段也有卡顿」——说明 330s 起那一段
-#    连 EL 标杆本身都有可听接缝，拿它做对照会两边都卡、无法分辨。
-#    改用 100s / 220s / 440s 三处，都是干净区间。
-P_E, P_M, P_L = 100.0, 220.0, 440.0
+# 🔴🔴 位置选择：**必须落在旧源确实有硬切的地方**。
+#
+#    第 29 轮首版踩的坑：我按「避开 330s」选了 100/220/440s，
+#    但硬切其实集中在 55.78 / 107.58 / **216.06** / 255.72 / 294.5 /
+#    309.62 / 352.4 / 486.86 秒 —— **220s 恰好落在两处之间**，
+#    旧源那一段和新源**都是 0 处硬切**，
+#    → 两段听不出差别是必然的，这题等于白出。
+#
+# ✅ 现在按实测的硬切位置选：216s（216.06 有硬切，是偏差最小的一处）。
+#    「避开 330s」的理由仍然成立（那段 EL 标杆自身也有接缝），
+#    但**不能只避坑，要确保选到有差异的地方**。
+#
+# 实测（旧源 longprobe-omni-1block，明显跌落 >40dB 共 17 处）：
+#   55.78 107.58 216.06 255.72 294.5 309.62 352.4 486.86 ... 秒
+#   新源（declick 后）：**0 处**
+P_E, P_M, P_L = 210.0, 216.0, 300.0
 
 
 def lufs(p):
@@ -82,12 +93,22 @@ def cut(src, start, dur):
     return t
 
 
-def emit(wav, name, title):
-    g = TGT_LUFS - lufs(wav)
-    mp3 = os.path.join(FB_DIR, "%s.mp3" % name)
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", wav,
-                    "-af", "volume=%gdB" % g,       # 🔴 dB 不是 %gdBB
-                    "-b:a", "192k", "-metadata", "title=%s" % title, mp3],
+def emit(wav, name, title, normalise=True, as_wav=False):
+    """生成切片。
+
+    🔴 2026-10-15 第29轮踩的坑（对照题必须 normalise=False）：
+       响度归一会把停顿处的极低电平**整体抬平**，
+       于是「数字真静音造成的硬切」被抹掉——
+       实测旧源原始 −154.9dB 的硬切，归一后只剩 −41.0dB，
+       **两个选项就变成没差异，这题等于白出**。
+    → 凡是「验证某个听感缺陷」的对照题，必须保留原始电平。
+    """
+    g = (TGT_LUFS - lufs(wav)) if normalise else 0.0
+    ext = "wav" if as_wav else "mp3"
+    mp3 = os.path.join(FB_DIR, "%s.%s" % (name, ext))
+    af = ["-af", "volume=%gdB" % g] if normalise else []
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", wav] + af +
+                   ["-b:a", "192k", "-metadata", "title=%s" % title, mp3],
                    check=True)
     back = lufs(mp3)
     if back is None:
@@ -110,7 +131,11 @@ def main():
     for tag, src in (("new", NEW_), ("old", OLD_), ("el", EL_S)):
         for pos, st in (("e", P_E), ("m", P_M), ("l", P_L)):
             nm = "v29_%s_%s" % (tag, pos)
-            made[nm] = emit(cut(src, st, DUR), nm, "clip %s" % nm)
+            # 🔴 第1题的两个选项不归一：它验证的就是「停顿处的电平」，
+            #    归一会把差异抹平。v2/v3 仍归一（它们比的是整体听感）。
+            made[nm] = emit(cut(src, st, DUR), nm, "clip %s" % nm,
+                            normalise=(pos != "m" or tag == "el"),
+                            as_wav=(tag in ("new", "old") and pos == "m"))
 
     ctrl = cut(NEW_, 300.0, DUR)
     made["v29_ctrl1"] = emit(ctrl, "v29_ctrl1", "ctrl A")
@@ -145,6 +170,11 @@ def main():
                  "第2段=修复前（停顿电平低到 -101dB，听感是「咔」）\n\n"
                  "机器侧：修复后硬切 10→0、最陡 −101.3dB→−30.7dB，\n"
                  "时长零变化（不改语速）。EL 标杆是 −25.3dB / 0 处硬切。\n\n"
+                 "🔴🔴 这两个选项是 **wav 不是 mp3**：\n"
+                 "   实测 libmp3lame 会把硬切从 −154.9dB 抹到 −41.1dB\n"
+                 "   （wav → mp3 转码后硬切数 1→0），用 mp3 做对照根本测不出。\n"
+                 "🔴 素材位置 216s —— 实测旧源该处有硬切(216.06s)，\n"
+                 "   新源同处 0 处。首版选 220s 时两段都是 0 硬切 → 白出。\n"
                  "🔴 标签不用「新/旧版本」：员工不知道新旧是相对什么，\n"
                  "   可能误以为第 2 段是 EL 标杆 → 会去错的那段里找卡顿。\n"
                  "   题干直接写明「两段都是我们的版本，处理方式不同」。\n"
@@ -152,8 +182,8 @@ def main():
                  "选B(第2段卡) → 修复被证实\n"
                  "选C(都听不出) → 修复有效，且说明之前听到的是别的问题",
          "options": [
-             {"key": "A", "file": "v29_new_m.mp3", "label": "第 1 段有卡顿"},
-             {"key": "B", "file": "v29_old_m.mp3", "label": "第 2 段有卡顿"},
+             {"key": "A", "file": "v29_new_m.wav", "label": "第 1 段有卡顿"},
+             {"key": "B", "file": "v29_old_m.wav", "label": "第 2 段有卡顿"},
              {"key": "C", "file": None, "label": "两段都听不出卡顿"}]},
 
         # ---- 2. 电子感（换引擎 + declick 之后是否改善）----
