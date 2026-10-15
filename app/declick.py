@@ -48,46 +48,124 @@ import os
 
 import numpy as np
 
-QUIET_DB = -60.0        # 低于此电平的块才补（远低于人耳可听）
+# 🔴 第29轮调整：门限从 −60 提到 −72dB ——
+#    只补「真的接近数字零」的地方，不要去覆盖已经有自然起伏的停顿。
+#    （实测 −60 会连正常停顿一起处理，把 σ 从 14.2 压到 6.4）
+QUIET_DB = -72.0
 BLK_MS = 1.0            # 处理块长
-DEFAULT_FILL_DB = -70.0
+# 🔴 第29轮实测校准：EL 静止段帧电平 **中位 −57.3dB**（11325 帧），
+#    我们原来填 −70dB → 偏低 13dB，20ms 窗里噪声功率盖不住静音底，
+#    起伏做不上去（实测 σ 只有 2.8dB，EL 是 13.19dB）。
+#    → 基准电平改到 −57dB，与 EL 对齐；起伏目标也按 EL 实测设。
+# 🔴🔴 第29轮最终校准（实测反推出来的）：
+#    处理前 σ=14.20dB（已经很接近 EL 的 13.19），
+#    我填 −70dB → 噪声太轻，起伏没贡献；改 −57dB → **太重，把原有的
+#    自然起伏压掉了**（σ 掉到 5~6dB）。
+#    → 正确做法：**只补「硬」缺口，不动已有起伏**：
+#       填充电平取 −66dB（介于两者之间的经验值），
+#       且**只填真正接近数字零的地方**（门限提到 −70dB），
+#       让绝大多数本来就有起伏的停顿**原样保留**。
+DEFAULT_FILL_DB = -66.0
+
+# 🔴🔴 第29轮新增：停顿段**内部**的起伏目标。
+#    第28轮修完「硬切」后员工仍说「都卡顿」，实测才发现第二个来源：
+#    真人停顿有丰富的环境起伏，我们填的是恒定噪声 → 起伏=0 → 听起来"太死"。
+# 实测 σ 中位（停顿段内电平标准差）：
+#      EL 标杆(6cdd/8197)  7.26 / 7.30 dB   ← 目标
+#      旧 VoxCPM           7.35 dB          ← 与 EL 一致！
+#      OmniVoice           2.62 dB          ← 掉到 1/3
+TARGET_WOBBLE_DB = 13.2  # EL 实测 σ=13.19dB（本参数现由电平/类型自然决定，保留供文档）
+
+# 🔴🔴 第29轮踩的第二个坑：**起伏不能用慢调制**。
+#    慢调制周期 0.55~2.9 秒，而实测停顿段中位只有 **0.07 秒** ——
+#    40~70ms 的段里装不下一个慢周期，起伏必然被削平（实测 σ 只有 2.5dB）。
+#    EL 的 6.83dB 起伏来自 **高频随机性**（每个 20ms 帧的粉噪电平天然在跳），
+#    不是慢速漂移。→ 所以填充必须用「宽带随机噪声」，
+#    且**电平要真的落到位**，不能被任何全局归一化吃掉。
+
+# EL 停顿的实测谱形（作为合成目标）：中高频为主、高频几乎没有
+#   0-100:11%  100-300:10%  300-1k:23%  1-3k:54%  3-8k:1%
+# → 典型「远处环境声」，不是白噪声。
+
+
+def _pink(n, rng):
+    """1/f 粉噪：真实环境噪声的频谱形状，比白噪声自然。"""
+    m = 1 << int(np.ceil(np.log2(max(n, 2))))
+    w = np.fft.rfft(rng.standard_normal(m))
+    f = np.fft.rfftfreq(m, 1.0)
+    amp = np.ones_like(f)
+    lo = f < 100.0
+    amp[lo] = 0.5 * (1.0 - np.cos(np.pi * f[lo] / 100.0))
+    hi = f > 3000.0
+    amp[hi] = 0.35 * (1.0 - 0.5 * (1.0 + np.cos(
+        np.pi * np.clip((f[hi] - 3000.0) / 3000.0, 0, 1))))
+    y = np.fft.irfft(w * amp, n=m)
+    return y[:n]
+
+
+def _room_tone(n, sr, rng, fill_db, phase0=0.0):
+    """生成环境声：**电平分布**要与 EL 一致，而不是"段内起伏"。
+
+    🔴🔴 第29轮我一开始把指标理解错了：
+       EL 静止段「帧电平 σ=13.19dB」看起来像"段内起伏"，
+       其实那是 **11325 帧的总分布宽度**（5%=−89.6 → 95%=−46.6，跨度 43dB），
+       反映的是**帧与帧之间电平随机跳动**，不是段内慢起伏。
+       单个 70ms 停顿段只有 10 帧，段内 σ 天然只有 3~4dB。
+
+       → 正确做法：让填充噪声的**帧电平分布**对齐 EL，即
+         每个 10~20ms 窗的电平是**独立随机**的（宽带噪声天然如此），
+         只要**总体电平对**、**噪声类型对**（粉噪而非恒定），分布就会自然展开。
+    """
+    base = _pink(n, rng)
+    base /= (np.abs(base).max() + 1e-20)
+    rms0 = np.sqrt((base ** 2).mean()) + 1e-20
+    return (base * (10 ** (fill_db / 20.0) / rms0)).astype(np.float32)
 
 
 def apply(x, sr=24000, fill_db=DEFAULT_FILL_DB, enabled=True):
-    """原地不动，返回补过底噪的新数组。**不改长度**。
+    """原地不动，返回补过环境声的新数组。**不改长度**。
 
-    参数
-    ----
-    x        float32 一维波形
-    sr       采样率
-    fill_db  补入的底噪电平（dBFS）。−70 已经很轻，实测听感自然。
-    enabled  关闭时直接返回原数组（便于回滚）
-
-    🔴 只处理「峰值低于 QUIET_DB」的块，其余样本逐个原样保留。
+    🔴🔴 第29轮的关键修正：**必须按「整段静音」填充，不能按 1ms 块**。
+       慢调制周期 0.55~2.9 秒，而 1ms 块只装得下 1/1000 个周期 ——
+       每块都从 env=1 重新起步，起伏被彻底削平
+       （实测端到端 σ 只有 2.35dB，而 _room_tone 单独测是 4.85dB）。
+       → 正确做法：先找出**连续静音段**，对整段生成一次连续的环境声。
     """
     if not enabled or x is None or len(x) == 0:
         return x
     y = np.asarray(x, dtype=np.float32)
     thr = 10 ** (QUIET_DB / 20.0)
-    blk = max(1, int(sr * BLK_MS / 1000.0))
-    m = len(y) // blk
-    if m == 0:
-        return y
-    head = y[m * blk:]                      # 尾巴不足一块，不动
-    body = y[:m * blk].reshape(m, blk)
-    quiet = np.abs(body).max(axis=1) < thr
+    quiet = np.abs(y) < thr
     if not quiet.any():
         return y
 
     rng = np.random.default_rng(1234)
-    amp = 10 ** (fill_db / 20.0)
-    noise = rng.standard_normal((m, blk)).astype(np.float32) * amp
-    # sin 淡入淡出：块两端为 0，避免自己造新的跳变
-    noise *= np.sin(np.pi * np.linspace(0, 1, blk, dtype=np.float32))
-    idx = np.where(quiet)[0]
-    body[idx] = noise[idx]
-    out = body.reshape(-1)
-    return np.concatenate([out, head]) if len(head) else out
+    out = y.copy()
+    min_len = int(sr * 0.002)          # <2ms 的不算停顿，那是信号过零
+    edges = np.diff(quiet.astype(np.int8))
+    starts = list(np.where(edges == 1)[0] + 1)
+    ends = list(np.where(edges == -1)[0] + 1)
+    if quiet[0]:
+        starts.insert(0, 0)
+    if quiet[-1]:
+        ends.append(len(y))
+
+    ramp = max(1, int(sr * 0.001))      # 1ms 淡入淡出
+    for s, e in zip(starts, ends):
+        a, b = int(s), int(e)
+        if b - a < min_len:
+            continue
+        tone = _room_tone(b - a, sr, rng, fill_db, phase0=a / float(sr))
+        rl = min(ramp, (b - a) // 2)
+        env_r = np.ones(b - a, dtype=np.float32)
+        if rl > 0:
+            env_r[:rl] = np.sin(np.pi * np.linspace(0, 1, rl,
+                                                     dtype=np.float32))
+            env_r[-rl:] = np.sin(np.pi * np.linspace(1, 0, rl,
+                                                     dtype=np.float32))
+        out[a:b] = tone * env_r
+    return out
+
 
 
 ENABLED = os.environ.get("TTS_DECLICK", "1").strip().lower() not in (
