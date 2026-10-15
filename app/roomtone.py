@@ -50,6 +50,23 @@ ROOMTONE_DB_MALE = float(os.environ.get("TTS_ROOMTONE_DB_MALE", "-56"))
 ROOMTONE_DB_FEMALE = float(os.environ.get("TTS_ROOMTONE_DB_FEMALE", "-50"))
 ENABLED = os.environ.get("TTS_ROOMTONE", "1").strip().lower() not in (
     "0", "false", "no")
+# 频谱斜率（功率谱滚降，dB/oct）。-3 = 粉红噪声（原值）。
+#
+# 🔴🔴 2026-10-15 结论：**分性别斜率全部回退到 -3.0，当前两性别都是粉噪。**
+#    离线看着很美，端到端两次都翻车，两个方向的实验都被证伪：
+#      · 男声 -1.5（更平）：离线说 Σz² 23.1->17.3、flat -2.61->-0.92；
+#        端到端重新生成反而 Σz² 23.1->32.4、flat 只动 0.18σ。
+#        根因：离线用的是「成品 − 复现噪声」，而线上 `_rng` 是**模块级全局**，
+#        状态会被之前的任务消耗掉，我减掉的根本不是实际叠加的那段噪声。
+#        受控实验一验就露馅：旧篇说 -1.5 好，新篇说 -3.0 好，两篇结论相反。
+#      · 女声 -6.0（更陡）：离线说 flat +4.54->+0.65（用的是无底噪产物正向叠加，
+#        方法本身可靠，但那份 v_swr_eq.wav 是 10-14 的老链路产物）；
+#        端到端 flat 反而 +2.91σ -> **+3.85σ**，Σz² 26.2->32.2，60~150 也 +1σ。
+# ⚠️ 教训：改底噪参数的离线实验，**base 必须是当前链路真实的无底噪中间产物**，
+#    且端到端必须重新生成验证（单次对比会被生成波动 ±4σ 淹没）。
+#    在拿到当前链路的无底噪 dump 之前，别再动这条轴。
+ROOMTONE_SLOPE_MALE = float(os.environ.get("TTS_ROOMTONE_SLOPE_MALE", "-3.0"))
+ROOMTONE_SLOPE_FEMALE = float(os.environ.get("TTS_ROOMTONE_SLOPE_FEMALE", "-3.0"))
 # 6 kHz 以上额外滚降（dB/oct）
 HF_EXTRA_ROLLOFF = 6.0
 HF_KNEE = 6000.0
@@ -59,10 +76,11 @@ F_FLOOR = 60.0
 _rng = np.random.default_rng(20261007)
 
 
-def gen_noise(n, sr, db, rng=None):
-    """生成 n 采样、RMS = db dBFS 的粉红噪声（FFT 塑形，比级联滤波快且准）。
+def gen_noise(n, sr, db, slope=-3.0, rng=None):
+    """生成 n 采样、RMS = db dBFS 的噪声（FFT 塑形，比级联滤波快且准）。
 
-    幅度谱 = 粉红(功率 −3 dB/oct) × 6 kHz 以上额外 −6 dB/oct。
+    幅度谱 = 功率按 slope dB/oct 滚降 × 6 kHz 以上额外 −6 dB/oct。
+    slope=-3 就是粉红噪声（原行为）；更负 = 能量更集中到低频 = flat 更低。
     """
     g = rng or _rng
     n = int(n)
@@ -73,7 +91,7 @@ def gen_noise(n, sr, db, rng=None):
     W = np.fft.rfft(g.standard_normal(m))
     f = np.fft.rfftfreq(m, 1.0 / sr)
     ff = np.maximum(f, F_FLOOR)
-    amp = (F_FLOOR / ff) ** 0.5                       # 粉红：功率 -3 dB/oct
+    amp = (F_FLOOR / ff) ** (abs(float(slope)) / 6.0)   # slope dB/oct
     over = np.log2(np.maximum(f, HF_KNEE) / HF_KNEE)  # 超过拐点的倍频程数
     amp = amp * 10.0 ** (-(HF_EXTRA_ROLLOFF / 20.0) * np.maximum(over, 0.0))
     y = np.fft.irfft(W * amp, n=m).astype(np.float32)[:n]
@@ -81,7 +99,7 @@ def gen_noise(n, sr, db, rng=None):
     return (y * (10.0 ** (db / 20.0) / rms)).astype(np.float32)
 
 
-def apply(x, sr=24000, db=-56.0, rng=None):
+def apply(x, sr=24000, db=-56.0, slope=-3.0, rng=None):
     """把房间底噪叠到信号上。**原地不改**，返回新数组。
 
     ⚠️ 必须在**响度归一之后**叠：叠在归一之前会把 RMS 抬一点点，
@@ -90,7 +108,7 @@ def apply(x, sr=24000, db=-56.0, rng=None):
     if not ENABLED or x is None or len(x) == 0:
         return x
     y = np.asarray(x, dtype=np.float32)
-    n = y + gen_noise(len(y), sr, db, rng=rng)
+    n = y + gen_noise(len(y), sr, db, slope=slope, rng=rng)
     # 绝不因为这一步把峰值顶过 0 dBFS
     m = float(np.max(np.abs(n))) if len(n) else 0.0
     if m > 0.999 and m > 0:
@@ -98,8 +116,20 @@ def apply(x, sr=24000, db=-56.0, rng=None):
     return n.astype(np.float32)
 
 
+def _gender_of(gender):
+    """归一成 'male' / 'female'。识别不出按男声（更保守、更不容易听出噪声）。"""
+    return "female" if str(gender or "").lower().startswith("f") else "male"
+
+
 def level_for(gender):
     """按性别取电平。识别不出就按男声（更保守、更不容易听出噪声）。"""
-    if str(gender or "").lower().startswith("f"):
+    if _gender_of(gender) == "female":
         return ROOMTONE_DB_FEMALE
     return ROOMTONE_DB_MALE
+
+
+def slope_for(gender):
+    """按性别取频谱斜率（dB/oct）。与 level_for 同一套性别判定，别拆开改。"""
+    if _gender_of(gender) == "female":
+        return ROOMTONE_SLOPE_FEMALE
+    return ROOMTONE_SLOPE_MALE
