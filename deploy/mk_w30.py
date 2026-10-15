@@ -57,7 +57,7 @@ TMPD = "/mnt/tts/diag/_w30"
 TGT_LUFS = -26.1
 DUR = 30.0
 
-NEW_ = "/mnt/tts/output/longprobe-r30vox-6cdd/longprobe-r30vox-6cdd-1.mp3"
+NEW_ = "/mnt/tts/output/longprobe-r30vox-6cdd-3/longprobe-r30vox-6cdd-1.mp3"
 OLD_ = "/mnt/tts/output/longprobe-6cdd/longprobe-6cdd-1.mp3"
 EL_S = "/mnt/tts/data/cases/6cdd25bc75f2/merged.wav"
 
@@ -67,8 +67,15 @@ EL_S = "/mnt/tts/data/cases/6cdd25bc75f2/merged.wav"
 #    → 取 188.0s 起（188~218s），一段里就含 200.7 / 200.9 / 207.1 三处。
 #    EL 标杆自身在 356.7s 有 1 处接缝 → 避开 330~370s。
 P_HARD = 188.0     # w1：旧源有 3 处硬切
-P_BASE = 250.0     # w3：基线题，避开 EL 的 356.7s 接缝
-P_REF = 120.0      # w2：单段定位题
+P_BASE = 250.0     # w4：基线题，避开 EL 的 356.7s 接缝
+P_REF = 120.0      # w2/w3：音高 A/B 与单段定位题
+
+# 🔴 第30轮新发现：男声音高偏高。
+#    同一套 parselmouth 口径实测：EL 男标杆 179.9Hz，我们的成品 **210.1Hz（高 17%）**。
+#    （老版本只有 186.3Hz —— 因为那时男声被当女声处理，变调逻辑没按男声走。）
+#    候选：用 asetrate 三步把音高降到 EL 的水平（记忆铁律：变调只用 asetrate，
+#    禁用 rubberband；三步缺一不可）。
+PITCH_RATIO = 179.9 / 210.1   # ≈0.856
 
 
 def lufs(p):
@@ -92,6 +99,21 @@ def cut(src, start, dur):
         sys.exit("🔴 切片越界：%s 第%.0fs起取%.0fs，实际仅%.1fs"
                  % (os.path.basename(src), start, dur, got))
     return t
+
+
+def emit_pitch(wav, name, ratio):
+    """变调：asetrate + aresample + atempo 三步（记忆铁律，缺一不可）。
+
+    漏了 atempo → 时长被压短 1/R。这里 R<1（降调），时长会被拉长 1/R。
+    """
+    out = os.path.join(TMPD, "_%s.wav" % name)
+    sr = 16000
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", wav,
+                    "-af",
+                    "asetrate=%d,aresample=%d,atempo=%.6f"
+                    % (int(round(sr * ratio)), sr, 1.0 / ratio),
+                    "-ar", str(sr), "-ac", "1", out], check=True)
+    return out
 
 
 def emit(wav, name, title, normalise=True, as_wav=False):
@@ -124,13 +146,21 @@ def main():
     os.makedirs(TMPD, exist_ok=True)
     made = {}
 
-    # w1：卡顿对照（不归一 + wav，否则硬切被抹平/被 mp3 抹掉）
+    # w1：卡顿对照（wav + 归一）
+    #    🔴 用 wav 是因为 **mp3 才会抹掉硬切**（libmp3lame 把 −154.9dB 抬到 −41.1dB）。
+    #    🔴 归一化用的是**静态** `volume=XdB`，只改整体增益、相对落差不变，
+    #       所以不会抹掉硬切（旧记忆里「归一抹掉硬切」其实是 mp3 造成的，已实测纠正）。
+    #       归一后两个选项响度一致，员工才不会按「哪个声音大」来选。
     made["w30_new_h"] = emit(cut(NEW_, P_HARD, DUR), "w30_new_h", "clip new",
-                             normalise=False, as_wav=True)
+                             normalise=True, as_wav=True)
     made["w30_old_h"] = emit(cut(OLD_, P_HARD, DUR), "w30_old_h", "clip old",
-                             normalise=False, as_wav=True)
-    # w2：单段定位题（归一）
-    made["w30_new_r"] = emit(cut(NEW_, P_REF, DUR), "w30_new_r", "clip ref")
+                             normalise=True, as_wav=True)
+    # w2：音高 A/B（候选 = 降到 EL 男声的 179.9Hz）
+    _ref = cut(NEW_, P_REF, DUR)
+    made["w30_new_r"] = emit(_ref, "w30_new_r", "clip ref")
+    made["w30_low_r"] = emit(emit_pitch(_ref, "w30_low_r", PITCH_RATIO),
+                             "w30_low_r", "clip low", normalise=True,
+                             as_wav=False)
     # w3：基线题（归一）
     made["w30_new_b"] = emit(cut(NEW_, P_BASE, DUR), "w30_new_b", "clip base")
     made["w30_el_b"] = emit(cut(EL_S, P_BASE, DUR), "w30_el_b", "clip el")
@@ -185,8 +215,34 @@ def main():
              {"key": "C", "file": None, "label": "③ 两段都有卡顿"},
              {"key": "D", "file": None, "label": "④ 两段都没有卡顿"}]},
 
-        # ---- 2. 最不像真人的地方（定位）----
-        {"id": "w2_whats_off_20261015w", "dim": "不像真人的原因定位",
+        # ---- 2. 音高 A/B（第30轮新发现）----
+        {"id": "w2_pitch_ab_20261015w", "dim": "音高（男声）",
+         "title": "这两段男声，哪一段的声音更自然？",
+         "desc": "两段都是我们的男声，**念的内容完全一样，只有声音的高低不同**。\n\n"
+                 "就按「哪个更像真人说话的声音」判断，不用管别的。\n"
+                 "两段都行就选「两段都自然」，都不行就选「两段都不自然」。",
+         "ref": None,
+         "note": "🔴🔴 第30轮新发现：**我们的男声音高比 EL 高 17%**。\n"
+                 "同一套 parselmouth 口径实测 F0 中位：\n"
+                 "  EL 男标杆 6cdd    **179.9 Hz**\n"
+                 "  我们（当前线上）   **210.1 Hz**  ← 高 17%\n"
+                 "  老版本（第29轮前）  186.3 Hz\n"
+                 "→ 老版本其实更接近，只是那时男声被当女声处理、变调没按男声走。\n\n"
+                 "第1段 = 当前音高（210Hz）\n"
+                 "第2段 = 候选：降到 EL 的水平（179.9Hz，ratio=0.856，\n"
+                 "        走 asetrate+aresample+atempo 三步，时长不变）\n\n"
+                 "选① → 保持现状，音高不是问题\n"
+                 "选② → ✅ 把男声音高降下来上线（改 fix_chain 的 --target-f0）\n"
+                 "选③ → 音高不是瓶颈，别在这上面花时间\n"
+                 "选④ → 方向不对（可能要再往上或换个思路）",
+         "options": [
+             {"key": "A", "file": "w30_new_r.mp3", "label": "① 第 1 段更自然"},
+             {"key": "B", "file": "w30_low_r.mp3", "label": "② 第 2 段更自然"},
+             {"key": "C", "file": None, "label": "③ 两段都自然"},
+             {"key": "D", "file": None, "label": "④ 两段都不自然"}]},
+
+        # ---- 3. 最不像真人的地方（定位）----
+        {"id": "w3_whats_off_20261015w", "dim": "不像真人的原因定位",
          "title": "这段男声，最不像真人的地方是哪一点？",
          "desc": "先点下面的播放键听一遍（约 30 秒），然后选**最突出**的那一点。\n\n"
                  "如果同时有几处，就选**你最先注意到**的那个。",
@@ -208,8 +264,8 @@ def main():
              {"key": "D", "file": None, "label": "④ 语速（太快或太慢）"},
              {"key": "E", "file": None, "label": "⑤ 有杂音 / 吞字 / 卡顿"}]},
 
-        # ---- 3. 长期基线锚点 ----
-        {"id": "w3_send_baseline_20261015w", "dim": "可发送性",
+        # ---- 4. 长期基线锚点 ----
+        {"id": "w4_send_baseline_20261015w", "dim": "可发送性",
          "title": "这 30 秒，哪一段可以直接发给客户？",
          "desc": "两段都是男声，同一段文案，各 30 秒。\n\n"
                  "按「能不能直接发给客户」判断。",
