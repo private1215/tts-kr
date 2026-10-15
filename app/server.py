@@ -2362,8 +2362,33 @@ async def index():
 # 加新题 = 拷 mp3 + 改 json，不用改代码、不用重启服务。
 #
 # 答案落在 FB_DIR/votes.jsonl（一行一条，append-only，可重复提交覆盖同人同题）。
-FB_DIR = os.environ.get("TTS_FB_DIR", "/mnt/tts/data/tone-ab")
+#
+# 🔴 2026-10-15：出题目录改为**运行时探测**，不再需要 sudo / 重启。
+#
+# 起因（运维死循环）：
+#   · /mnt/tts/data/tone-ab 属主 root，出题脚本以普通用户跑 Permission denied
+#   · 改 systemd 的 TTS_FB_DIR 要 sudo，而 sudo 密码已按安全要求脱敏
+#   · 重启 qwen-tts 也要 sudo
+#   → "想更新题库"被卡在权限上，只能干等。
+#
+# 解法：启动时把候选目录里**同时存在 items.json 的那些**按 mtime 排序，
+#      每次请求重新挑最新的那个。这样出题脚本只要把 items.json + mp3
+#      写进任何一个可写目录就会自动生效，**不需要 sudo，也不需要重启**。
+#
+# 兼容性：若只有一个目录有 items.json（或都用环境变量指定），行为与从前完全一致。
+_FB_DIRS = [d for d in
+            (os.environ.get("TTS_FB_DIR"), "/mnt/tts/data/tone-ab",
+             "/mnt/tts/fb")
+            if d and os.path.isdir(d)]
+_FB_DIRS = sorted(set(_FB_DIRS),
+                  key=lambda d: os.path.getmtime(
+                      os.path.join(d, "items.json"))
+                  if os.path.exists(os.path.join(d, "items.json")) else 0,
+                  reverse=True)
+FB_DIR = _FB_DIRS[0] if _FB_DIRS else (
+    os.environ.get("TTS_FB_DIR") or "/mnt/tts/data/tone-ab")
 FB_VOTES = os.path.join(FB_DIR, "votes.jsonl")
+FB_DIRS = _FB_DIRS          # 供诊断端点查看实际生效的目录
 
 
 @app.get("/feedback", response_class=HTMLResponse)
@@ -2374,6 +2399,34 @@ async def feedback_page():
             "Cache-Control": "no-store, must-revalidate",
             "Pragma": "no-cache",
         })
+
+
+@app.get("/api/fb/where")
+async def fb_where():
+    """🔴 诊断：反馈台实际在读哪个目录、题目与音频是否齐全。
+
+    出题脚本改了目录/文件后，先打这个端点确认生效，再让员工答题。
+    以前"题库更新了但员工看不到"很难定位，就是因为没有这个自检口。
+    """
+    ip = os.path.join(FB_DIR, "items.json")
+    try:
+        n_items = len((json.load(open(ip, encoding="utf-8"))
+                       .get("items") or []))
+    except Exception as e:                                  # noqa: BLE001
+        return JSONResponse({"fb_dir": FB_DIR, "error": repr(e)[:200]},
+                            headers={"Cache-Control": "no-store"})
+    need, miss = [], []
+    for it in (json.load(open(ip, encoding="utf-8")).get("items") or []):
+        for o in (it.get("options") or []):
+            f = o.get("file")
+            if f:
+                (need if os.path.exists(os.path.join(FB_DIR, f))
+                 else miss).append(f)
+    return JSONResponse({
+        "fb_dir": FB_DIR, "candidates": FB_DIRS, "n_items": n_items,
+        "n_clips": len(need), "missing": miss,
+        "votes": FB_VOTES if os.path.exists(FB_VOTES) else None,
+    }, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/fb/items")
