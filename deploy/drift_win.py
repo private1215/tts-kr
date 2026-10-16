@@ -33,7 +33,7 @@ WIN = float(os.environ.get("DRIFT_WIN", "20"))
 TMP = "/mnt/tts/diag/_drift"
 os.makedirs(TMP, exist_ok=True)
 
-REF = "/mnt/tts/data/voices/EL_male.wav"
+REF = os.environ.get("DRIFT_REF", "/mnt/tts/data/voices/EL_male.wav")
 OURS = "/mnt/tts/output/longprobe-z32-6cdd/longprobe-z32-6cdd-1.mp3"
 EL = "/mnt/tts/data/cases/6cdd25bc75f2/merged.wav"
 
