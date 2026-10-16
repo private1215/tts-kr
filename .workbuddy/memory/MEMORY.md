@@ -136,6 +136,26 @@
 | 女 | 0.7862 | 0.7314 | 0.055 |
 
 - 剩余缺口在**引擎**（男 0.110 / 女 0.177）→ 下个大动作 = 路径 B 微调（36 条 EL 案例当 SFT 集；GS cron 已设 `GS_AUTO_TRAIN=1`，北京凌晨 3 点跑）。
+- 🔴 **口径不同不能混用**：上表 0.7314 是旧素材口径。第47轮**同文案全篇**口径
+  （case `00b6a45ad6aa`，3416 字，三条全篇多窗平均）实测：
+  EL 1.000 / **现役 omnivoice 0.858** / **GS 微调 SOLA 0.908** —— GS 高 +0.050，
+  且覆盖率 0.928 ≥ 0.85（没翻车，历史翻车那次覆盖率只有 0.150）。
+  GS 弱点：句内动态 8.22（现役 9.12 / EL 9.55）、句尾降幅 −2.58（现役 −0.72）。
+
+## 🔴🔴 GS（GPT-SoVITS）的两个硬坑（2026-10-16 第47轮）
+1. **参考音频必须 3~10 秒**。现役女声 `EL_female.wav` 是 15.08s、`SOLA_female.wav` 15.0s
+   → 走 `/api/jobs` 一律 500 `OSError('Reference audio is outside the 3-10 second range')`。
+   **GS 之前从生产链路根本进不去**（只跑过 CLI 裸推理所以没暴露）。
+   ✅ 解法：用 10s 的 `gpt-sovits/out/prompt_sola_00b6a45a.wav`，
+   campplus 与 EL_female 余弦 **0.7953 同人**（`prompt_f10s.wav` 0.8321 也可）。
+   ⚠️ **`elara.wav` 只有 0.3424 = 不同人**，绝不能当 SOLA 参考（GS_VOICE_GROUP 把
+   elara 映射到 SOLA，很容易误用）。
+   已注册临时音色 `SOLA_gs10`（`deploy/gs_voice_add.py add|del`，自带 `/api/voices/reload`），
+   备份 `/mnt/tts/diag/voices.json.bak-before-sola47`。
+   ⚠️ 加音色**不会**影响员工侧：`BEST_CLONE` 是写死的 `{"male":"EL_male","female":"EL_female"}`。
+2. **产物目录会被加 `-N` 后缀**：服务端 `_unique_dir` 重名时给目录加后缀
+   （第一次失败留下的空目录占名 → 成品实际落在 `sola47_f_gptsovits-2/`）。
+   按无后缀标题 glob 会抓空。`cmp_sola47.py` 已加 `find_out_dir()`（挑 mp3 最多且最新的）。
 - 女声 F0 本来就对不需变调；女声偏噪（平坦度 +7.33σ）方向与男声相反。
 - 生成随机量：发声占比同配置差 2.9σ → 改动收益 < 2.9σ 时单次对比不作数。
 - 现役男声 EQ：`eq800:-2, highshelf1500:+2.5, highshelf2500:-1.5, highshelf4000:-9.5, lowpass14000`。

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第47轮 · GS 微调 SOLA 女声 vs 现役（z45 已上线）</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --card:#fff; --line:#e3e6ea; --text:#1f2329;
+    --muted:#6b7280; --accent:#2f6fed; --good:#0a7f3f; --warn:#b45309; --bad:#b91c1c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:15px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;}
+  .wrap{max-width:980px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:22px;margin:0 0 6px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:24px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;
+        padding:18px 20px;margin-bottom:18px}
+  h2{font-size:16px;margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  thead th{color:var(--muted);font-weight:600}
+  tr.hl td{background:#eef4ff}
+  .good{color:var(--good);font-weight:600}
+  .bad{color:var(--bad);font-weight:600}
+  .warn{color:var(--warn);font-weight:600}
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+  .seg{background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:12px}
+  .seg .who{font-size:13px;font-weight:600;margin-bottom:6px}
+  .seg .who span{color:var(--muted);font-weight:400}
+  audio{width:100%;height:36px}
+  .note{font-size:12.5px;color:var(--muted);margin-top:8px}
+  code{background:#f0f2f5;padding:1px 5px;border-radius:4px;font-size:12.5px}
+  ul{margin:8px 0 0;padding-left:20px}
+  li{margin-bottom:4px}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;
+       background:#eef4ff;color:var(--accent);margin-left:6px}
+  .tag.el{background:#fff2e8;color:var(--warn)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>第47轮：GS 微调 SOLA 女声，能不能顶替现役？</h1>
+  <div class="sub">
+    同文案（案例 <code>00b6a45ad6aa</code>，3416 字）· 同 case_id · 同 seed=42 ·
+    都走 <code>POST /api/jobs</code> 同一条流水线，只有「谁来念」不同。
+    z45 已上线（5 题 / 10 段音频，全盲听）。
+  </div>
+
+  <div class="card">
+    <h2>一、三方评分（engine_score_all.py，全篇，参照 = EL 原声）</h2>
+    <table>
+      <thead>
+        <tr><th>样本</th><th>音色</th><th>覆盖率</th><th>CER</th><th>音高中位</th>
+            <th>句内动态</th><th>音高跨度</th><th>能量动态</th><th>语速CV</th>
+            <th>句尾STD</th><th>停顿熵</th><th>句尾降幅</th><th>语速</th><th>停顿/分</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>EL 原声（参照）</td><td>1.000</td><td>0.954</td><td>0.045</td><td>265.8</td>
+            <td>9.55</td><td>14.04</td><td>15.33</td><td>0.145</td><td>6.90</td><td>0.776</td>
+            <td>+0.55</td><td>5.35</td><td>20.0</td></tr>
+        <tr><td>现役 omnivoice</td><td class="bad">0.858</td><td>0.963</td><td>0.038</td><td>267.9</td>
+            <td>9.12</td><td>14.13</td><td>14.28</td><td>0.134</td><td>5.83</td><td>0.796</td>
+            <td>−0.72</td><td>5.35</td><td>23.7</td></tr>
+        <tr class="hl"><td><b>GS 微调 SOLA</b></td><td class="good">0.908</td><td>0.928</td><td>0.070</td><td>274.0</td>
+            <td class="warn">8.22</td><td>13.36</td><td>15.91</td><td>0.134</td><td class="warn">4.66</td><td>0.656</td>
+            <td class="warn">−2.58</td><td>5.46</td><td>24.6</td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      判定：<b>现役 → 音色偏低（0.8582）；GS 微调 → 通过</b>。<br>
+      · 音色 <b>+0.050</b>（0.858 → 0.908），女声缺口 0.177 里补掉近 ⅓，且是<b>引擎级</b>的，后处理补不回来。<br>
+      · <b>没有翻车</b>：覆盖率 0.928 ≥ 0.85 阈值。历史上 GS 那次翻车是音色 0.9426 但覆盖率只有 <b>0.150</b>。<br>
+      · 弱点：<b>句内动态 8.22</b>（现役 9.12 / EL 9.55）偏小、<b>句尾降幅 −2.58</b>（现役 −0.72）下沉更多 ——
+        这两个正是「女生的少了点感情」的候选来源，所以必须盲听裁决。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>二、为什么切点必须按文本对齐（不能按绝对秒）</h2>
+    <table>
+      <thead><tr><th>音频</th><th>时长</th><th>相对 EL</th></tr></thead>
+      <tbody>
+        <tr><td>EL 原声</td><td>459.13s</td><td>—</td></tr>
+        <tr><td>现役 omnivoice</td><td>458.83s</td><td>−0.30s（几乎重合）</td></tr>
+        <tr class="hl"><td>GS 微调 SOLA</td><td>450.38s</td><td class="warn">−8.75s（快 1.9%）</td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      GS 比 EL 快 8.75s，同一个绝对秒根本不是同一句话 —— 直接按秒切，员工就在比「哪句好念」，
+      正是用户反复纠正的「逗人玩」陷阱。<code>align47.py</code> 用 ASR 实测三方同一句话的相似度，
+      本轮只取<b>三方都 &gt; 0.85</b> 的切点。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>三、A/B 试听（与员工听到的完全同一份素材，20s）</h2>
+
+    <div class="seg" style="margin-bottom:14px">
+      <div class="who">第 1 组 · 全文第 12s <span>（三方同句相似度 现役/EL 0.975、GS/EL 0.957 —— 本轮最齐）</span></div>
+      <div class="pair">
+        <div class="seg"><div class="who">A · 现役 omnivoice<span>（音色 0.858）</span></div>
+          <audio controls src="s1_t12_A_现役.wav"></audio></div>
+        <div class="seg"><div class="who">B · GS 微调 SOLA<span>（音色 0.908）</span></div>
+          <audio controls src="s1_t12_B_候选.wav"></audio></div>
+      </div>
+    </div>
+
+    <div class="seg" style="margin-bottom:14px">
+      <div class="who">第 2 组 · 全文第 115s <span>（现役/EL 0.902、GS/EL 0.911）</span></div>
+      <div class="pair">
+        <div class="seg"><div class="who">A · 现役 omnivoice</div>
+          <audio controls src="s2_t115_A_现役.wav"></audio></div>
+        <div class="seg"><div class="who">B · GS 微调 SOLA</div>
+          <audio controls src="s2_t115_B_候选.wav"></audio></div>
+      </div>
+    </div>
+
+    <div class="seg" style="margin-bottom:14px">
+      <div class="who">第 3 组 · 全文第 320s <span class="tag">后段，GS 已知弱项：长文本发散/吞字</span></div>
+      <div class="pair">
+        <div class="seg"><div class="who">A · 现役 omnivoice</div>
+          <audio controls src="s3_t320_A_现役.wav"></audio></div>
+        <div class="seg"><div class="who">B · GS 微调 SOLA</div>
+          <audio controls src="s3_t320_B_候选.wav"></audio></div>
+      </div>
+      <div class="note">这组是<b>否决键</b>：若后段明显崩，哪怕前两组全赢也不能切引擎。</div>
+    </div>
+
+    <div class="seg">
+      <div class="who">第 4 组 · 全文第 30s <span class="tag el">隐藏对照：B 是 EL 原声（员工不知道身份）</span></div>
+      <div class="pair">
+        <div class="seg"><div class="who">A · 现役 omnivoice<span>（我们）</span></div>
+          <audio controls src="el_t30_A_现役.wav"></audio></div>
+        <div class="seg"><div class="who">B · EL 原声<span>（隐藏对照）</span></div>
+          <audio controls src="el_t30_B_候选.wav"></audio></div>
+      </div>
+      <div class="note">
+        这是「能否直接发客户」基线题的<b>盲听版</b>：历史上 13 票全判 EL。
+        本轮若 B 仍明显占优 → 题目有效、员工判别力在线，前 3 题的票才有含金量；
+        若前 3 题里 A 赢了而这里 B 赢 → 说明<b>换引擎确实拉近了差距</b>。
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>四、本轮踩到的坑与结论</h2>
+    <ul>
+      <li><b>GS 只吃 3~10 秒参考音频</b>：现役女声 <code>EL_female.wav</code> 是 15.08s，
+          走 <code>/api/jobs</code> 一律 500
+          <code>OSError('Reference audio is outside the 3-10 second range')</code>。
+          → GS 这条路<b>之前从生产链路根本进不去</b>（只跑过 CLI 裸推理所以没暴露）。
+          改用同人的 10s 参考 <code>prompt_sola_00b6a45a.wav</code>（campplus 与 EL_female 余弦
+          <b>0.7953</b>，同人阈值 0.75）后成功。
+          ⚠️ <code>elara.wav</code> 只有 <b>0.3424</b>，<b>不同人</b>，不能拿来当 SOLA 参考。</li>
+      <li><b>silfloor 在第二个引擎上独立验证</b>：GS 裸推理同样有「停顿往下沉」
+          （深谷 91 段 / &lt;−100dB 51 帧 / p5 −91.6dB），silfloor 拉回 −58.6dB。
+          → 第44轮的修复是对的，只是员工点名的不是它。</li>
+      <li><b>产物目录会被加后缀</b>：服务端 <code>_unique_dir</code> 重名时给目录加 <code>-N</code>
+          （第一次失败的空目录占了名，成品落在 <code>sola47_f_gptsovits-2/</code>），
+          按无后缀目录 glob 会抓空。已修 <code>cmp_sola47.py</code>。</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>
