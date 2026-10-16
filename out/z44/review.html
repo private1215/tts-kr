@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第44轮复核包 · 断句异声 = 句间停顿「往下沉」</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --line:#e3e6ea; --txt:#1c2024; --dim:#67707a;
+    --a:#c2703a; --b:#0f8a80; --el:#5a6b8c; --warn:#b4342a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font:15px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:32px 20px 72px}
+  h1{font-size:24px;margin:0 0 6px;letter-spacing:-.3px}
+  h2{font-size:17px;margin:34px 0 12px;padding-left:10px;border-left:3px solid var(--txt)}
+  .sub{color:var(--dim);font-size:13.5px;margin-bottom:24px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0}
+  .lead{background:#fff;border:1px solid var(--line);border-left:4px solid var(--b);
+        border-radius:12px;padding:16px 20px;margin:18px 0}
+  .lead b{color:var(--b)}
+  table{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-weight:600;color:var(--dim);font-size:12.5px;letter-spacing:.02em}
+  td.n{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .bad{color:var(--warn);font-weight:600}
+  .good{color:var(--b);font-weight:600}
+  .neutral{color:var(--el)}
+  .pair{display:grid;grid-template-columns:1fr;gap:10px}
+  .row{display:grid;grid-template-columns:132px 1fr 132px;gap:12px;align-items:center}
+  .tag{font-size:13px;font-weight:600;padding:3px 8px;border-radius:6px;display:inline-block;white-space:nowrap}
+  .tag.a{color:#8a4b1e;background:#fbf0e6;border:1px solid #f0d8c2}
+  .tag.b{color:#0b6b63;background:#e6f6f4;border:1px solid #bfe6e2}
+  .tag.el{color:#42506b;background:#eef1f7;border:1px solid #d5dcea}
+  audio{width:100%;height:34px}
+  .lv{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;color:var(--dim);text-align:right}
+  .head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+  .head .t{font-weight:600}
+  .head .m{font-size:12.5px;color:var(--dim);font-family:ui-monospace,Menlo,monospace}
+  .note{font-size:13px;color:var(--dim);margin-top:10px}
+  .hint{background:#fffdf5;border:1px solid #f0e4c2;border-radius:10px;padding:12px 16px;font-size:13.5px}
+  .kbd{font-family:ui-monospace,Menlo,monospace;background:#eef0f3;border-radius:4px;padding:1px 5px;font-size:12.5px}
+  ul{margin:8px 0 0;padding-left:20px}
+  li{margin:4px 0}
+  svg{display:block;width:100%;height:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>第44轮复核包 · 「断句有异声」的真根因</h1>
+  <div class="sub">同文案同秒对照 · 员工点名的三处全部命中 · 修复已上线并过了 L1 闸门 · 2026-10-16</div>
+
+  <div class="lead">
+    <b>一句话：</b>员工听到的「突然冒出来的额 / 啊」，位置就是<b>句间停顿下沉得太深</b>的那几处。
+    句子说完后，EL 的停顿衰减到 −52&nbsp;dB 就<b>平躺</b>在房间底噪上；我们的停顿穿过 −52&nbsp;dB 还<b>继续往下沉</b>，
+    沉到 −73&nbsp;dB，甚至沉成数字零（−240&nbsp;dB）。落差从 ~30&nbsp;dB 变成 50~220&nbsp;dB，
+    耳朵就会把断口紧邻的那一两个音节<b>凸显出来</b>——听着像凭空蹦出的一声。
+  </div>
+
+  <h2>① 员工点名 ↔ 我们定位到的地方：3/3 精确命中</h2>
+  <div class="card">
+    <table>
+      <tr><th>员工原话</th><th>换算到成品位置</th><th>那里的停顿实测</th><th>EL 同秒</th></tr>
+      <tr>
+        <td>第 1 题「5 秒里有<em>额</em>」</td>
+        <td class="n">题1 切自 90s → <b>95.50s</b></td>
+        <td class="n bad">−73 dB，125 ms</td>
+        <td class="n neutral">−51 dB</td>
+      </tr>
+      <tr>
+        <td>第 2 题「1 秒里有<em>啊</em>」</td>
+        <td class="n">题2 切自 130s → <b>131.28s</b></td>
+        <td class="n bad">−240 dB（数字零），75 ms</td>
+        <td class="n neutral">−59 dB</td>
+      </tr>
+      <tr>
+        <td>第 3 题「10 秒<em>啊</em>」</td>
+        <td class="n">题3 切自 160s → <b>169.93s</b></td>
+        <td class="n bad">−72 dB，190 ms</td>
+        <td class="n neutral">−62 dB</td>
+      </tr>
+    </table>
+    <div class="note">三处全部落在「深静音谷」上，不是分散抱怨——这让我们第一次能把问题钉在一个具体特征上。</div>
+  </div>
+
+  <h2>② 同文案 · 同秒对照（这是本轮最关键的一步）</h2>
+  <div class="card">
+    <p style="margin-top:0">成品是拿案例原文<b>前 1500 字</b>生成的，正好 198.6 s；EL 原声是同一份文案的 525 s。
+    用逐点转写比对了第 <span class="kbd">95</span> <span class="kbd">131</span> <span class="kbd">170</span>
+    <span class="kbd">183</span> 秒——<b>同一秒就是同一句话</b>（EL 只领先 0.3~0.6 s）。
+    所以下面每一条都是<b>同一句话、同一时刻</b>的对照，不是跨文案比。</p>
+    <table>
+      <tr><th>口径</th><th>EL 女声原声</th><th>我们·修前</th><th>我们·修后</th></tr>
+      <tr><td>停顿电平 中位</td><td class="n neutral">−51.8 dB</td><td class="n">−51.9 dB</td><td class="n good">−51.3 dB</td></tr>
+      <tr><td>停顿电平 p5</td><td class="n neutral">−60.5 dB</td><td class="n bad">−73.5 dB</td><td class="n good">−59.1 dB</td></tr>
+      <tr><td>停顿电平 p10</td><td class="n neutral">−58.7 dB</td><td class="n bad">−62.4 dB</td><td class="n good">−57.9 dB</td></tr>
+      <tr><td>最低电平</td><td class="n neutral">−98.5 dB</td><td class="n bad">−240 dB</td><td class="n good">−86.5 dB</td></tr>
+      <tr><td>数字零帧（&lt;−100 dB）</td><td class="n neutral">0 帧</td><td class="n bad">32 帧</td><td class="n good">0 帧</td></tr>
+      <tr><td>深谷段数（&lt;−60 dB 且 ≥40 ms）</td><td class="n neutral">8 段</td><td class="n bad">20 段</td><td class="n good">0 段</td></tr>
+      <tr><td>点名三处最低电平</td><td class="n neutral">−51 / −59 / −62</td><td class="n bad">−73 / −240 / −72</td><td class="n good">−58 / −59 / −58</td></tr>
+      <tr><td>L1 闸门 Σz²（EL 分布 17~240）</td><td class="n neutral">—</td><td class="n">32.2</td><td class="n good">27.8</td></tr>
+      <tr><td>L1 闸门 平坦度</td><td class="n neutral">—</td><td class="n bad">+3.85σ</td><td class="n good">+3.22σ</td></tr>
+    </table>
+    <div class="note">修后三处点名电平 <b>−58 / −59 / −58</b>，EL 同秒是 <b>−51 / −59 / −62</b>——已经重合。
+    闸门两项都变好，发声占比不变（同一音频离线验证 −2.00σ → −2.01σ），长度和峰值都没动。</div>
+  </div>
+
+  <h2>③ 你亲自听一遍（每组三段，响度已对齐）</h2>
+  <div class="hint">
+    <b>怎么听：</b>听每组里的「修前」和「修后」，只用盯一件事——<b>句子接上去的第一个音节，是不是"蹦"出来的</b>。
+    「EL 同秒参照」是同一句文案、同一时刻的 EL 原声，用来对齐感受（音色本来就不同，只听断口）。
+  </div>
+
+  <div class="card">
+    <div class="head"><span class="t">第 1 处 · 90s 起 20 秒（员工说 5 秒处有「额」）</span>
+      <span class="m">断口：95.8s（片内 5.8 秒）· 修前 −73 dB → 修后 −58 dB · EL −51 dB</span></div>
+    <div class="pair">
+      <div class="row"><span class="tag a">A 修前</span>
+        <audio controls preload="none" src="p1_95s_A_%E4%BF%AE%E5%89%8D.wav"></audio>
+        <span class="lv">95.5s = −73 dB</span></div>
+      <div class="row"><span class="tag b">B 修后</span>
+        <audio controls preload="none" src="p1_95s_B_%E4%BF%AE%E5%90%8E.wav"></audio>
+        <span class="lv">95.5s = −58 dB</span></div>
+      <div class="row"><span class="tag el">EL 同秒</span>
+        <audio controls preload="none" src="p1_95s_EL%E5%90%8C%E7%A7%92%E5%8F%82%E7%85%A7.wav"></audio>
+        <span class="lv">95.5s = −51 dB</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="head"><span class="t">第 2 处 · 130s 起 20 秒（员工说 1 秒处有「啊」）</span>
+      <span class="m">断口：131.3s · 修前数字零 −240 dB → 修后 −59 dB · EL −59 dB</span></div>
+    <div class="pair">
+      <div class="row"><span class="tag a">A 修前</span>
+        <audio controls preload="none" src="p2_131s_A_%E4%BF%AE%E5%89%8D.wav"></audio>
+        <span class="lv">131.9s = −240 dB</span></div>
+      <div class="row"><span class="tag b">B 修后</span>
+        <audio controls preload="none" src="p2_131s_B_%E4%BF%AE%E5%90%8E.wav"></audio>
+        <span class="lv">131.9s = −59 dB</span></div>
+      <div class="row"><span class="tag el">EL 同秒</span>
+        <audio controls preload="none" src="p2_131s_EL%E5%90%8C%E7%A7%92%E5%8F%82%E7%85%A7.wav"></audio>
+        <span class="lv">131.9s = −59 dB</span></div>
+    </div>
+    <div class="note">这一处最干净：修后与 EL <b>同秒同为 −59 dB</b>。修前这里是全篇最严重的一处——整段 75 ms 的纯数字零。</div>
+  </div>
+
+  <div class="card">
+    <div class="head"><span class="t">第 3 处 · 160s 起 20 秒（员工说 10 秒处有「啊」）</span>
+      <span class="m">断口：170.0s · 修前 −72 dB → 修后 −58 dB · EL −62 dB</span></div>
+    <div class="pair">
+      <div class="row"><span class="tag a">A 修前</span>
+        <audio controls preload="none" src="p3_170s_A_%E4%BF%AE%E5%89%8D.wav"></audio>
+        <span class="lv">170.5s = −72 dB</span></div>
+      <div class="row"><span class="tag b">B 修后</span>
+        <audio controls preload="none" src="p3_170s_B_%E4%BF%AE%E5%90%8E.wav"></audio>
+        <span class="lv">170.5s = −58 dB</span></div>
+      <div class="row"><span class="tag el">EL 同秒</span>
+        <audio controls preload="none" src="p3_170s_EL%E5%90%8C%E7%A7%92%E5%8F%82%E7%85%A7.wav"></audio>
+        <span class="lv">170.5s = −62 dB</span></div>
+    </div>
+  </div>
+
+  <h2>④ 改了什么 / 已经上线</h2>
+  <div class="card">
+    <ul>
+      <li>新增 <span class="kbd">app/silfloor.py</span>：<b>加法式地板</b>
+        <span class="kbd">out = seg + tone × g</span>——只抬高、绝不压低，物理上不可能挖出新坑。
+        门限 −58 dB、目标 −52 dB、段长 ≥60 ms、且必须比上下文低 12 dB 以上才认作停顿；
+        底噪优先取<b>这段音频自己</b>的帧拼接，频谱自洽。</li>
+      <li>顺手修掉 <span class="kbd">app/declick.py</span> 的同类漏洞：原来用「逐样本取较大」，
+        噪声过零时数字零会漏过去（就是那 32 帧的来源）；外加淡入淡出自己又挖了两个坑。
+        门限本来就在 −100 dB、段内没有可听内容，所以改成整段替换、去掉淡入淡出。</li>
+      <li>已重启 qwen-tts 生效。端到端实跑一条同款成品，日志实锤：
+        <span class="kbd">深谷 21→0 段 · 停顿 p5 −76.8→−58.2 dB</span>，耗时 65.5 s，长度峰值都不变。</li>
+      <li>一键回退：<span class="kbd">TTS_SILFLOOR=0</span>；备份 <span class="kbd">/mnt/tts/diag/_bak44/</span>。</li>
+    </ul>
+  </div>
+
+  <h2>⑤ 已经发给员工的第 44 轮（5 题，全盲听）</h2>
+  <div class="card">
+    <table>
+      <tr><th>题</th><th>问什么</th><th>拿到答案改什么</th></tr>
+      <tr><td>第 1~3 段</td><td>哪一段的断句更自然？（90~110s / 130~150s / 160~180s）</td>
+        <td>三处点名全覆。选「修后」→ 方案成立；选「差不多 / 都像机器」→ 回退改引擎路线。</td></tr>
+      <tr><td>第 4 段</td><td>停顿 / 空白处有没有沙沙声一类的杂音？</td>
+        <td>底噪护栏：本次是「往停顿里加底噪」，万一可闻，方案一样否决。</td></tr>
+      <tr><td>最后一题</td><td>两段听起来有区别吗？（同一段放两遍）</td>
+        <td>答题有效性校验，答错整份作废。</td></tr>
+    </table>
+    <div class="note">素材已归一到同一响度、md5 无撞车、音频路由全部 200、题目库 missing 为空。</div>
+  </div>
+
+</div>
+</body>
+</html>
