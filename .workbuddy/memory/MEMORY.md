@@ -142,6 +142,21 @@
   且覆盖率 0.928 ≥ 0.85（没翻车，历史翻车那次覆盖率只有 0.150）。
   GS 弱点：句内动态 8.22（现役 9.12 / EL 9.55）、句尾降幅 −2.58（现役 −0.72）。
 
+## 🔴🔴🔴 引擎分两条后处理路径（2026-10-16 第47轮，颠覆性）
+`NEW_ENGINES = ("voxcpm", "omnivoice")`，**gptsovits / qwen / cosyvoice3 都在 legacy 路径**。
+| | 现役 omnivoice（快路径） | GS 微调（legacy 全链） |
+|---|---|---|
+| PBA / 包络整形 8~16Hz | 跳过 | 跑 |
+| 慢尺度轮廓 / 能量动态 | 跳过 | 跑 |
+| 时长对齐 atempo | 跳过 | **0.9308 / 0.9349（拉慢 7%）** |
+| 首尾静音 atempo | 跳过 | 0.931 |
+| 呼吸 / 响度归一 / roomtone / peakfit | 跳过 | 跑 |
+- 🔴 **所以跨引擎对照时「都走 /api/jobs 同一条流水线」这句话是错的** ——
+  `/api/jobs` 只是同源，**内部按引擎分流**。GS 被套上为 Qwen/Cosy 调的老链。
+- 🔴 后果：GS 对比数字被混淆；且 legacy 链的 atempo（WSOLA 时域拉伸）是
+  **「波段杂音」的头号嫌疑**（mp3 编码 SNR：现役 61.6dB vs GS 44.0dB，差 17.6dB）。
+- `engine_full_cmp.py` / `cmp_sola47.py` 的结论必须按此打折。
+
 ## 🔴🔴 GS（GPT-SoVITS）的两个硬坑（2026-10-16 第47轮）
 1. **参考音频必须 3~10 秒**。现役女声 `EL_female.wav` 是 15.08s、`SOLA_female.wav` 15.0s
    → 走 `/api/jobs` 一律 500 `OSError('Reference audio is outside the 3-10 second range')`。
