@@ -1,0 +1,19 @@
+[
+ {
+  "name": "EL原声(00b6a45ad6aa)",
+  "path": "/mnt/tts/data/cases/00b6a45ad6aa/merged.wav",
+  "is_male": false,
+  "ref": true,
+  "text_file": "/mnt/tts/projects/gpt-sovits/out/full_00b6a45ad6aa.txt"
+ },
+ {
+  "name": "现役女声(omnivoice)",
+  "path": "/mnt/tts/diag/sola47_f_omnivoice.wav",
+  "is_male": false
+ },
+ {
+  "name": "GS微调SOLA(gptsovits)",
+  "path": "/mnt/tts/diag/sola47_f_gptsovits.wav",
+  "is_male": false
+ }
+]
