@@ -98,9 +98,9 @@ def find_bumps(y, sr, bump_db=8.0, minlen=0.10, maxlen=0.35, ctx_win=0.40):
     return out, floor, voiced, len(seg)
 
 
-def apply_bump(src, dst, bump_db=8.0, maxlen=0.35, target_db=3.0):
+def apply_bump(src, dst, bump_db=8.0, maxlen=0.35, target_db=3.0, ctx_win=0.40):
     y, sr = load(src, "src")
-    bumps, floor, voiced, _ = find_bumps(y, sr, bump_db, maxlen=maxlen)
+    bumps, floor, voiced, _ = find_bumps(y, sr, bump_db, maxlen=maxlen, ctx_win=ctx_win)
     n = 0
     for t, ln, lvl, ctx in bumps:
         a, b = int(t * sr), int((t + ln) * sr)
