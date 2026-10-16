@@ -103,8 +103,18 @@ def timbre(path, ref):
 
 
 def find(title):
-    """产物目录可能被加 -N 后缀：挑 mp3 最多且最新的。"""
-    cands = sorted(glob.glob(os.path.join(OUT, title + "*")))
+    """产物目录可能被加 -N 后缀：挑 mp3 最多且最新的。
+
+    🔴🔴 **必须优先精确匹配**：`glob(title + "*")` 会把 `gs48m_post2`
+    也算成 `gs48m_post` 的候选（前缀包含）。两个目录各有 1 个 mp3 时，
+    "挑最新"就会把两次测量都指向同一个文件 —— 实测两次跑出**完全相同**
+    的数字（182.2s / 11.600 / 0.494），差点当成"改动没生效"。
+    与 `_unique_dir` 加 `-N` 后缀是同一类坑，必须两边都防。
+    """
+    exact = os.path.join(OUT, title)
+    cands = [exact] if os.path.isdir(exact) else []
+    if not cands:
+        cands = sorted(glob.glob(os.path.join(OUT, title + "*")))
     best, bk = None, None
     for d in cands:
         fs = glob.glob(os.path.join(d, "*.mp3"))
