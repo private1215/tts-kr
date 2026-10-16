@@ -58,6 +58,31 @@ FN = '''    # 🔴 第47轮 v1.2：GS 专属极简后处理（atempo 变速 + �
     GS_TARGET_CPS = {"m": 8.23, "f": 7.45}
     GS_LUFS = {"m": -25.0, "f": -22.6}       # 与 MINIMAL_LUFS 同锚
 
+    # 🔴 按性别的**固定** EQ（不自适应）。空串 = 不做 EQ。
+    #   开关：TTS_GS_EQ_F / TTS_GS_EQ_M 可覆盖。
+    #
+    #   女声：GS 裸输出（gs48f_sola，458s 全篇，16k 发声帧频段占比）vs EL 标杆：
+    #   | 频段 | EL | GS 裸 | 定案后 |
+    #   |---|---|---|---|
+    #   | 0-500 | 41.23 | 38.24 | 41.29 |
+    #   | 500-1000 | 46.22 | **53.60** | 46.67 |
+    #   | 1000-2000 | 6.28 | 4.65 | 5.50 |
+    #   | 2000-4000 | 5.41 | **2.60** | 5.46 |
+    #   | 4000-8000 | 0.87 | 0.90 | 1.08 |
+    #   → 真问题不是「中低频偏薄」，是 **500-1000 偏多 / 2000-4000 偏少（−3.2dB）**。
+    #     所以是「抬 2.6k 宽带 + 压 700」。
+    #   → 杂音（静音段 4-8k）4.241 → 4.068，离 EL 11.371 还有巨大余量；
+    #     click 0.000% → 0.100%，仍低于 EL 0.157%；音色 0.9179 → **0.9191**。
+    #   用**宽带**（w≥1.5）不用窄带 —— 记忆教训：窄带衰减会摧毁频谱平坦度。
+    #   定案来自 tools/eqprobe48.py 两批离线筛选（一次合成、多次试参数，
+    #   EQ 是线性滤波，对成品施加 = 对裸输出施加后再走 atempo+volume）。
+    GS_EQ_F_DEF = ("equalizer=f=2600:t=q:w=2.5:g=4.0,"
+                   "equalizer=f=700:t=q:w=1.5:g=-1.5")
+    GS_EQ = {
+        "m": os.environ.get("TTS_GS_EQ_M", ""),
+        "f": os.environ.get("TTS_GS_EQ_F", GS_EQ_F_DEF),
+    }
+
     def _gs_post(audio, sr, text, gender):
         """GS 专用：按目标 cps 做 atempo 变速 + 静态增益到目标 LUFS。
 
@@ -83,8 +108,12 @@ FN = '''    # 🔴 第47轮 v1.2：GS 专属极简后处理（atempo 变速 + �
             a = os.path.join(d, "a.wav")
             b = os.path.join(d, "b.wav")
             _sf3.write(a, audio, sr)
+            _eq = GS_EQ.get(gender, "")
+            _af = "atempo=%.6f" % at
+            if _eq:
+                _af = _eq + "," + _af     # 先 EQ 再变速（与响度测量同序）
             _sp3.run(["ffmpeg", "-y", "-v", "error", "-i", a,
-                      "-af", "atempo=%.6f" % at, b], check=True)
+                      "-af", _af, b], check=True)
 
             # 响度：静态 volume（与 _minimal_lufs 同口径，不用 loudnorm）
             r = _sp3.run(["ffmpeg", "-i", b, "-af", "ebur128",
