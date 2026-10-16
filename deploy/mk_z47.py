@@ -55,6 +55,15 @@ CLIPS = [
 ]
 SUFFIX = "20261016z15"
 
+# 🔴 版本标识（见项目规范「版本标识」+ VERSION 文件）：
+#    题目 id 带版本前缀、每题打 ver 字段，员工报问题时可直接查变更表。
+VER = os.environ.get("TTS_VER", "v1.0")
+
+
+def qid(slug):
+    """题目 id = <版本>-<反馈轮次>-<小题>。"""
+    return "%s-z15-%s" % (VER, slug)
+
 
 def lufs(p):
     r = subprocess.run(["ffmpeg", "-i", p, "-af", "ebur128", "-f", "null", "-"],
@@ -98,7 +107,7 @@ def two_q(iid, a, b, title, desc, note, la, lb):
         "id": iid, "dim": "男声·修复复验",
         "title": title,
         "desc": desc,
-        "ref": None, "note": note,
+        "ref": None, "note": note, "ver": VER,
         "options": [
             {"key": "A", "file": a, "label": la},
             {"key": "B", "file": b, "label": lb},
@@ -133,7 +142,7 @@ def main():
     print("  无撞车（ctrl1/ctrl2 除外）" if not bad else "  !! 有撞车")
 
     items = [
-        two_q("z15_sp1_%s" % SUFFIX, "z47_a_s1.wav", "z47_b_s1.wav",
+        two_q(qid("sp1"), "z47_a_s1.wav", "z47_b_s1.wav",
               "这两段，**说话的速度**哪一段更自然？",
               "两段读的是同一段话，声音不一样是正常的。\n"
               "**只问一件事：哪一段说话的快慢听起来更舒服、更自然？**\n"
@@ -146,7 +155,7 @@ def main():
               "选①或③ → 语速问题解决，本项封存。",
               "① 第 1 段更自然", "② 第 2 段更自然"),
 
-        two_q("z15_sp2_%s" % SUFFIX, "z47_a_s2.wav", "z47_b_s2.wav",
+        two_q(qid("sp2"), "z47_a_s2.wav", "z47_b_s2.wav",
               "换一段话再听一次：**说话的速度**哪一段更自然？",
               "还是同样的问法，换了一段内容。\n"
               "**只问哪一段说话的快慢更舒服。**\n"
@@ -155,13 +164,13 @@ def main():
               "换位置复验，排除「只有开头碰巧正常」。",
               "① 第 1 段更自然", "② 第 2 段更自然"),
 
-        {"id": "z15_noise_%s" % SUFFIX, "dim": "男声·杂音复验",
+        {"id": qid("noise"), "dim": "男声·杂音复验",
          "title": "这两段里，**有没有哪一段能听到杂音**？",
          "desc": ("两段读的是同一段话。\n"
                   "**只问一件事：有没有杂音？**\n"
                   "比如沙沙声、嘶嘶声、滋滋声、嗡嗡声，或者音量一阵一阵的波纹感。\n"
                   "听一遍就选，凭第一感觉。"),
-         "ref": None,
+         "ref": None, "ver": VER,
          "note": ("杂音复验：①=我们（修后）②=EL。上一轮员工同时报了「杂音 + 乱说话」。\n"
                   "乱说话已客观解决（CER 0.66->0.087，大段 insert 6->0），\n"
                   "但**杂音没有单独处理过**，只是可能随着语速修复一并消失。\n"
@@ -175,13 +184,13 @@ def main():
              {"key": "D", "file": None, "label": "④ 两段都有杂音"},
              {"key": "E", "file": None, "label": "⑤ 说不准 / 没听出来"}]},
 
-        {"id": "z15_txt_%s" % SUFFIX, "dim": "男声·内容复验",
+        {"id": qid("txt"), "dim": "男声·内容复验",
          "title": "这两段里，有没有**念错、重复、或者念出文案里没有的话**？",
          "desc": ("两段读的是同一段话。\n"
                   "**只问内容对不对**：有没有多念、少念、重复念某一句，\n"
                   "或者冒出文案里根本没有的句子。\n"
                   "听一遍就选。"),
-         "ref": None,
+         "ref": None, "ver": VER,
          "note": ("内容复验：①=我们 ②=EL。上一轮员工报「文本文字说话不匹配、乱说话了」。\n"
                   "客观已解决（CER 0.6606->0.0869；反复念参考文本的大段 insert 6 次 -> 0 次）。\n"
                   "选① → 还有内容问题 → 继续查参考音频/ref_text 对齐。\n"
@@ -193,11 +202,11 @@ def main():
              {"key": "D", "file": None, "label": "④ 两段都有"},
              {"key": "E", "file": None, "label": "⑤ 说不准 / 没听出来"}]},
 
-        {"id": "z15_ctrl_%s" % SUFFIX, "dim": "答题有效性校验",
+        {"id": qid("ctrl"), "dim": "答题有效性校验",
          "title": "【最后一题】这两段，听起来有区别吗？",
          "desc": "**这道题必须选一个**（选错也没关系）。\n\n"
                  "这两段是**同一段音频放了两遍**，内容完全一样。听 5 秒就够。",
-         "ref": None, "note": "隐藏控制题：正解 = C 两段一样。答错整份作废。",
+         "ref": None, "ver": VER, "note": "隐藏控制题：正解 = C 两段一样。答错整份作废。",
          "options": [
              {"key": "A", "file": "z47_ctrl1.wav", "label": "A 明显有区别"},
              {"key": "B", "file": "z47_ctrl2.wav", "label": "B 明显有区别"},
