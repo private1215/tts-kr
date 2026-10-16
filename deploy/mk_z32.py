@@ -136,6 +136,22 @@ def main():
     if not bad:
         print("  ✅ 无撞车")
 
+    print("\n=== 单音频题自检 ===")
+    _ok1 = True
+    for _it in items:
+        _n = sum(1 for _o in _it["options"] if _o.get("file"))
+        _r = (_it.get("ref") or {}).get("file")
+        if _n == 1:
+            print("  🔴 %s 只有 1 个选项带音频 → 音频会挂在那个选项卡片里"
+                  "（前端会用「（无音频）」占位其余选项），会带偏答案。"
+                  "   请改用 ref 区块承载单条音频。" % _it["id"])
+            _ok1 = False
+        if _n == 0 and not _r:
+            print("  🔴 %s 既无选项音频也无 ref → 废题" % _it["id"])
+            _ok1 = False
+    if _ok1:
+        print("  ✅ 无单音频/无音频题")
+
     items = [
         {"id": "z1_workpoint_ab_20261016z", "dim": "音色 vs 音高（工作点裁决）",
          "title": "这两段，哪一段听起来更像是「同一个人在自然说话」？",
@@ -172,14 +188,15 @@ def main():
                  "· **吃字**：某个字的辅音被吞掉、听不清\n"
                  "· **卡字**：字与字之间卡顿、突然中断\n\n"
                  "按最明显的那一项判断。",
-         "ref": None,
+         "ref": {"label": "请听这一段（我们的当前线上版本，男声 30 秒）",
+                 "file": "z32_new_c.mp3", "note": ""},
          "note": "🔴 上一个版本（揉两遍 WSOLA）已被定位为三症状的根因并修掉，\n"
                  "本轮素材是修复+换工作点之后的当前线上原状。\n\n"
                  "选③ 没有 → 三项从问题清单关闭\n"
                  "选② 轻微 → 降级，但仍留一个长期观察项\n"
                  "选① 明显 → 根因没找全，回查停顿合成/拼接点/后处理顺序",
          "options": [
-             {"key": "A", "file": "z32_new_c.mp3", "label": "① 明显还有"},
+             {"key": "A", "file": None, "label": "① 明显还有"},
              {"key": "B", "file": None, "label": "② 有，但很轻微"},
              {"key": "C", "file": None, "label": "③ 没有"}]},
 
@@ -231,7 +248,17 @@ def main():
              {"key": "C", "file": None, "label": "C 没有区别，是一样的"}]})
 
     out = os.path.join(FB_DIR, "items.json")
-    shutil.copyfile(out, os.path.join(FB_DIR, "items_roundy.json"))
+    # 🔴 只归档「上一轮」。重跑本脚本时不能把本轮自己的内容盖成历史。
+    _arc = os.path.join(FB_DIR, "items_roundy.json")
+    _cur = ""
+    try:
+        _cur = io.open(out, encoding="utf-8").read()
+    except OSError:
+        pass
+    if "20261016z" not in _cur:
+        shutil.copyfile(out, _arc)
+    else:
+        print("  (items.json 已是本轮内容，跳过归档避免覆盖历史)")
     with open(out, "w", encoding="utf-8") as f:
         json.dump({"items": items}, f, ensure_ascii=False, indent=1)
     print("\n发布 %d 题 / %d 段音频 -> %s"
