@@ -16,22 +16,34 @@
 → 换 EL 参考能减少 50-75% 但消不掉；EL 本身是 0。
 → 员工明确听得见，且与她说 N 次的「断句有异声」吻合。
 
-## 做法
+## 做法（v2，2026-10-17 按 z26 员工反馈修订）
 
-检测「夹在两个长停顿之间的极短孤立发声段」：
-    · 时长 20~120ms（5ms 帧 RMS，db > p35 判发声）
-    · 前后静音都 > 0.15s（保证是孤立填充音，不是正常语流中的短音节）
-满足则用**等长静音**替换（总时长不变），5ms 淡入淡出避免 click。
+z26 员工反馈：「整体有改善，但是没清理干净」。
+审计（`tools/gruntaudit53.py`）发现原判据漏了两类：
+    · 时长 120~250ms 的「嗯」（原上限 120ms）
+    · 前后静音不足 0.15s 的（原门槛 0.15s）
+男声原判据只抓 9 个，放宽后 58 个。但直接全放宽会误伤正常语音
+（`tools/gruntdiff53.py`：多出的 49 个里只有 13 个是浊音「嗯」，
+  其余 36 个 zcr 高/低频低，是正常语音碎片）。
+
+→ **v2 判据**（三者同时满足）：
+    · 时长 20~250ms（5ms 帧 RMS，db > p35 判发声）
+    · 前后静音都 > 0.08s（保证是孤立填充音，不是正常语流中的短音节）
+    · **浊音特征**：过零率 < 0.12 且 300Hz 以下能量占比 > 0.45
+      （「嗯」是鼻浊音：低频饱满、无高频摩擦；正常韩语音节 zcr 通常 >0.14）
+    · 峰值 > -32dB（有实质能量）
+
+用**等长静音**替换（总时长不变），5ms 淡入淡出避免 click。
 
 🔴 为什么用静音替换而不是删段：删段会改变总时长、破坏与其他指标的配比；
    静音替换只去掉那一声「嗯」，其余一个样本都不动。
 
-🔴 为什么阈值卡在 120ms：韩语正常短音节（네/예/어）通常 >150ms，
-   20~120ms 且前后都是 >0.15s 静音的组合，正常语流中几乎不会出现。
+🔴 为什么必须加浊音判据：单纯放宽时长/静音会把正常语音碎片也算进来
+   （男声 58 个里 36 个是正常语音），删了会切碎词语。
 
 用法：
-    python3 gruntclean53.py in.wav out.wav [--min-ms 20] [--max-ms 120]
-                                      [--sil 0.15] [--dry]
+    python3 gruntclean53.py in.wav out.wav [--min-ms 20] [--max-ms 250]
+                                      [--sil 0.08] [--no-voiced] [--dry]
 """
 import argparse
 import os
@@ -44,6 +56,9 @@ import soundfile as sf
 
 SR = 16000
 FRAME = 0.005
+PEAK_DB = -32.0
+ZCR_MAX = 0.12
+LOW_RATIO = 0.45
 
 
 def load16(p, sr=SR):
@@ -68,32 +83,53 @@ def fade(a, ms=5):
     return a
 
 
-def find_grunts(x, min_ms, max_ms, sil):
-    """返回 [(start_s, dur_s)]，极短孤立发声段。"""
+def voiced_quality(a, sr=SR):
+    """浊音判定：过零率 + 300Hz 以下能量占比。「嗯」是鼻浊音，两者都极端。"""
+    if len(a) < 40:
+        return 1.0, 0.0
+    zcr = float(np.mean(np.abs(np.diff(np.sign(a)))) / 2)
+    sp = np.abs(np.fft.rfft(a * np.hanning(len(a)))) ** 2
+    fr = np.fft.rfftfreq(len(a), 1.0 / sr)
+    low = float(sp[fr < 300].sum() / (sp.sum() + 1e-12))
+    return zcr, low
+
+
+def find_grunts(x, min_ms, max_ms, sil, voiced, peak_db=PEAK_DB):
+    """返回 [(start_s, dur_s)]。
+    voiced=True 时要求浊音特征（v2 判据）；False 回退 v1（只按时长+静音）。"""
     n = int(FRAME * SR)
     nfr = len(x) // n
     rms = np.sqrt((x[:nfr * n].reshape(nfr, n) ** 2).mean(axis=1))
     db = 20 * np.log10(rms + 1e-12)
-    voiced = db > np.percentile(db, 35)
+    voiced_f = db > np.percentile(db, 35)
     segs, i = [], 0
-    while i < len(voiced):
-        if voiced[i]:
+    while i < len(voiced_f):
+        if voiced_f[i]:
             j = i
-            while j < len(voiced) and voiced[j]:
+            while j < len(voiced_f) and voiced_f[j]:
                 j += 1
-            segs.append((i * FRAME, (j - i) * FRAME))
+            segs.append((i * FRAME, (j - i) * FRAME, float(db[i:j].max())))
             i = j
         else:
             i += 1
     out = []
     lo, hi = min_ms / 1000.0, max_ms / 1000.0
     for k in range(1, len(segs) - 1):
-        s, d = segs[k]
-        if lo <= d <= hi:
-            pe = segs[k - 1][0] + segs[k - 1][1]
-            nx = segs[k + 1][0]
-            if (s - pe) > sil and (nx - (s + d)) > sil:
-                out.append((s, d))
+        s, d, pk = segs[k]
+        if not (lo <= d <= hi):
+            continue
+        pe = segs[k - 1][0] + segs[k - 1][1]
+        nx = segs[k + 1][0]
+        if (s - pe) <= sil or (nx - (s + d)) <= sil:
+            continue
+        if pk < peak_db:
+            continue
+        if voiced:
+            a = x[int(s * SR):int((s + d) * SR)]
+            zcr, low = voiced_quality(a)
+            if not (zcr < ZCR_MAX and low > LOW_RATIO):
+                continue
+        out.append((s, d))
     return out
 
 
@@ -102,18 +138,23 @@ def main():
     ap.add_argument("src")
     ap.add_argument("dst")
     ap.add_argument("--min-ms", type=float, default=20.0)
-    ap.add_argument("--max-ms", type=float, default=120.0)
-    ap.add_argument("--sil", type=float, default=0.15)
+    ap.add_argument("--max-ms", type=float, default=250.0)
+    ap.add_argument("--sil", type=float, default=0.08)
+    ap.add_argument("--no-voiced", dest="voiced", action="store_false",
+                    default=True, help="关闭浊音判据，回退 v1（只按时长+静音）")
     ap.add_argument("--dry", action="store_true", help="只报告不写文件")
     a = ap.parse_args()
 
     x = load16(a.src)
-    g = find_grunts(x, a.min_ms, a.max_ms, a.sil)
+    g = find_grunts(x, a.min_ms, a.max_ms, a.sil, a.voiced)
     dur = len(x) / SR
-    print("%s  %.1fs  极短填充音 %d 个 (%.2f/分钟)"
-          % (os.path.basename(a.src), dur, len(g), len(g) / dur * 60), flush=True)
+    print("%s  %.1fs  极短填充音 %d 个 (%.2f/分钟)  [时长%d~%dms 静音>%.2f 浊音=%s]"
+          % (os.path.basename(a.src), dur, len(g), len(g) / dur * 60,
+             a.min_ms, a.max_ms, a.sil, "开" if a.voiced else "关"), flush=True)
     for s, d in g:
-        print("   t=%7.2fs  %3.0fms" % (s, d * 1000), flush=True)
+        zcr, low = voiced_quality(x[int(s * SR):int((s + d) * SR)])
+        print("   t=%7.2fs  %3.0fms  zcr=%.3f 低频=%.2f" % (s, d * 1000, zcr, low),
+              flush=True)
     if a.dry or not g:
         if not g and not a.dry:
             sf.write(a.dst, x, SR)
