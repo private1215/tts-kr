@@ -26,13 +26,27 @@ omnivoice 男声全篇实测（4594 字，同文案 d172b8c4efb3）：
 
 ## 题目
 
-4 段同文案同位置（60~120s），单段独立评分：
-  G  omnivoice 男声 + 仅响度对齐（极简，对齐女声 v1.1 路线）
-  H  G + 停顿等比例压缩（scale 0.6，修 2 倍停顿）
-  I  voxcpm 现役 v2.0（对照）
-  J  EL 标杆
+**男声 4 段 + 女声 3 段**，同性别同文案同位置（60~120s），单段独立评分：
 
-一轮同时回答「换引擎」和「换引擎+修停顿」是否有效。
+  男（d172b8c4efb3）：
+    G  omnivoice 男声 + 仅响度对齐（极简，对齐女声 v1.1 路线）
+    H  G + 停顿等比例压缩（scale 0.6，修 2 倍停顿）
+    I  voxcpm 现役 v2.0（对照）
+    J  EL 标杆
+
+  女（00b6a45ad6aa）：
+    K  omnivoice 女声现役（v1.1 极简成品）
+    L  omnivoice 女声 + 响度对齐 + 停顿压缩（scale 0.8：现役 0.22s → EL 0.18s）
+    M  EL 标杆
+
+🔴 为什么必须男女都出（用户 2026-10-17 指出）：此前 z22/z23/z24 只出男声，
+   理由是「男声 0 分是主战场」。但女声 1.5 分也没到 EL 的 2.0，
+   且「omnivoice + 停顿压缩」这条新路对女声同样适用（现役 0.22s vs EL 0.18s）。
+   只测一个性别既浪费员工时间，也让女声连续三轮无人跟进。
+
+一轮同时回答四个问题：男声换引擎？男声换引擎+修停顿？
+女声修停顿？男女与各自 EL 标杆的差距？
+
 身份只记服务端 note，题干/选项不出现引擎名/版本/EL。
 
 字段名必须与 app/ui/feedback.html 对齐：title / desc / dim / options[].key。
@@ -54,9 +68,14 @@ TARGET_LUFS = -20.0
 
 RAW_OMNI = "/mnt/tts/diag/omnim52/m_full_raw.wav"
 VOX_CUR = "/mnt/tts/diag/l3_52/D_mild_no_clean.wav"
-EL = "/mnt/tts/data/cases/d172b8c4efb3/merged.wav"
+EL_M = "/mnt/tts/data/cases/d172b8c4efb3/merged.wav"
+# 女声（不同文案，员工听不出关联）
+RAW_OMNI_F = "/tmp/omniraw_f.wav"
+OMNI_F_CUR = "/mnt/tts/output/v11_f_official/v11_f_official-1.mp3"
+EL_F = "/mnt/tts/data/cases/00b6a45ad6aa/merged.wav"
 
-SCALE = 0.6
+SCALE_M = 0.6      # 男声停顿缩放（0.32s -> ~0.20s）
+SCALE_F = 0.8      # 女声停顿缩放（0.22s -> ~0.18s，已接近 EL，温和压）
 FLOOR = 0.20
 
 
@@ -86,12 +105,12 @@ def norm(src, dst, target=TARGET_LUFS):
     return cur, lufs(dst)
 
 
-def compress(src, dst):
+def compress(src, dst, scale=SCALE_M, floor=FLOOR):
     """调 pausecompress52.py 做等比例停顿缩放。"""
     r = subprocess.run([sys.executable, "/tmp/pausecompress52.py", src, dst,
-                        "--scale", str(SCALE), "--floor", str(FLOOR),
+                        "--scale", str(scale), "--floor", str(floor),
                         "--min", "0.25"], capture_output=True, text=True)
-    print("  压缩:", r.stdout.strip()[-120:], flush=True)
+    print("  压缩(scale=%.2f): %s" % (scale, r.stdout.strip()[-90:]), flush=True)
     return r.returncode == 0
 
 
@@ -129,13 +148,34 @@ def build():
     c5, c6 = norm(VOX_CUR, os.path.join(FB, "z24_m_vox.wav"))
     print("z24_m_vox.wav  LUFS %.1f -> %.1f" % (c5, c6), flush=True)
 
-    # J：EL 标杆
-    c7, c8 = norm(EL, os.path.join(FB, "z24_m_el.wav"))
+    # J：EL 男声标杆
+    c7, c8 = norm(EL_M, os.path.join(FB, "z24_m_el.wav"))
     print("z24_m_el.wav  LUFS %.1f -> %.1f" % (c7, c8), flush=True)
 
+    # ---- 女声（不同文案）----
+    k16 = os.path.join(tmpd, "k16.wav")
+    l16 = os.path.join(tmpd, "l16.wav")
+
+    # K：女声现役成品（v1.1 极简）只做响度对齐
+    to16k(OMNI_F_CUR, k16)
+    c9, c10 = norm(k16, os.path.join(FB, "z24_f_cur.wav"))
+    print("z24_f_cur.wav  LUFS %.1f -> %.1f" % (c9, c10), flush=True)
+
+    # L：女声裸 + 响度对齐 + 停顿压缩（scale 0.8，0.22s -> EL 0.18s）
+    to16k(RAW_OMNI_F, l16)
+    compress(l16, os.path.join(tmpd, "l16c.wav"), SCALE_F, 0.15)
+    c11, c12 = norm(os.path.join(tmpd, "l16c.wav"),
+                    os.path.join(FB, "z24_f_pause.wav"))
+    print("z24_f_pause.wav  LUFS %.1f -> %.1f" % (c11, c12), flush=True)
+
+    # M：EL 女声标杆
+    c13, c14 = norm(EL_F, os.path.join(FB, "z24_f_el.wav"))
+    print("z24_f_el.wav  LUFS %.1f -> %.1f" % (c13, c14), flush=True)
+
     # 统一切 60~120s
-    for f in ("z24_m_omni.wav", "z24_m_omni_pause.wav",
-              "z24_m_vox.wav", "z24_m_el.wav"):
+    ALL = ("z24_m_omni.wav", "z24_m_omni_pause.wav", "z24_m_vox.wav",
+           "z24_m_el.wav", "z24_f_cur.wav", "z24_f_pause.wav", "z24_f_el.wav")
+    for f in ALL:
         p = os.path.join(FB, f)
         t = os.path.join(tmpd, "t.wav")
         cut(p, t)
@@ -147,17 +187,22 @@ def build():
         ("z24_m_omni_pause.wav", "omni_pause", "omnivoice 男声·响度+停顿压缩"),
         ("z24_m_vox.wav", "vox_current", "voxcpm 现役"),
         ("z24_m_el.wav", "el", "EL 标杆"),
+        ("z24_f_cur.wav", "omni_f_current", "omnivoice 女声·现役"),
+        ("z24_f_pause.wav", "omni_f_pause", "omnivoice 女声·响度+停顿压缩"),
+        ("z24_f_el.wav", "el_f", "EL 标杆"),
     ]
     for name, role, label in FILES:
         key = name.replace("z24_", "").replace(".wav", "")
+        gender = "女" if name.startswith("z24_f_") else "男"
         ITEMS.append({
             "id": "%s-%s-%s" % (VER, ROUND, key),
-            "dim": "男声·整体自然度",
+            "dim": "%s声·整体自然度" % gender,
             "title": Q,
             "desc": D,
             "ref": None,
-            "note": "性别=male 角色=%s 源=%s 位置=%.0fs 长度=%.0fs" % (
-                role, label, START, CLIP),
+            "note": "性别=%s 角色=%s 源=%s 位置=%.0fs 长度=%.0fs" % (
+                "female" if gender == "女" else "male", role, label,
+                START, CLIP),
             "ver": VER,
             "options": [
                 {"key": "A", "label": "① 像真人，很自然", "file": name},
