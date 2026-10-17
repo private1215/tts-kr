@@ -1029,6 +1029,19 @@ def _gs_group_of(job):
     return GS_DEFAULT_GROUP
 
 
+def _gender_of(job):
+    """性别一律取自**音色配置**，不按引擎名猜。
+
+    🔴 2026-10-17：男声链路从 voxcpm 切到 omnivoice（z24 员工盲听定案：
+       男声 omnivoice 1.5 分 vs voxcpm 0 分）。若还按 `_engine_name == "voxcpm"`
+       判性别，男声会被当女声处理——F0 目标 276（男 188）、LUFS -22.6（男 -25.0）
+       全错，target-cps 也会用女声的 7.57。
+    """
+    v = voices.get((job.get("voice") or "").strip()) or {}
+    g = (v.get("gender") or "").strip().lower()
+    return "m" if g == "male" else "f"
+
+
 async def run_job(job):
     loop = asyncio.get_running_loop()
     job["status"] = "running"
@@ -1292,11 +1305,28 @@ async def run_job(job):
         try:
             _sf.write(src, audio, sr)
             _t0 = time.time()
+            # 🔴 target-cps 必须按**性别**取，不能只按引擎名：
+            #    男声 omni 实测 cps 8.31（EL 男 8.27），女声 omni 7.57（EL 女 7.45）。
+            #    若男声用女声的 7.57 会被错误放慢 9.8%，语速明显拖沓。
+            _g = _gender_of(job)
+            _cps = NEW_ENGINE_CPS.get(_engine_name, 8.0)
+            if _engine_name == "omnivoice" and _g == "m":
+                _cps = 8.27          # EL 男声实测（d172b8c4efb3，4594 字/555.2s）
             cmd = [sys.executable, FIX_CHAIN, src, out,
-                   "--gender", "m" if _engine_name == "voxcpm" else "f",
-                   "--target-cps", str(NEW_ENGINE_CPS.get(_engine_name, 8.0)),
+                   "--gender", _g,
+                   "--target-cps", str(_cps),
                    "--chars", str(len(text))]
-            # 🔴 M4 半极简开关：男声跳过 clean_gaps / roomtone 替换
+            # 🔴🔴 男声 omnivoice 走**极简后处理**（z24 员工盲听定案的那一版）：
+            #     不变调（asetrate 会搬走共振峰，实测音色 0.79 -> 0.88）、
+            #     不清洗停顿（clean_gaps 会把停顿洗得比裸输出还干净，
+            #       低于-60dB 占比 36.1% vs EL 13.7%，是 EL 的 2.6 倍）、
+            #     不加 EQ（campplus 音色 0.9091 vs 加 EQ 的 0.8835）。
+            #     只保留响度对齐 + 目标 cps 变速。
+            if _engine_name == "omnivoice" and _g == "m":
+                cmd += ["--no-pitch", "--no-clean", "--no-adaptive-hf",
+                        "--eq", "anull"]
+            # 🔴 M4 半极简开关（仅 voxcpm 时代有效；男声切 omni 后由上面的
+            #    omni 极简分支接管，此处保留供回退 voxcpm 时使用）
             if _engine_name == "voxcpm" and os.environ.get("TTS_VOX_MINIMAL") == "1":
                 cmd.append("--no-clean")
             r = _sp.run(cmd, capture_output=True, text=True, timeout=1800)
@@ -1350,17 +1380,20 @@ async def run_job(job):
         return audio, sr, st
 
     def _synth_omni(text_ci):
-        """OmniVoice（女声最佳）分支：整篇一次提交，回来再走 fix_chain。
+        """OmniVoice 分支：整篇一次提交，回来再走 fix_chain。
 
         🔴 必须整篇一次提交：**分块会换韵律**，等于换了一套方案，
            而 X2_f 冠军就是整篇跑出来的（3911 字 -> 513s）。
+        🔴 2026-10-17 z24 起男女声都走 omnivoice（男声 1.5 分 vs voxcpm 0 分），
+           voice 名按音色配置的性别取，不再写死 female。
         """
         try:
             import omni_client
         except Exception as _e:
             raise RuntimeError(f"omni_client 不可用: {_e}")
         audio, sr, meta = omni_client.synth(
-            text=text_ci[1], voice="female",
+            text=text_ci[1],
+            voice=("male" if _gender_of(job) == "m" else "female"),
             on_progress=_mk_progress(text_ci[0]))
         if audio is None:
             raise RuntimeError(f"OmniVoice 生成失败: {meta.get('error')}")

@@ -1,19 +1,20 @@
-"""OmniVoice 独立推理服务（端口 8300）—— 女声最佳链路的合成端。
+"""OmniVoice 独立推理服务（端口 8300）—— 男女声合成端。
 
 为什么要独立进程：OmniVoice 自带 venv（torch 2.14+cu130、numpy 2.5），
 与 Qwen3-TTS 主服务、CosyVoice3(cu121) 互相冲突，只能「独立 venv + HTTP」。
 
 对外接口（与 cosy_server.py 同形态，便于 pipeline 统一调用）：
     GET  /health    -> 健康检查 + 显存
-    POST /synth     -> {"text":..., "voice":"female"} 返回 wav 二进制
+    POST /synth     -> {"text":..., "voice":"female"|"male"} 返回 wav 二进制
     POST /voices    -> 覆盖某音色的参考音频/文字稿
     POST /unload    -> 卸载模型释放显存
     GET  /progress  -> ?rid=... 查询进度
 
 ⚠️ 复现获胜链路的硬约束（改这里必看）：
-  女声冠军 X2_f.wav 是 **整篇一次提交** 生成的（3911 字 -> 513s，段数=1）。
-  OmniVoice 长文稳定，所以这里默认**不分块**；分块会改变韵律，等于换了个方案。
-  参考音频必须是 gpt-sovits/out/prompt_sola_00b6a45a（= EL 女声标杆切片）。
+  冠军链路都是**整篇一次提交**（女声 X2_f 3911 字 -> 513s；男声 4594 字 -> 553s）。
+  OmniVoice 长文稳定，所以默认**不分块**；分块会改变韵律，等于换了个方案。
+  参考音频必须是 gpt-sovits/out/ 下的 prompt_sola_00b6a45a（女）
+  / prompt_yohan_1a6c20a6（男），都是 EL 标杆切片。
 """
 import io
 import os
@@ -46,6 +47,14 @@ SR = 24000
 VOICES = {
     "female": (os.path.join(GSOUT, "prompt_sola_00b6a45a.wav"),
                os.path.join(GSOUT, "prompt_sola_00b6a45a.txt")),
+    # 🔴 2026-10-17 z24 员工盲听裁决：**男声 omnivoice 1.5 分 vs voxcpm 0 分**。
+    #    全篇实测（4594 字同文案）：音色 0.9557 vs 0.7928、click 0.0132 ≈ EL 0.0124、
+    #    cps 8.31 ≈ EL 8.27、质心 802 ≈ EL 818 —— 除 F0/停顿外全面占优。
+    #    男声链路整体切到 omnivoice，参考音频用 yohan 的 10s 切片（F0 196.1，
+    #    与 EL 男声 200.7 接近；voxcpm 输出会固有压到 ~180，这是引擎特性）。
+    #    同样**整篇一次提交**（分块会换韵律，男声 4594 字实测 553s 正常返回）。
+    "male": (os.path.join(GSOUT, "prompt_yohan_1a6c20a6.wav"),
+             os.path.join(GSOUT, "prompt_yohan_1a6c20a6.txt")),
 }
 DEFAULT_VOICE = "female"
 

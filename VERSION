@@ -390,6 +390,74 @@ cp /mnt/tts/fb/items_z16.json /mnt/tts/fb/items.json   # 备选，一般不需�
 
 ---
 
+### v3.0 — 2026-10-17 第52轮（**男声引擎 voxcpm → omnivoice**）
+
+**主版本改动（D 级引擎级）**：男声链路从 VoxCPM2 切到 **OmniVoice**。
+
+依据：z24 员工盲听（2 人，单段独立评分）
+
+| 题 | 素材 | 디아 | 24124112 | 均分 |
+|---|---|---|---|---|
+| 1 | omnivoice 男声·仅响度 | A | B | **1.5** |
+| 2 | omnivoice 男声·+停顿压缩 | A | B | 1.5 |
+| 3 | voxcpm 现役 | C | C | **0** |
+| 4 | EL 男 | A | A | 2.0 |
+| 5 | omnivoice 女声现役 | A | B | 1.5 |
+| 6 | omnivoice 女声·+停顿压缩 | A | B | 1.5 |
+| 7 | EL 女 | A | A | 2.0 |
+
+→ 男声 **0 分 → 1.5 分**，是四轮以来第一个真正有效的改动。
+  前三轮（v1.4→v2.0 click 0.0103→0.0041、变调→不变调音色 0.79→0.88）
+  员工评分全是 C，按 S6 全部封存。
+
+**L3 全篇实测（男声 4594 字同文案，16k 口径）**：
+
+| 指标 | voxcpm 现役 v2.0 | **omnivoice 男声** | EL |
+|---|---|---|---|
+| 音色 ×EL | 0.7928 | **0.9557** | 1.000 |
+| click % | 0.0041 | 0.0132 | 0.0124 |
+| 停顿中位 | 0.20s | 0.32s | 0.16s |
+| CV | 0.66 | 0.64 | 0.70 |
+| 质心 | 789 | 802 | 818 |
+| cps | 8.37 | 8.31 | 8.27 |
+| F0 | 187.2 | 176.7 | 200.7 |
+
+→ 音色 +0.16 是决定性差距；click/cps/质心天然对齐 EL；
+  短板是停顿（EL 2 倍）与 F0（低 12%），均为 omnivoice 引擎固有。
+
+**改动清单**：
+
+1. `deploy/omni_server.py`：`VOICES` 增加 `male`
+   （`prompt_yohan_1a6c20a6.wav/.txt`，10s，F0 196.1）。
+   🔴 此前只用 `POST /voices` 运行时添加，**重启即丢**，必须写进文件。
+2. `app/server.py`：
+   - 新增 `_gender_of(job)`：性别一律取音色配置，**不按引擎名猜**。
+     原 `--gender "m" if _engine_name=="voxcpm" else "f"` 在男声切 omni 后会全错
+     （F0 目标 276、LUFS -22.6、cps 7.57）。
+   - `_synth_omni` 的 `voice="female"` 改为按性别取。
+   - `target-cps` 按性别：男 omni **8.27**（EL 男实测），女 omni 7.57。
+   - **男声 omni 走极简后处理**：`--no-pitch --no-clean --no-adaptive-hf --eq anull`
+     （= z24 员工认可的那一版：不变调 / 不清洗停顿 / 不加 EQ，只留响度 + cps）。
+3. `voices.json`：`EL_male.engine` `voxcpm` → `omnivoice`。
+   🔴 引擎取自 voices.json 的逻辑在 `if job["mode"] == "clone":` 块内——
+   **用 `mode="custom"` 不会读 voices.json 的 engine，会 silent 回落到 qwen**。
+4. 备份：`server.py.bak-before-omnimale53`、`omni_server.py.bak-before-omnimale53`、
+   `voices.json.bak-before-omnimale53`。
+
+**未采用的支线（均有实测依据）**：
+- **停顿压缩**（`tools/pausecompress52.py`）：男女都 1.5→1.5，无收益，不上线。
+- **男声继续用 voxcpm + 调参**：M1 证明 STEPS 10→20 反而略差且 RTF +40%。
+- **变调补 F0**：z23 证明变调/不变调员工听不出差别，且变调损失音色 0.09。
+
+**回退方案**：`voices.json` 的 `EL_male.engine` 改回 `voxcpm`，
+恢复 `server.py.bak-before-omnimale53`，重启 omni-tts + qwen-tts。
+
+**遗留**：`_minimal_lufs` / `TTS_OMNI_MINIMAL` 在 git 历史中从未存在，
+但 VERSION v1.1 记录了它 —— 一次「标了版本没真上线」的记录失真。
+版本凭证只能证明号对上了，不能证明代码真改了。
+
+---
+
 ## 实验记录（**未通过 L3，未上线**）
 
 ### ❌ v1.1-exp — 跳过变调（`PITCH_SKIP=0.03`）— 已回退
