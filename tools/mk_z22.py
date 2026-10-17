@@ -95,48 +95,66 @@ D = ("就当你在手机或车里偶然刷到这条股票广播，随便听，�
      "不用分辨细节，也不用和专业主播比。\n"
      "下面三个选项是**评价档位**，不是三段不同的音频——只播一遍，选一个最贴近你感觉的。")
 
+# 🔴🔴 字段名必须与 app/ui/feedback.html 的 render() 对齐：
+#     title / desc / dim / options[].key（缺一不可）
+#   · 前端 `it.title`、`it.desc` 空 → 题干不显示，只剩选项
+#   · 前端 `o.key` 空 → `PICK[id] = ''` 是 falsy → 计数 0/N、
+#     提交时 picks 被 `if (PICK[it.id])` 过滤成空对象 → 「还没选，也没写反馈」
+#   z22 首版踩过这个坑（用户截图发现），字段名照抄 mk_z20.py。
+ITEMS = []
 
-def main():
-    os.makedirs(FB, exist_ok=True)
-    items = []
+
+def build_items():
+    """切音频 + 归一响度 + 组装题目。字段名必须与 feedback.html 对齐。"""
     for name, src, role, label in FILES:
         key = name.replace("z22_", "").replace(".wav", "")
         t = cut(src, os.path.join(FB, name))
         cur, after = norm_to(t, os.path.join(FB, name))
-        print("%s  LUFS %.1f -> %.1f" % (name, cur or float("nan"), after or float("nan")), flush=True)
+        print("%s  LUFS %.1f -> %.1f" % (name, cur or float("nan"),
+                                        after or float("nan")), flush=True)
         # 🔴🔴 前端单选：选中先清所有 .sel；每个有 file 的 option 都渲染一个播放器。
         #    所以**只让第一个选项带 file**，其余纯文字档位。
-        items.append({
+        ITEMS.append({
             "id": "%s-%s-%s" % (VER, ROUND, key),
-            "ver": VER,
-            "round": ROUND,
-            "type": "rating",
-            "question": Q,
-            "description": D,
+            "dim": "男声·整体自然度",
+            "title": Q,
+            "desc": D,
+            "ref": None,
             "note": "性别=male 角色=%s 源=%s 位置=%.0fs 长度=%.0fs" % (
                 role, label, START, CLIP),
+            "ver": VER,
             "options": [
-                {"label": "① 像真人，很自然", "score": 2,
-                 "file": name},
-                {"label": "② 听得出是 AI，但还算舒服", "score": 1},
-                {"label": "③ 明显是机器，听着别扭", "score": 0},
+                {"key": "A", "label": "① 像真人，很自然", "file": name},
+                {"key": "B", "label": "② 听得出是 AI，但还算舒服",
+                 "file": None, "text": "（同上，只是评价档位）"},
+                {"key": "C", "label": "③ 明显是机器，听着别扭",
+                 "file": None, "text": "（同上，只是评价档位）"},
             ]
         })
 
+def main():
+    os.makedirs(FB, exist_ok=True)
+    build_items()
     out = os.path.join(FB, "items_z22.json")
-    json.dump({"items": items}, open(out, "w"),
+    json.dump({"items": ITEMS}, open(out, "w"),
               ensure_ascii=False, indent=2)
-    print("\n%s  %d 题" % (out, len(items)), flush=True)
+    print("\n%s  %d 题" % (out, len(ITEMS)), flush=True)
 
-    # 自检：按规范走
+    # 自检：字段齐全 + 文件存在
     print("\n自检：")
-    for it in items:
+    for it in ITEMS:
+        for k in ("id", "title", "desc", "dim", "options"):
+            if not it.get(k):
+                print("  ❌ 缺字段 %s: %s" % (k, it.get("id")))
         for o in it["options"]:
+            if not o.get("key"):
+                print("  ❌ 选项缺 key: %s" % o.get("label"))
             fn = o.get("file")
             if fn:
                 p = os.path.join(FB, fn)
                 print("  %s exists=%s size=%d" % (
-                    fn, os.path.exists(p), os.path.getsize(p) if os.path.exists(p) else 0), flush=True)
+                    fn, os.path.exists(p),
+                    os.path.getsize(p) if os.path.exists(p) else 0), flush=True)
     print("\n切换命令：cp %s/items_z22.json %s/items.json" % (FB, FB))
     return 0
 

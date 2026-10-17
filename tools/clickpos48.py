@@ -19,12 +19,15 @@ THR = 0.30
 
 
 def load(p):
-    if not p.endswith(".wav"):
-        t = tempfile.mktemp(suffix=".wav")
-        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", p,
-                        "-ar", str(SR), "-ac", "1", t], check=True)
-        p = t
-    x, sr = sf.read(p, dtype="float32", always_2d=False)
+    # 🔴🔴 必须对**所有**格式都降到 16k，不能只看扩展名是不是 .wav！
+    # 旧版 `if not p.endswith(".wav")` 会让 .wav 输入按原采样率算：
+    # 案例库 EL 的 merged.wav 是 24k/48k，算出来的 click 次数只有 16k 口径的
+    # 1/13（实测 10 vs 132），据此得出「我们是 EL 的 26 倍」——**错得离谱**。
+    # 真实差距（16k 统一口径）是 2.0 倍，GS 女声反而比 EL 好 40%。
+    t = tempfile.mktemp(suffix=".wav")
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", p,
+                    "-ar", str(SR), "-ac", "1", t], check=True)
+    x, sr = sf.read(t, dtype="float32", always_2d=False)
     if x.ndim > 1:
         x = x.mean(axis=1)
     return x, sr
