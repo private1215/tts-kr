@@ -16,35 +16,28 @@ z24 测的是**手工制作的极简版**（omni 裸输出 + 我本地脚本响�
 
 另外这轮同时把**女声 v3.0 线上产物**一起测（男女都要有，见 z24 教训）。
 
-## 为什么放 EL（以及为什么只放必要的量）
+## 题目（**只有我们的版本，不放 EL**）
 
-案例库元数据 `source: elevenlabs` —— **merged/source 全是 EL 生成，项目里没有真人原声**。
-EL 是唯一握有的「最接近真人」参照，作用是给员工**评分锚点**：
-单段独立评分问「像不像真人」，若几段全是我们的版本，员工没有参照物、
-尺度会漂（这轮严下轮松），跨轮就不可比。
+🔴 2026-10-17 用户批评后的修正：
+   首版 4 题里有 2 题是 EL（一半题目在测 EL），我当时的"改进"只是把顺序
+   从 `[我们男, 我们女, EL男, EL女]` 打乱成 `[EL女, 女v3.0, 男v3.0, EL男]`
+   —— **EL 一段没删，员工听的内容一模一样**，纯粹是脱裤子放屁。
+   已立规矩：**员工时间 100% 花在给我们反馈上**。
 
-🔴 但**不能每轮都放、更不能集中放在末尾**：
-- z25 首版 4 题里 2 题是 EL（一半），且顺序 `[我们男, 我们女, EL男, EL女]`
-  —— 员工听到第 3 题就可能猜到「后两题是特殊材料」，反而污染前两题。
-- EL 自身评分不稳：z22/z23 得 B(1 分)，z24 同位置得 A(2 分)，波动 1 分。
-- 我们已知 EL ≈ 2.0，重复测它是浪费员工时间。
+   本项目没有真人原声（案例库 `source=elevenlabs`，merged 就是 EL 生成），
+   EL 只是唯一锚点。但**已有 5 轮 EL 基线**（z20~z24，员工听过、稳定在 1~2 分），
+   继续每轮放它是重复测已知信息。
+   → **z25 起：默认不放 EL**，只测我们自己的版本，评分直接与历史基线比。
+   → 若某轮确实需要重新校准锚点，最多放 **1 段**，且要在记忆里写明理由。
 
-**改进（本条即执行）**：
-- 顺序用固定种子打乱，EL 不集中在末尾，降低「猜到身份」的概率。
-- 后续轮次（z26 起）只放 1 段 EL 做锚点，或完全不放（已有 5 轮 EL 基线）。
-- 若要做「每人顺序不同」，需改 feedback.html 前端随机，那是另一件事。
-
-## 题目
-
-4 段，同性别同文案同位置（60~120s），单段独立评分：
-  男声 v3.0 线上成品 / 女声 v3.0 线上成品 / EL 男 / EL 女
-（**顺序已打乱**，见 `SHUFFLE_SEED`）
+2 段，男女各一，同位置（60~120s），单段独立评分：
+  男声 v3.0 线上成品（l3-m-omni，4594 字）
+  女声 v3.0 线上成品（l3-f-omni，3417 字）
 
 字段名必须与 app/ui/feedback.html 对齐：title / desc / dim / options[].key。
 """
 import json
 import os
-import random
 import subprocess
 import sys
 import tempfile
@@ -57,7 +50,6 @@ START = 60.0
 TARGET_LUFS = -20.0
 # 🔴 固定种子打乱题目顺序：EL 不能集中在末尾（员工会猜到「后两题是特殊材料」，
 #    反而污染前两题的判断）。固定种子保证可复现——同一个种子永远同一个顺序。
-SHUFFLE_SEED = 20261017
 
 FILES = [
     # (输出名, 源, 性别, 角色, 中文标签)
@@ -65,10 +57,6 @@ FILES = [
      "male", "v30_male", "男声 v3.0 线上成品"),
     ("z25_f_v30.wav", "/mnt/tts/output/l3-f-omni-2/l3-f-omni-1.mp3",
      "female", "v30_female", "女声 v3.0 线上成品"),
-    ("z25_m_el.wav", "/mnt/tts/data/cases/d172b8c4efb3/merged.wav",
-     "male", "el_male", "EL 标杆"),
-    ("z25_f_el.wav", "/mnt/tts/data/cases/00b6a45ad6aa/merged.wav",
-     "female", "el_female", "EL 标杆"),
 ]
 
 
@@ -151,10 +139,8 @@ def build():
 def main():
     os.makedirs(FB, exist_ok=True)
     build()
-    # 🔴 打乱顺序（固定种子）：EL 不集中末尾，降低身份被猜到的概率
-    rng = random.Random(SHUFFLE_SEED)
-    rng.shuffle(ITEMS)
-    print("\n打乱后顺序（种子 %d）：" % SHUFFLE_SEED, flush=True)
+    # 只有我们自己的版本、男女不同文案，不需要打乱顺序（没有身份可猜）
+    print("\n题目顺序：", flush=True)
     for i, it in enumerate(ITEMS, 1):
         print("  %d. %-22s %s" % (i, it["id"], it["note"].split("源=")[-1]),
               flush=True)
