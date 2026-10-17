@@ -1,0 +1,4 @@
+{
+  "eq": "highpass=f=110:poles=2,equalizer=f=90:t=q:w=2.0:g=3.0,equalizer=f=350:t=q:w=1.5:g=1.5,equalizer=f=1400:t=q:w=1.5:g=1.5,highshelf=f=4000:g=-2,lowpass=f=14000",
+  "note": "第52轮温和化：三道 w=1.1 窄带 boost(90+7.5/350+3/1400+3) 改宽带小增益；撤 250Hz 补丁(它是给激进 boost 擦屁股)；保留 highpass110 与固定 highshelf -2。非自适应分支。"
+}

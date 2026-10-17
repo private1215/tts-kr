@@ -1292,11 +1292,14 @@ async def run_job(job):
         try:
             _sf.write(src, audio, sr)
             _t0 = time.time()
-            r = _sp.run([sys.executable, FIX_CHAIN, src, out,
-                         "--gender", "m" if _engine_name == "voxcpm" else "f",
-                         "--target-cps", str(NEW_ENGINE_CPS.get(_engine_name, 8.0)),
-                         "--chars", str(len(text))],
-                        capture_output=True, text=True, timeout=1800)
+            cmd = [sys.executable, FIX_CHAIN, src, out,
+                   "--gender", "m" if _engine_name == "voxcpm" else "f",
+                   "--target-cps", str(NEW_ENGINE_CPS.get(_engine_name, 8.0)),
+                   "--chars", str(len(text))]
+            # 🔴 M4 半极简开关：男声跳过 clean_gaps / roomtone 替换
+            if _engine_name == "voxcpm" and os.environ.get("TTS_VOX_MINIMAL") == "1":
+                cmd.append("--no-clean")
+            r = _sp.run(cmd, capture_output=True, text=True, timeout=1800)
             if r.returncode != 0 or not os.path.exists(out):
                 log.warning("任务 %s 第 %d 块 fix_chain 失败（用 raw）：%s",
                             jid, ci + 1, (r.stderr or "")[-300:])
@@ -2401,6 +2404,42 @@ async def feedback_page():
         })
 
 
+def _relver_snapshot():
+    """版本凭证快照。
+
+    🔴 import 必须写在函数内：app/ 是**扁平导入**（systemd
+    `WorkingDirectory=app`），顶部写 `from app import relver` 会让服务
+    启动即 ModuleNotFoundError —— 2026-10-16 踩过，**连崩 7 次**
+    restart counter 打满。两条路都留着。
+    """
+    try:
+        import relver
+    except ImportError:
+        try:
+            from app import relver                          # noqa: PLC0415
+        except Exception as _e:                             # noqa: BLE001
+            return {"error": "relver 不可用: %r" % (_e,)}
+    try:
+        return relver.snapshot(FB_DIR)
+    except Exception as _e:                                 # noqa: BLE001
+        return {"error": "snapshot 失败: %r" % (_e,)}
+
+
+@app.get("/api/version")
+async def api_version():
+    """🔴 发布版本凭证（第48轮新增）。
+
+    返回服务端版本号 **并校验题库标注是否与之相容**：
+      · consistent=true  → 服务端 version 与题目 ver 一致，凭证有效
+      · consistent=false → **题库标错版本了**，先跑
+                           tools/release_version.py --items <文件> 修
+    员工反馈「vX 这条有问题」时，用这个端点就能定位到确切的改动清单，
+    不会像 items_z17.json 那样标着 v1.1、素材却是 v1.2 产物。
+    """
+    return JSONResponse(_relver_snapshot(),
+                        headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/fb/where")
 async def fb_where():
     """🔴 诊断：反馈台实际在读哪个目录、题目与音频是否齐全。
@@ -2426,6 +2465,10 @@ async def fb_where():
         "fb_dir": FB_DIR, "candidates": FB_DIRS, "n_items": n_items,
         "n_clips": len(need), "missing": miss,
         "votes": FB_VOTES if os.path.exists(FB_VOTES) else None,
+        # 🔴 第48轮：诊断口也带版本凭证，换题库后一眼看出标没标错
+        "server_version": _relver_snapshot().get("version"),
+        "fb_version": _relver_snapshot().get("fb", {}).get("ver"),
+        "version_consistent": _relver_snapshot().get("consistent"),
     }, headers={"Cache-Control": "no-store"})
 
 
