@@ -35,3 +35,6 @@ models/
 Thumbs.db
 .vscode/
 .idea/
+
+# 服务端备份（含带时间戳后缀的）
+*.bak-*
