@@ -1013,6 +1013,76 @@ GS_GENDER_GROUP = {"female": "SOLA", "male": "yohan", "unknown": "SOLA"}
 GS_DEFAULT_GROUP = os.environ.get("GS_DEFAULT_GROUP", "SOLA")
 
 
+# ---------------------------------------------------------------------------
+# 🔴 第50轮：GS 参考音频替换表（GS 上线前的硬阻塞，详见 deploy/patch_gsref50.py）
+#
+# GS 要求参考音频 **3~10 秒**，超长直接 HTTP 500。而员工默认音色
+# BEST_CLONE = EL_female / EL_male 都是 **15 秒** —— 只要把默认引擎切成
+# gptsovits，员工每一次提交都会 500。实测：
+#   ref=EL_female.wav(15.08s)            -> HTTP 500
+#   ref=prompt_sola_00b6a45a.wav(10.00s) -> HTTP 200
+#
+# 修法：GS 分支把超长参考音频换成**同人**的 GS 专用短切片，且 ref_text 一并
+# 跟随（换音频不换文本 = 语速崩 + 把参考文本当正文念，CER 0.66 事故）。
+# 配置：值是 **voices.json 里的音色名**（不是路径），path + ref_text 都取自
+# 音色表，保证与实验素材逐字一致：
+#   TTS_GS_REF_MAP="EL_female=SOLA_gs10,EL_male=yohan_gs_f8"
+# 🔴 不配置就完全走原逻辑，不设环境变量 = 行为与打补丁前一致。
+# ---------------------------------------------------------------------------
+GS_REF_MAX_SEC = float(os.environ.get("TTS_GS_REF_MAX_SEC", "10"))
+_GS_REF_MAP = {}
+for _pair in os.environ.get("TTS_GS_REF_MAP", "").split(","):
+    if "=" not in _pair:
+        continue
+    _k, _v = _pair.split("=", 1)
+    _k, _v = _k.strip(), _v.strip()
+    if _k and _v:
+        _GS_REF_MAP[_k] = _v
+if _GS_REF_MAP:
+    log.info("GS 参考音频替换表: %s", _GS_REF_MAP)
+
+
+def _gs_ref_pair(wav, text, voice_name=""):
+    """GS 分支专用：超长参考音频 -> 同人短切片，ref_text 一并跟随。
+
+    返回 (wav_path, ref_text)。
+    🔴 只在「参考音频超过 GS_REF_MAX_SEC」时才换：本来就合规的参考音频
+    保持原样，避免管理员手工传了好切片却被替换掉。
+    命中不了也原样返回（GS 服务会报 500），但这里先打一条 warning，
+    排查时不用去翻 gs_service.log。
+    """
+    if not wav or not os.path.exists(wav):
+        return wav, text
+    try:
+        import soundfile as _sfi
+        _dur = float(_sfi.info(wav).duration)
+    except Exception:
+        _dur = 0.0
+    if _dur and _dur <= GS_REF_MAX_SEC:
+        return wav, text                      # 本来就合规
+    _key = (_GS_REF_MAP.get((voice_name or "").strip())
+            or _GS_REF_MAP.get(os.path.splitext(os.path.basename(wav))[0]))
+    if not _key:
+        log.warning("GS 参考音频 %.2fs 超过 %.0fs 且没有替换目标（%s）"
+                    "-> GS 大概率报 500", _dur, GS_REF_MAX_SEC, wav)
+        return wav, text
+    # 值是音色名：path 与 ref_text 都从音色表取，和实验素材逐字一致
+    _av = voices.get(_key) or {}
+    alt = _av.get("path") or ""
+    new_text = (_av.get("ref_text") or "").strip() or text
+    if not alt or not os.path.exists(alt):
+        log.warning("GS 参考替换音色 %s 不存在或 path 无效（%s），沿用原参考",
+                    _key, alt)
+        return wav, text
+    if not (_av.get("ref_text") or "").strip():
+        log.warning("GS 替换音色 %s 没有 ref_text，沿用原 ref_text"
+                    "（语速可能崩）", _key)
+    log.info("GS 参考音频替换：%s(%.2fs) -> 音色 %s（%s，ref_text %d 字）",
+             os.path.basename(wav), _dur, _key, os.path.basename(alt),
+             len(new_text or ""))
+    return alt, new_text
+
+
 def _gs_group_of(job):
     """决定这个任务该用哪套 GS 微调权重。
 
@@ -1223,10 +1293,14 @@ async def run_job(job):
         但它**必须外部分段**才能用（整段会发散），所以这里把整块文本交给
         GS 服务，由服务端按 --seg 切段推理再拼接，主服务只看结果。
         """
+        # 🔴 第50轮：GS 参考音频必须 3~10 秒，而员工默认音色是 15 秒的
+        #    EL_female / EL_male -> 不换就是全员 HTTP 500。见 _gs_ref_pair。
+        _gw, _gt = _gs_ref_pair(ref_wav_path, ref_text,
+                                (job.get("voice") or "").strip())
         ok, payload = gs_client.synth(
             text=text_ci[1],
-            ref_wav=ref_wav_path or "",
-            ref_text=ref_text or "",
+            ref_wav=_gw or "",
+            ref_text=_gt or "",
             spk=_gs_spk,
             seed=int(text_ci[2]),
             seg=_gs_seg,
@@ -1286,6 +1360,131 @@ async def run_job(job):
     #    与 deploy/fix_chain.py 的 DEFAULT_CPS 保持一致，改一处要改两处。
     NEW_ENGINE_CPS = {"voxcpm": 8.37, "omnivoice": 7.57}
 
+    # ---------------------------------------------------------------------------
+    # 🔴 第53轮 b：保采样率 clickfix（详见 deploy/patch_clickfix53b.py）
+    #
+    # click 是唯一与员工评分单调对应的客观指标。
+    # 第53轮 f 起男女声都修：男声 click 1.21×EL，女声 1.24×EL（合规标杆
+    # cases/00b6a45ad6aa/merged.wav）→ 阈值分性别：男 0.30 / 女 0.26。
+    #
+    # 🔴 必须用 clickfix53b（保采样率），不能用 clickfix53：后者写死 16k 输出，
+    #    而 16k 音频压 mp3 会把音色从 0.9331 打到 0.6903（不同人）。
+    #    项目所有客观指标都在 16k 口径下测，这个降采样在所有指标里是隐形的。
+    #
+    # TTS_CLICKFIX_MALE_TH 留空 / 设为 0 = 关闭，行为与打补丁前完全一致。
+    # ---------------------------------------------------------------------------
+    CLICKFIX_MALE_TH = os.environ.get("TTS_CLICKFIX_MALE_TH", "0.30")
+    # 第53轮 f：女声也接 clickfix（阈值 0.26，与男声 0.30 分性别）
+    # 女声 th 扫描（pipe_f53，EQ+2 之后）：0.20 改 0.196% 样本 / **0.26 改 0.034%** /
+    # 0.32 改 0.0053% / 0.40 改 0.0005%（278→274 等于没修）。0.26 是效率最优点。
+    CLICKFIX_FEMALE_TH = os.environ.get("TTS_CLICKFIX_FEMALE_TH", "0.26")
+    CLICKFIX_BIN = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "tools", "clickfix53b.py")
+
+
+    def _clickfix53b_wrap(audio, sr, gender, engine_name, _tag=""):
+        """保采样率 click 修复。🔴 任何异常都原样退回，绝不让整单失败。"""
+        try:
+            if engine_name != "omnivoice":
+                return audio, sr
+            _gd = (gender or "").lower()[:1]
+            if _gd == "m":
+                th = str(CLICKFIX_MALE_TH or "").strip()
+            elif _gd == "f":
+                th = str(CLICKFIX_FEMALE_TH or "").strip()
+            else:
+                return audio, sr
+            if not th or float(th) <= 0:
+                return audio, sr
+            import subprocess as _sp
+            import tempfile as _tf
+            import soundfile as _sf
+            if not os.path.exists(CLICKFIX_BIN):
+                log.warning("clickfix53b 不存在（%s），跳过", CLICKFIX_BIN)
+                return audio, sr
+            d = _tf.mkdtemp(prefix="clickfix_")
+            try:
+                src = os.path.join(d, "in.wav")
+                outp = os.path.join(d, "out.wav")
+                _sf.write(src, audio, sr)
+                r = _sp.run([sys.executable, CLICKFIX_BIN, src, outp,
+                             "--th", th, "--rounds", "3"],
+                            capture_output=True, text=True, timeout=1800)
+                if r.returncode != 0 or not os.path.exists(outp):
+                    log.warning("clickfix53b 失败（用未修音频）：%s",
+                                (r.stderr or "")[-300:])
+                    return audio, sr
+                y, sr2 = _sf.read(outp, dtype="float32")
+                if getattr(y, "ndim", 1) > 1:
+                    y = y.mean(axis=1)
+                if len(y) < int(0.5 * sr):
+                    log.warning("clickfix53b 产物过短，用未修音频")
+                    return audio, sr
+                log.info("clickfix53b 完成 th=%s（%d Hz 保持不变）", th, sr2)
+                return y, sr2
+            finally:
+                try:
+                    import shutil as _sh
+                    _sh.rmtree(d, ignore_errors=True)
+                except Exception:
+                    pass
+        except Exception as _e:                                  # noqa: BLE001
+            log.warning("clickfix53b 异常（用未修音频）: %r", (_e,))
+            return audio, sr
+
+
+    def _mideq53b_wrap(audio, sr, gender, engine_name, _tag=""):
+        """保采样率**窄带中频 EQ**（1k:0 / 1.8k:+G / 3k:0）。omni+男女声。
+        **只返回 audio**（sr 不变）——🔴 别返回 (audio, sr) 再 `*` 解包，
+        那会让外层 _clickfix53b_wrap 少收 gender/engine_name 两个参数。
+        任何异常一律原样返回 audio，绝不让整单失败。"""
+        try:
+            if engine_name != "omnivoice":
+                return audio
+            _gd = (gender or "").lower()[:1]
+            _eqenv = {"m": "TTS_MID_EQ_MALE_DB",
+                      "f": "TTS_MID_EQ_FEMALE_DB"}.get(_gd)
+            if _eqenv is None:
+                return audio
+            _g = str(os.environ.get(_eqenv, "2") or "").strip()
+            if not _g or float(_g) == 0:
+                return audio
+            _g = float(_g)
+            import subprocess as _sp
+            import tempfile as _tf
+            import soundfile as _sf
+            _d = _tf.mkdtemp(prefix="mideq53b_")
+            _src = os.path.join(_d, "in.wav")
+            _dst = os.path.join(_d, "out.wav")
+            _sf.write(_src, audio, sr)
+            _sp.run(["ffmpeg", "-y", "-v", "error", "-i", _src, "-af",
+                     "firequalizer=gain_entry='entry(1000,0);"
+                     "entry(1800,%g);entry(3000,0)'" % _g,
+                     "-ar", str(sr), "-ac", "1", _dst],
+                    check=True, timeout=300)
+            _y, _ = _sf.read(_dst, dtype="float32")
+            if getattr(_y, "ndim", 1) > 1:
+                _y = _y.mean(axis=1)
+            # 🔴🔴 firequalizer 是 **FIR**，输出比输入**长** filter_size-1 个样本
+            #   （16k 实测长 320 样本 = 20ms）。第二版用 `if len(_y) != len(audio):
+            #   return audio` 判等，**每次都触发退回** → EQ 永远不生效。
+            #   L1 实测中频仍 0.83×EL，加临时日志才看到
+            #   `MIDDBG ffmpeg后 len(_y)=206400 len(audio)=206080 → 早退: 长度不一致`。
+            #   → 改成**居中裁剪**回原长：线性相位 FIR 的群延迟是对称的，
+            #     居中即对齐，总时长不变。
+            #   → 只有差得离谱（>0.5s）才真退回，防止 ffmpeg 出怪东西。
+            _extra = len(_y) - len(audio)
+            if _extra < 0 or _extra > int(0.5 * sr):
+                return audio
+            if _extra:
+                _o = _extra // 2
+                _y = _y[_o:_o + len(audio)]
+            log.info("mideq53b 完成 %+g dB（%d Hz 保持不变，FIR 多 %d 样本已居中裁剪）",
+                     _g, sr, _extra)
+            return _y
+        except Exception:
+            return audio
+
     def _run_fix_chain(audio, sr, text):
         """新引擎专用后处理：字/秒锚 + F0 对齐 + 停顿清洗 + EQ + 响度。
 
@@ -1316,13 +1515,20 @@ async def run_job(job):
                    "--gender", _g,
                    "--target-cps", str(_cps),
                    "--chars", str(len(text))]
-            # 🔴🔴 男声 omnivoice 走**极简后处理**（z24 员工盲听定案的那一版）：
-            #     不变调（asetrate 会搬走共振峰，实测音色 0.79 -> 0.88）、
-            #     不清洗停顿（clean_gaps 会把停顿洗得比裸输出还干净，
-            #       低于-60dB 占比 36.1% vs EL 13.7%，是 EL 的 2.6 倍）、
-            #     不加 EQ（campplus 音色 0.9091 vs 加 EQ 的 0.8835）。
-            #     只保留响度对齐 + 目标 cps 变速。
-            if _engine_name == "omnivoice" and _g == "m":
+            # 🔴🔴 omnivoice（男女声）走**极简后处理**（z24 员工盲听定案的那一版）：
+            #     不变调、不清洗停顿、不加 EQ，只保留响度对齐 + 目标 cps 变速。
+            #   · 男声依据：asetrate 搬走共振峰（音色 0.79 -> 0.88）；
+            #     clean_gaps 把停顿洗得比裸输出还干净（低于-60dB 占比 36.1%
+            #     vs EL 13.7%，EL 的 2.6 倍）；加 EQ 音色反降（0.9091 vs 0.8835）。
+            #   · 女声依据（v1.1 同文本全篇实测）：click 0.298% -> 0.229%、
+            #     音色 0.8270 -> 0.9253、杂音 14.596 -> 12.952；z24 盲听女声
+            #     现役（=极简版）A/B 通过；docs/异音_语速突变_音色漂移根因与优化
+            #     落地指南-2026-10-19 结论：「女声不需要清理也不需要 EQ，
+            #     不跑任何变调，唯一差距是 click」。
+            # 🔴 2026-10-19 修复回归：10-17 上午 OMNI_MINIMAL（v1.1 起男女都
+            #     极简）被某次补丁去掉，omnimale53 只补回男声，女声白跑一天
+            #     完整链（asetrate + clean_gaps + 自适应HF + EQ）。
+            if _engine_name == "omnivoice":
                 cmd += ["--no-pitch", "--no-clean", "--no-adaptive-hf",
                         "--eq", "anull"]
             # 🔴 M4 半极简开关（仅 voxcpm 时代有效；男声切 omni 后由上面的
@@ -1340,7 +1546,9 @@ async def run_job(job):
             log.info("任务 %s 第 %d 块 fix_chain 完成 %.1fs -> %.1fs（%.0fs）",
                      jid, ci + 1, len(audio) / float(sr),
                      len(y2) / float(sr2), time.time() - _t0)
-            return y2, sr2
+            return _clickfix53b_wrap(
+                _mideq53b_wrap(y2, sr2, _g, _engine_name),
+                sr2, _g, _engine_name)
         except Exception as _e:
             log.warning("任务 %s 第 %d 块 fix_chain 异常（用 raw）: %r",
                         jid, ci + 1, _e)

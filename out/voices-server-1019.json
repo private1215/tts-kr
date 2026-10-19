@@ -1,0 +1,112 @@
+{
+  "EL_male": {
+    "path": "/mnt/tts/data/voices/EL_male.wav",
+    "ref_text": "투매 끝났다, 세력 매집 끝났다 이렇게 확정 지을 순 없습니다. 수급창 한번 보실까요? 11시 5분 기준, 외인창구 마이너스 67 찍혀 있죠. 개인이랑 기관은 블라인드 처리되어 있는데 이거 0이라고 단정하시면 큰 코 다칩니다.",
+    "sr": 24000,
+    "dur": 14.98,
+    "engine": "omnivoice",
+    "src_path": "/mnt/tts/data/voices/sources/EL_male__full.wav",
+    "src_dur": 14.98,
+    "src_text_len": 126,
+    "src_ref_text": "투매 끝났다, 세력 매집 끝났다 이렇게 확정 지을 순 없습니다. 수급창 한번 보실까요? 11시 5분 기준, 외인창구 마이너스 67 찍혀 있죠. 개인이랑 기관은 블라인드 처리되어 있는데 이거 0이라고 단정하시면 큰 코 다칩니다.",
+    "clip": null,
+    "cps": 7.851,
+    "cps_lock": 7.806,
+    "gender": "male",
+    "bench_case": "1a6c20a60481",
+    "label": {
+      "zh": "案例男声（标杆）",
+      "en": "Case male (benchmark)",
+      "ko": "케이스 남성(기준)",
+      "ja": "ケース男性（基準）"
+    }
+  },
+  "EL_female": {
+    "path": "/mnt/tts/data/voices/EL_female.wav",
+    "ref_text": "벌어질 수밖에 없습니다. 제 멘트를 무조건 맹신하기보다는 아 이 자리 이탈하면 손절이고 뚫어주면 홀딩이구나 하는 시나리오 매매의 뼈대로 삼으셔야 합니다. 지금 다들 비슷한 고민으로 밤잠 설치실 겁니다.",
+    "sr": 24000,
+    "dur": 15.08,
+    "engine": "omnivoice",
+    "src_path": "/mnt/tts/data/voices/sources/EL_female__full.wav",
+    "src_dur": 15.08,
+    "src_text_len": 112,
+    "src_ref_text": "벌어질 수밖에 없습니다. 제 멘트를 무조건 맹신하기보다는 아 이 자리 이탈하면 손절이고 뚫어주면 홀딩이구나 하는 시나리오 매매의 뼈대로 삼으셔야 합니다. 지금 다들 비슷한 고민으로 밤잠 설치실 겁니다.",
+    "clip": null,
+    "cps": 7.62,
+    "cps_lock": 7.57,
+    "gender": "female",
+    "bench_case": "00b6a45ad6aa",
+    "label": {
+      "zh": "案例女声（标杆）",
+      "en": "Case female (benchmark)",
+      "ko": "케이스 여성(기준)",
+      "ja": "ケース女性（基準）"
+    }
+  },
+  "yohan_male": {
+    "path": "/mnt/tts/data/voices/yohan_male.wav",
+    "label": {
+      "zh": "yohan 男声（案例）",
+      "en": "yohan (male) (case)",
+      "ko": "yohan 남성 음성 (케이스)",
+      "ja": "yohan 男性ボイス（ケース）"
+    },
+    "ref_text": "다음 장에서 무조건 이십구만칠천원 고점 뚫어내는지, 이것부터 쪼아보세요. 그다음이 삼십만삼천칠백오십원 전환선인데, 이 윗단 악성 매물대부터 완벽하게 소화해야 됩니다. 반대로 시가였던 이십팔만사천원 깨지면? 비중 축소부터 생각하셔야 돼요.\n고점 근처라고 불나방처럼 뇌동매매 하지 마시고요.",
+    "sr": 24000,
+    "dur": 15.0,
+    "engine": "qwen",
+    "gender": "male",
+    "bench_case": "81c2d4fc5a99",
+    "origin": "cases",
+    "src_case": "81c2d4fc5a99",
+    "src_speaker": "yohan",
+    "src_dur": 0.0,
+    "clip": [
+      47.5,
+      62.5
+    ],
+    "cps_lock": 8.0,
+    "cps": 4.999
+  },
+  "yohan_gs10": {
+    "path": "/mnt/tts/data/voices/yohan_gs10.wav",
+    "ref_text": "그다음이 삼십만삼천칠백오십원 전환선인데, 이 윗단 악성 매물대부터 완벽하게 소화해야 됩니다.",
+    "sr": 24000,
+    "dur": 10.0,
+    "engine": "gptsovits",
+    "gender": "male",
+    "bench_case": "6cdd25bc75f2",
+    "note": "第47轮：GS 专用 10s 参考（GS 只接受 3~10s，15s 会 500）",
+    "cps_lock": 6.19,
+    "cps": 6.554
+  },
+  "yohan_gs_f8": {
+    "path": "/mnt/tts/data/voices/yohan_gs_f8.wav",
+    "ref_text": "이 채널 하나만 알람 켜둬도 계좌 색깔이 바뀐다고들 하세요. 주린이분들도 바로 따라 하실 수 있게,",
+    "sr": 24000,
+    "dur": 6.2,
+    "engine": "gptsovits",
+    "gender": "male",
+    "bench_case": "6cdd25bc75f2",
+    "note": "第47轮 v1.2 实验：语速更快的 GS 参考。6.20s / 55字 / 8.87字/s（原稿口径），音色×EL_male 0.9184。目标把 GS 输出 cps 从 6.92 提到 ~7.9（EL 8.23）。",
+    "cps_lock": 7.45,
+    "cps": 7.753
+  },
+  "SOLA_gs10": {
+    "path": "/mnt/tts/projects/gpt-sovits/out/prompt_sola_00b6a45a.wav",
+    "ref_text": "여러분들 그동안 소갈이 진짜 심하셨잖아요  고점에서 크게 두들겨 맞고 바닥을 길게 기면서  도대체 언제 터널아운드 하나 답답하셨을까",
+    "sr": 24000,
+    "dur": 10.0,
+    "engine": "gptsovits",
+    "gender": "female",
+    "bench_case": "00b6a45ad6aa",
+    "cps": 7.314,
+    "cps_lock": 7.45,
+    "clip": null,
+    "origin": "diag-temp-47",
+    "label": {
+      "zh": "SOLA 10s（GS 对照用，临时）",
+      "en": "SOLA 10s (GS A/B, temp)"
+    }
+  }
+}

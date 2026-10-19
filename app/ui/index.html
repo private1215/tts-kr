@@ -875,7 +875,7 @@ const I18N = {
     submit:'开始生成', clear:'清空输入', enroll:'录入声音（声音克隆用）',
     vnamePh:'音色名称，例：韩语女声-知妍', refAudio:'参考音频（整段录音直接上传，无需自己剪辑）',
     engineLabel:'这个音色用哪个引擎', engineQwen:'千问 Qwen（第一代，发音稳但没有情感选项）', engineCosy:'CosyVoice3（推荐：有情感，可选激昂/亲切/严肃）',
-    vEngine:'引擎', engQwen:'千问 Qwen（无情感）', engCosy:'CosyVoice3（有情感）', engSaved:'引擎已保存', engFail:'引擎保存失败',
+    vEngine:'引擎', engQwen:'千问 Qwen（无情感）', engCosy:'CosyVoice3（有情感）', engOmni:'OmniVoice（现役男女声）', engGs:'GPT-SoVITS（GS 微调）', engVox:'VoxCPM（已退役）', engSaved:'引擎已保存', engFail:'引擎保存失败', confirmEngChange:(n,a,b)=>`把音色「${n}」的引擎从「${a}」改成「${b}」？该音色的生产链路会随之改变。`,
     engineHint:'这个音色的默认引擎。员工生成时若选了「激昂/亲切/严肃」，会强制改走 CosyVoice3 —— 千问克隆没有情感入参，给不了情绪。',
     refText:'音频对应的完整文字稿', refTextPh:'把这段录音里说的话完整粘进来（不用挑片段，系统会自动截取对应部分）',
     enrollAdminOnly:'案例音色已由系统批量生成（男声/女声各两组），通常不需要再手动录入；仅当需要添加一个全新说话人时才用这里。',
@@ -1023,7 +1023,7 @@ const I18N = {
     submit:'Start generation', clear:'Clear input', enroll:'Enroll a voice (for cloning)',
     vnamePh:'Voice name, e.g. Korean female — Jiyeon', refAudio:'Reference audio (upload the whole recording — no need to trim it yourself)',
     engineLabel:'Engine for this voice', engineQwen:'Qwen (most accurate, calm)', engineCosy:'CosyVoice3 (more expressive; excited / warm / serious available)',
-    vEngine:'Engine', engQwen:'Qwen (most accurate)', engCosy:'CosyVoice3 (expressive)', engSaved:'Engine saved', engFail:'Failed to save engine',
+    vEngine:'Engine', engQwen:'Qwen (most accurate)', engCosy:'CosyVoice3 (expressive)', engOmni:'OmniVoice (current M+F)', engGs:'GPT-SoVITS (fine-tuned)', engVox:'VoxCPM (retired)', engSaved:'Engine saved', engFail:'Failed to save engine', confirmEngChange:(n,a,b)=>`Change voice "${n}" engine from "${a}" to "${b}"? Its production pipeline will change.`,
     engineHint:'Default engine for this voice. If the employee picks Excited / Warm / Serious when generating, CosyVoice3 is forced — Qwen cloning has no emotion input.',
     refText:'Full transcript of the audio', refTextPh:'Paste everything said in this recording — no need to pick a clip, the matching part is cut automatically',
     enrollAdminOnly:'Case voices are generated in bulk (two sets each for male/female), so manual enrollment is rarely needed — use this only when adding a brand-new speaker.',
@@ -1171,7 +1171,7 @@ const I18N = {
     submit:'생성 시작', clear:'입력 지우기', enroll:'음성 등록 (클론용)',
     vnamePh:'음성 이름, 예: 한국어 여성-지연', refAudio:'참고 음성 (녹음 전체를 그대로 올리세요. 직접 자를 필요 없습니다)',
     engineLabel:'이 음성에 사용할 엔진', engineQwen:'Qwen (가장 정확하고 차분함)', engineCosy:'CosyVoice3 (감정 표현이 풍부함 · 격양/부드러움/진지함 선택 가능)',
-    vEngine:'엔진', engQwen:'Qwen (가장 정확)', engCosy:'CosyVoice3 (감정 표현)', engSaved:'엔진이 저장되었습니다', engFail:'엔진 저장 실패',
+    vEngine:'엔진', engQwen:'Qwen (가장 정확)', engCosy:'CosyVoice3 (감정 표현)', engOmni:'OmniVoice (현역 남녀 음성)', engGs:'GPT-SoVITS (파인튜닝)', engVox:'VoxCPM (퇴역)', engSaved:'엔진이 저장되었습니다', engFail:'엔진 저장 실패', confirmEngChange:(n,a,b)=>`음성 "${n}"의 엔진을 "${a}"에서 "${b}"(으)로 바꿀까요? 프로덕션 경로가 바뀝니다.`,
     engineHint:'이 음성의 기본 엔진입니다. 생성 시 "격앙/부드러움/진지함"을 선택하면 CosyVoice3로 강제 전환됩니다 — Qwen 클론에는 감정 입력이 없습니다.',
     refText:'녹음 전체의 대사', refTextPh:'이 녹음에서 한 말을 전체로 붙여 넣으세요. 구간을 고를 필요 없이 해당 부분은 자동으로 잘립니다',
     enrollAdminOnly:'케이스 음성은 시스템이 일괄 생성했습니다(남성/여성 각 2세트). 보통 수동 등록은 필요 없으며, 완전히 새로운 화자를 추가할 때만 사용하세요.',
@@ -1319,7 +1319,7 @@ const I18N = {
     submit:'生成を開始', clear:'入力をクリア', enroll:'音色を登録（クローン用）',
     vnamePh:'音色名、例：韓国語女性-ジヨン', refAudio:'参照音声（録音をそのままアップロード。自分で切る必要はありません）',
     engineLabel:'この音色に使うエンジン', engineQwen:'Qwen（最も正確、抑揚は穏やか）', engineCosy:'CosyVoice3（感情表現が豊か・激昂/穏やか/真剣を選べます）',
-    vEngine:'エンジン', engQwen:'Qwen（最も正確）', engCosy:'CosyVoice3（感情表現）', engSaved:'エンジンを保存しました', engFail:'エンジンの保存に失敗',
+    vEngine:'エンジン', engQwen:'Qwen（最も正確）', engCosy:'CosyVoice3（感情表現）', engOmni:'OmniVoice（現役の男女音声）', engGs:'GPT-SoVITS（ファインチューニング）', engVox:'VoxCPM（退役）', engSaved:'エンジンを保存しました', engFail:'エンジンの保存に失敗', confirmEngChange:(n,a,b)=>`音色「${n}」のエンジンを「${a}」から「${b}」に変更しますか？プロダクション経路が変わります。`,
     engineHint:'この音色の既定エンジンです。生成時に「激昂/穏やか/真剣」を選ぶと CosyVoice3 に強制切り替えされます — Qwen のクローンには感情入力がありません。',
     refText:'録音全体の書き起こし', refTextPh:'この録音で話した内容をすべて貼り付けてください。区間を選ぶ必要はなく、該当部分は自動で切り出されます',
     enrollHint:'使い方：録音全体とその書き起こし全体をアップロードするだけです。音声の編集もタイムライン調整も不要です。サーバーが最もクリアな約 15 秒を選び、実際の発話時間に合わせて書き起こしも同時に切り出します。初回登録は分析に数秒余計にかかりますが、以降はそのまま使えます。',
@@ -1912,9 +1912,12 @@ function renderVoiceList(){
       <div class="vmeta">${src}${clip}</div>
       <div class="vrow" style="display:flex;align-items:center;gap:6px;margin:4px 0">
         <span class="vmeta">${t('vEngine')}</span>
-        <select class="veng" style="flex:1" title="${t('engineHint')}">
-          <option value="qwen"${v.engine === 'cosyvoice3' ? '' : ' selected'}>${t('engQwen')}</option>
+        <select class="veng" style="flex:1" title="${t('engineHint')}" data-cur="${esc(v.engine || '')}">
+          <option value="qwen"${v.engine === 'qwen' ? ' selected' : ''}>${t('engQwen')}</option>
           <option value="cosyvoice3"${v.engine === 'cosyvoice3' ? ' selected' : ''}>${t('engCosy')}</option>
+          <option value="omnivoice"${v.engine === 'omnivoice' ? ' selected' : ''}>${t('engOmni')}</option>
+          <option value="gptsovits"${v.engine === 'gptsovits' ? ' selected' : ''}>${t('engGs')}</option>
+          <option value="voxcpm"${v.engine === 'voxcpm' ? ' selected' : ''}>${t('engVox')}</option>
         </select>
       </div>
       <div class="vtext" data-full="${esc(txt)}">${txt ? esc(txt.length > 46 ? txt.slice(0, 46) + '…' : txt)
@@ -1940,6 +1943,16 @@ function renderVoiceList(){
     const es = item.querySelector('.veng');
     if(es) es.onchange = async () => {
       const val = es.value;
+      const cur = es.dataset.cur || '';
+      // 🔴 2026-10-19：引擎下拉紧挨删除键，误触一下就悄悄改写生产链路
+      //   （10-18 事故：9 个音色被误改成 cosyvoice3，成品整批跑错引擎）。
+      //   真改之前必须确认，并说清新旧值。
+      if(val === cur) return;
+      if(!confirm(t('confirmEngChange')(n, cur || '未设置', val))){
+        es.value = cur;
+        if(!cur) loadMeta();
+        return;
+      }
       try{
         const r = await api('/api/voices/' + encodeURIComponent(n) + '/engine', {
           method:'POST',

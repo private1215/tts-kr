@@ -1,259 +1,118 @@
-# tts-kr 速查索引（压缩版 2026-10-18）
+# tts-kr 速查索引（2026-10-19 晚）
 
-## 🔴🔴🔴 开工必读
-改链路/配置/参考数据/引擎/权重前，先读并逐条遵循 `项目规范.md`（闭环七步 S0→S7、
-变更分级 A~D、出题铁律、防复发三问、已证伪清单）。本索引与规范冲突时以规范为准。
-版本见 `VERSION`（v主.次），**只能**由 `tools/release_version.py` 改。
+> 细节版见 `.workbuddy/memory/archive-detail.md`（GS 硬坑、CER、已证伪全表、清理链实测、
+> click 归因、反馈台出题铁律、v3.1~v3.3 明细）。本文件只留**高频硬规则**。
+> 改链路/配置/引擎/权重前先读 `项目规范.md`；与本索引冲突以规范为准。
+
+## 🔴🔴🔴 两条版本轴（用户纠正，别再混）
+| 轴 | 格式 | 含义 | 真相源 | 写入口 |
+|---|---|---|---|---|
+| **项目版本** | `v<主>.<次>` | 链路状态 | `VERSION` 的 `version =` | `release_version.py` |
+| **反馈批次** | `z<N>` | 第几批发出去的问题 | `VERSION` 的 `round =` | 同上（`--round`） |
+- 题 id = `v<版本>-<z批次>-<维度>`；`ver` 字段**只放项目版本**。
+- `/api/version` 三个布尔必须全 true：`version_consistent` / `round_consistent` / `consistent`。
+- 🔴 必须 `--set/--bump ... --round ... --items <题库>` **一次给全**（分两次会把 minor 顶两档 v3.3→v3.4）。
+- 🔴 事故（已修）：`rewrite_items()` 只换版本前缀不换 `z` 段 → 题库成 `v3.3-z32-*`，`consistent` 仍 true。
+  修法 `patch_verround53.py`（脚本加 `new_round`/`RE_ROUND`，`app/relver.py` 加 `round_ok`），
+  `patch_audit53_round.py` 给 audit 加 6 条检查项。
+
+## 🔴🔴🔴 EL 标杆口径（推翻多条历史结论）
+铁律：**EL 基线一律取 `cases/<id>/merged.wav`**。
+- ❌ 女声曾用 `diag/qwen_fullf_EL_female.wav`（非标准）→ 音色记成 0.8172，实际 **0.9204**。
+- 🔴🔴 **EL 自身运行间方差极大**（同文本同嗓音两次录音）：click 0.0046 vs 0.0018（**2.56×**）、
+  杂音 7.3 vs 1.3（**5.6×**）→ 比值 **<2.6×（click）/ <5.6×（杂音）都在 EL 噪声里，不算真差距**；
+  真差距要**同时**低于/高于两个 EL 参考。
 
 ## 目标与验收
-替代 ElevenLabs（**EL**）。验收：同文案我们 vs EL，员工听不出差别。
-- 案例库 36 条全是 EL 生成；`cases/<id>/merged.wav` = EL 原声，**EL 基线一律取它**。
-- 员工只上传文案+选男女，零调参。**验收只看长篇**。
-- 🔴 物理差异 ≠ 员工能听到的差异（z44：13dB 改动，9 票仅 1 票指向修后）
-  → **定根因前先出裁决题验证可闻性**。
-- 🔴 反向同类错误（z20）：GS 女声客观全面优于 EL，员工一致判「明显是机器」=0 分。
-  → click/音色/杂音**只是体检项不是验收项**；换引擎只能由盲听听感拍板。
+替代 ElevenLabs（**EL**）：同文案我们 vs EL，员工听不出差别。员工零调参，**验收只看 L3 长篇（≥3~5 分钟）**。
+- 🔴 物理差异 ≠ 可闻差异（z44：13dB 改动，9 票仅 1 票指向修后）→ 定根因前先出裁决题。
+- 🔴 反向错误（z20）：GS 女声客观全面优于 EL，员工一致判「明显是机器」=0 分
+  → click/音色/杂音**只是体检项不是验收项**；换引擎只能由盲听拍板。
+- 🔴🔴 **片段口径与全篇口径可以相反** → 只用 L3 下结论。
 
-## 分级验证
-| 级 | 长度 | 用途 |
-|---|---|---|
-| L1 | 15~30s | 改动是否生效 |
-| L2 | 60~120s | 方向筛查 |
-| **L3** | **≥3~5 分钟** | ✅ **唯一质量验收** |
-🔴🔴 **片段口径与全篇口径结论可以相反**（第47轮栽两次）→ 只用 L3 下结论。
+## 员工两个症状（L3 全篇量化）
+| 症状 | 我们 | EL | 倍数 |
+|---|---|---|---|
+| (a) 句首紧贴碎片（「文案里没的字也发音」） | 6 / 0.64 每分 | 2 / 0.22 | 3× |
+| (b) 句末粘连嗯（「吐字后嗯的尾音」） | **56 / 5.99 每分** | 36 / 3.89 | **1.55×** |
+🔴 **模版传染已证伪**：omni 参考音频句首 0、句末 ≤1 → 干净模版照样 56 个 = **模型固有**，只能后处理清。
+⚠️ 清理目标 = **对齐 EL 密度 3.89/分，严禁清零**。
 
 ## 测量口径（不统一就作废）
 | 指标 | 铁律 |
 |---|---|
-| click | **先归一到峰值 0.70** 再判 `|Δ|>=0.30`；🔴 **且必须无条件重采样到 16k**（曾漏做 → 误报「26 倍」，真值 2.0）。跨格式比一律先 `-ar 16000` |
-| 杂音（静音段 4-8k 占比） | 统一降到 16k 再算 |
-| 音色 | campplus 16k，同人阈值 0.75，同素材同长度与 `merged.wav` 比 |
-| cps / 语速 | 字数与时长取自**同一条 job 记录**；用**含空格**字符数。EL 锚点：女 7.45 / 男 8.37 |
-- σ 一律 `MAD×1.4826`；测量必须全篇/中段，不能只测前 60s。
-- 单次 min 值/单点 dB **不可作判据**，5ms 帧 RMS 才有意义。
-- 🔴 反馈台路由：页面 `/feedback`、音频 `/fb-audio/{name}`、题目 `/api/fb/items`、
-  自检 `/api/fb/where`（**不是** `/ui/feedback`、`/fb/{name}`）。
-- 🔴 前端选项是**单选**；**每个有 file 的 option 都渲染播放器** → 只让第一个带 file。
-- 🔴 `pkill -f "xxx"` 会杀自己父 shell → 用 `pkill -f "[x]xx"`。
-- 🔴 脚本缓存文件名必须用**全路径 hash**（男女标杆都叫 `merged.wav`）。
-- 🔴 产物目录查找**优先精确匹配**：`glob(title+"*")` 会让 `gs48m_post` 匹配到 `gs48m_post2`。
-- 🔴 找「多出来的音」别用绝对 dB 阈值。我们与 EL 能量分布几乎一致 → 差异在**时序结构**
-  不在响度。**能量包络目视 + 声谱图比自动检测器可靠。**
+| click | **先归一到峰值 0.70** 再判 `|Δ|>=0.30`；🔴 重采样 16k；🔴🔴 **必须测压完 mp3 后的值** |
+| 音色 | campplus 16k（cosy venv），同人阈值 0.75；EL-EL 中位 **0.9854(女)/0.9850(男)**；`measure53` 不含 |
+| cps | 字数时长取自**同一条 job 记录**，用**含空格**字符数；EL 锚 女 7.45 / 男 8.37 |
+| ASR | 🔴🔴 >3min **必须分段**（`asrseg53`，30s 窗）；整篇喂 whisper-small 会**循环复读** |
+| 采样率 | 🔴🔴🔴 **成品绝不能 16 kHz**：`fix_chain` 输出就是 16000 Hz，清理全在 16k 跑，最后 `aresample=44100` 压 mp3。libmp3lame：44.1k→mp3 音色 **0.9999**（透明），16k→mp3 只 **0.79**（16k 成品 vs EL **0.6903 ❌**）。旧工具写死 SR=16000 **只能中间处理**；保采样率版 = `clickfix53b`/`ltasmatch53b`/`tailclean53b2`/`53c2`/`eqfix53b` |
+- σ 一律 `MAD×1.4826`；必须全篇/中段测。找「多出来的音」别用绝对 dB 阈值（能量分布几乎一致，
+  差异在**时序结构**）。
 
-## 停顿节奏 = 最大「机器感」来源（第51轮）
-| | 停顿数(全篇) | 中位s | CV |
-|---|---|---|---|
-| EL 男 / 女 | 403 / 367 | **0.18 / 0.16** | **0.67 / 0.71** |
-| GS 男 / 女 | **116** / 284 | 0.34 / 0.32 | 0.56 / 0.60 |
-- EL：**短促+长短多变**；GS：**长 2 倍+更统一**。click/音色/杂音/CER **全都不覆盖停顿结构**
-  → 这是 z20「GS 客观占优却 0 分」的答案。**CER 只衡量念对字，与像不像人无关。**
-- 现役男声相反：停顿接近 EL，是**音色发闷**（质心 1534 vs 1794；中频 14.1% vs 21.7%）。
-→ 工具 `tools/pauseforensics.py`、`tools/z20_forensics.py`
+## 现役链路（v3.3）
+qwen :8000（**后处理只在这里**）/ cosy :8100 / gs :8200 / omni :8300 / vox :8400。
+- 🔴🔴 **男女声都走 omnivoice**，路由看 `voices.json` 每音色 `engine`。**不按引擎名判性别**：
+  `_gender_of(job)` 取性别，`_engine_name` 取引擎。
+- 🔴🔴 **omni 走极简后处理**（`--no-pitch --no-clean --no-adaptive-hf --eq anull`），守卫必须
+  `if _engine_name == "omnivoice":`（曾只剩男声生效，女声白跑一天）。**GS 不走任何后处理**。
+- 钩子都是 `run_job()` 内嵌套函数：`_mideq53b_wrap`（窄带 EQ）→ `_clickfix53b_wrap`（click 插值），顺序不能反。
+- 🔴 `/api/jobs` 只同源、内部按引擎分流；**必须用 `tools/eval5` 的 login/submit_job/wait_job**。
 
-## 男女声问题方向相反（第51轮）
-- **男声 voxcpm**：裸 click 1.10/s → 成品 4.37/s = **后处理放大 4 倍**（atempo +65%、
-  EQ 低频 +92%）。停顿/频谱接近 EL → **可修**。
-- **女声 omnivoice**：裸输出就 0.781/s（2.7×EL）、停顿 0.23s 且 0.3-0.6s 有多余平台
-  —— **模型固有**，generate() 无质量参数。
-- **click 是唯一与员工评分单调对应的客观指标**（女 2.0×→1.5 分；男 9.9×→0.5 分）。
-
-## 引擎 / 链路
-- 服务：qwen :8000（**后处理只在这里**）/ cosy :8100 / gs :8200 / omni :8300 女 / vox :8400 男。
-  现役：男 voxcpm、女 omnivoice。性别按**音色配置**判定，不按引擎名。
-- 🔴🔴 **GS 根本不走任何后处理**：`_run_fix_chain()` 只在 voxcpm/omnivoice 合成函数里调用，
-  `_synth_gs()` 直接 return 裸输出。旧记录「GS 走 legacy 全链被 atempo 拉慢 7%」**是错的**。
-  → v1.2 补 `deploy/patch_gs48.py`（GS 专属，刻意不跑 fix_chain）。
-- 🔴 `/api/jobs` 只同源，**内部按引擎分流**。
-- 🔴🔴 **`gs_auto_train.py`「没变化就跳过」会漏判** → epoch 自适应曾静默失效一整轮。
-  定期核对 `dataset_<spk>/` 与 `SoVITS_weights_v2ProPlus/` 的 mtime；
-  强制重训 `bash tools/gs_run_group.sh <spk> train`，训完**必须** `curl -X POST :8200/unload`。
-
-## 现役版本
-- **v1.1** 女声 omnivoice 极简后处理（`TTS_OMNI_MINIMAL=1`）：只响度对齐 -22.6 LUFS，
-  跳过变速/变调/切窗/EQ。杂音 14.596→12.952、click 0.298→0.229%、音色 0.8270→0.9253。
-- 男声工作点 h5：`DEFAULT_F0["m"]=188.0` + `highpass=f=110:poles=2` + `MALE_250=+0.75`。
-- **v1.2** CER 数字归一化（`app/asr_check.py`）+ GS 专属后处理。
-
-## ✅ 已证伪（别再试第二遍）
-**杂音/click**：mp3 编码、亮度/同带宽、重采样 24k→16k、静态增益、切窗拼接、EQ、停顿清洗、
-**silfloor**（关掉反升）、瞬态整形/限幅器、declick（click 100% 在发声中）、重复说话、换 soxr、
-缺频段、慢调制补起伏、抬停顿底噪、**跳过变调 PITCH_SKIP**（片段改善全篇变差）。
-真正生效的只有整条极简后处理。
-🔴 atempo **加速**会触发自适应 EQ 反向补高频 → 嘶声爆炸（11.077→35.986）。
-**断句异声**（员工三批都提，八条修复全败）：多念字、音高拔高、短音变多、局部顶起过多
-（真 EL 基线 30.5 处/分 vs 我们 25.1，**我们更少**）。失败修复：软噪声门、填房间底噪、
-句末淡出、元音起音柔化、分段压顶起、迭代压顶起、连续平滑增益、句末突起压制。
-⚠️ 「句间停顿往下沉」是真实缺陷但 z44 证明**听不出** → 别往停顿/地板加码。
-⚠️⚠️ **「句末 X」类判据已连栽 3 次，全线封存**（句末短音 EL 66.4% vs 我们 58.1%；
-句末粘连鼻音 EL 4.54/分 vs 我们 2.25/分，**都是 EL 更多**）
-→ **凡是「句末 X」，先查 EL 是否更多再动手。**
-**其他**：分块背锅（1 vs 2 块相似 0.9947）、rubberband、「后处理到顶」、
-「campplus 看不见音高」、换 SoVITS 权重改语速（时长由 GPT 决定）。
-🔴🔴 **本机 ffmpeg `equalizer` 滤镜实测失效** → 必须用 **`firequalizer`**（FIR）：
-  `firequalizer=gain_entry='entry(1000,0);entry(1800,<G>);entry(3000,0)'`
-
-## 「嗯」清理：最终结论（z29/z30）
-- 🔴 题库顺序是 **①男v4 ②男v4+tail ③女v4 ④女v3**；员工「第一题 A」= **未 tailclean 的男 v4**。
-  同文本 EL = `data/cases/d172b8c4efb3/merged.wav`（555s）。
-- 🔴 **「文案里没有的多余发音」= ASR insert 实测不存在**（`asr_insert53.py` 全文对齐
-  → 全是数字假 insert）。「嗯」只在声学层，whisper 转不出无意义鼻音。
-- 唯一真实差距 = **句首紧贴型碎片**（后间隔 20~50ms）：我们 21 (2.25/分) vs EL 12 (1.30/分)。
-- ✅ **tailclean53b**（句末粘连 49 处）+ **tailclean53c**（句首紧贴 10 处）＝男声清理链。
-  清理后句首碎片 21→**9**（EL 12）、句末 49→2，ASR 相似度 1.0000。
-  53c 判据：5~80ms / 峰值 −45~−25dB / zcr<0.15 / low>0.45 / 前间隔>20ms / **后间隔 20~50ms**。
-- ✅ **男声中频 EQ +2dB**（firequalizer）：中频 5.76%→6.92%（EL 6.86%）、click 改善 12%。
-- 🔴 **生产链 app/ 至今未引用 gruntclean/tailclean/eqfix** —— 优化只在 diag 产物。
-  **等 z30 盲听通过后再接，勿提前改。**
-
-## 生产链同文案 vs EL（2026-10-18 量化）
-`/mnt/tts/output/elcmp-male/elcmp-male-1.mp3`（4594字，564.4s，走 /api/jobs）。
-⚠️ 对比必须两边同编码（EL 也压 192k mp3 再转 16k wav）；生成必须走 /api/jobs。
-**pipeline53.py = tailclean53b → tailclean53c → eqfix53(自动EQ)**
-
-| 指标 | 生产原产/EL | 管线后/EL | +LTAS/EL |
-|---|---|---|---|
-| click | 1.39 | 1.37 | **1.30** |
-| 中频1k-3k | 0.87 | 0.96 | ≈1.0 |
-| 质心 | 0.99 | 1.02 | 1.03 |
-| 杂音 | 0.92 | 0.86 | 0.75 |
-| 句末粘连 | 49 | **2** | — |
-| 孤立碎片 | 21 | **7（EL 14）** | — |
-
-🔴🔴 **管线顺序 = LTAS/频谱 → 53b → 53c（不能反过来）**：firequalizer 是 FIR（线性相位）
-有**振铃/时域涂抹**，会在干净静音里「抹」出 −44dB/5ms 碎片（实测 LTAS 后句末 2→8、碎片 7→11）。
-→ **final**：句末 **0**、碎片 8、click 1.30、质心 1.03、中频 1.05、杂音 0.75。
-→ ✅ **泛化已验证**（第二条文案 8197d9ac8a35）：基线同样差距 → 管线后句末 **1**、碎片 **8**、
-  中频 1.06、杂音 0.83；ASR 5 窗口 0.9615~0.9907 **无削字**。工具 `tools/prod_gen53.py`。
-→ 接生产链的最后一道**客观**关卡已过，**仍等 z30 盲听拍板**。
-
-## ✅ LTAS 全频段频谱对齐（ltasmatch53.py）
-迭代 3 轮，各频段 G=10*log10(EL/我们)，firequalizer 多段应用。
-- **男声有效**：频谱总误差 **0.0037**，click 反而改善 0.0172→0.0164，ASR 0.9903。
-- **女声无效**：误差 0.0339 且 **click 恶化 19%** → 不做。
-
-## ✅✅ click 已解决：精准样本级修复（clickfix53.py）
-❌ ffmpeg declick / 整体限幅器 / 瞬态整形 / `hfscan53` / `lpfscan53` 全部证伪。
-✅ 迭代 3 轮，找 |Δ|>=th 的跳变位置 i，把 x[i+1] 换成 (x[i]+x[i+2])/2。
-- 归因（`clickattr53.py`）：簇中位=1（**孤立单样本**）；|Δ|p50 我们 0.325 < EL 0.335
-  → **不是跳更猛，是同幅度小跳变更频繁**。
-- 🔴🔴 **生产交付是 mp3，编码会重新引入毛刺**：th=0.30 压后 0.0023%→**0.0071%（回升3倍）**；
-  th=0.26 压后 **0.0011%** → **测 click 必须测压完 mp3 后的值，否则是虚的。**
-- 结果（压 192k mp3 后）：男声文案1 **1.39→0.09**、文案2 0.78→**0.07**、女声 **1.59→0.04**。
-- 零副作用（`fixchk53.py`）：改动 **0.0486%** 样本、帧包络 Pearson **0.999999**、
-  **起音斜率保留 100.0%**。
-- ⚖️ **工作点分男女**：男声 **th=0.30**（click 0.56~0.62×EL）；女声 **th=0.26**（音色零损失）。
-  th=0.26 用在男声上音色代价 4 倍，边际收益不值。
-- 管线定稿：**LTAS → 53b → 53c → clickfix53（男0.30 / 女0.26）**；女声只跑 clickfix。
-
-## 🔴🔴 音色相似度 = 当前最大剩余差距
-工具 `tools/spkcmp53.py`（campplus，需 cosy venv；`measure53` 不含此指标，**别漏测**）。
-**基线：EL 之间（同人不同文案）中位 0.9854（女）/ 0.9850（男），p10 0.9483。**
-
-| | 音色 | 距 0.985 |
+## ✅ v3.1→v3.3（均已 L3 全篇验收）
+| 版本 | 改动 | 结果 |
 |---|---|---|
-| 男声文案1 | 0.9338 | −0.05 |
-| 男声文案2 | 0.9134 | −0.07 |
-| **女声（生产链）** | **0.8531** | **−0.13** |
+| v3.1 | 男声 clickfix53b（th=0.30） | click 1.21×→**0.05×**、音色零损失、cps→8.27 |
+| v3.2 | 男声窄带 EQ 1k:0/1.8k:+2/3k:0 | 中频 0.86→**1.01**、质心 1.02、杂音 0.73、click 0.28×、音色 0.9329 |
+| v3.3 | 女声接 EQ+clickfix（男0.30/女0.26） | 中频 0.88→**1.01**、click 1.24×→**0.00×**、质心 0.99、杂音 1.12、音色 0.9204→**0.9227**（六项全改善） |
+- 决策原则：**只动「我们比 EL 差」的指标**；已比 EL 好的不动。
 
-→ **女声是最大短板，量级是男声 2 倍以上**，且 0.8531 ≈ 裸推理 0.8530
-→ **后处理没吃音色，是 omnivoice 模型本身上限**，不换引擎/微调改不了。
+## 当前基线（v3.3）
+- 男声 click **0.28×** / 质心 1.02 / 中频 1.01 / 杂音 0.73 / cps 8.27 / 音色 **0.9329**。
+- 女声（合规标杆 00b6a45ad6aa）click **0.00×** / 质心 0.99 / 中频 1.01 / 杂音 1.12 / cps 1.00 / 音色 **0.9227**。
+→ 客观指标已全部对齐 EL。音色 0.92~0.94 距 EL-EL 0.985 差 ~0.05，**男女差距不大**
+  → **GS 微调紧迫性大幅下降**（旧「女声 0.8172 最大短板」是错误标杆，已作废）。
 
-## 女声结论（EL = `qwen_fullf_EL_female.wav` 450s，아모텍文本）
-⚠️ 女声文案（아모텍/이민정）与男声（제주반도체）不同，**不在 36 条案例库**；
-  `_cmp44/EL女声原声` 是 hlb제약，别用错。
-| 女声 | 我们/EL |
-|---|---|
-| 句首碎片 | 10 vs 11（少） |
-| 句末粘连 | 14 vs 19（少） |
-| 中频 | **1.01（已对齐，不需 EQ）** |
-| **click** | **1.59（唯一差距）** |
-→ 女声**不需要清理也不需要 EQ**。
+## 常用操作坑（最高频）
+- 🔴🔴 **补丁自检必须 `compile()`，不能用 `ast.parse()`**（不走符号表，抓不到 `await` 作用域错误）。
+  给 `run_job()` 里的嵌套函数插 helper，缩进必须**同为 4 空格**，否则截断外层 async → 服务启动即崩。
+- 🔴🔴 **插 helper 后必须跑 L1 实测，不能只信 audit53**（它只查"字符串在不在"，查不到"没被执行"）。
+  两招它都全绿：① `return _cf(*_eq(...))` 解包二元组少收参数 → TypeError → 回退 raw；
+  ② `if len(_y) != len(audio): return audio` —— **firequalizer 输出比输入长 filter_size-1 样本**
+  （16k 长 320 = 20ms）→ 每次退回。修：helper **只返回 audio**；长度差**居中裁剪**，差 >0.5s 才真退回。
+- 🔴🔴 **改完 `voices.json` 必须重启 qwen-tts**（任务结束时把内存音色表写回磁盘，冲掉新加音色）。
+- 🔴🔴 **app/ 下扁平导入**：`from app import xxx` 启动即连崩 7 次。
+- 🔴🔴 **服务日志在 `service.log`，不在 journalctl**；`sudo -n journalctl` 需密码时**静默返回空、不报错**。
+- 🔴🔴 **产物目录会加 `-N` 后缀**：`find_out` 取 mtime 最新；`glob(title+"*")` 会抓旧目录。
+- 🔴🔴 **faster_whisper 必须 `local_files_only=True`**（无外网 → 静默挂死 4 分钟）；**不能传文件路径**
+  （av 不兼容）→ ffmpeg 降 16k，soundfile 读 ndarray 再 `transcribe`。
+- 🔴 `voices/sources/` 是 root 属主 → 切片放 `voices/<name>.wav`。`voices.json` 是**扁平字典**（键=音色名），
+  写入前照抄完整字段：path/label/ref_text/sr/dur/engine/gender/bench_case/origin/src_case/src_speaker/src_dur/clip/cps_lock/cps。
+- 🔴 反馈台 `items.json` 必须 `{"items":[...]}`（裸 list 打不开）；前端选项**单选**；
+  **每个有 file 的 option 都渲染播放器** → 只让第一个带 file。
+- 🔴 `pkill -f "[x]xx"`；缓存名用**全路径 hash**（男女标杆都叫 merged.wav）。
+- 🔴🔴 **永远不整目录 rsync**（本地是旧快照），只能按文件 scp；韩文目录名 ssh 双引号里常失败 → 先 cp 到 ASCII。
+- 🔴 ssh 后台任务：`cd X && setsid nohup <绝对路径 python> ... & disown`（`python` 不存在）。
 
-## 变调吃掉音色
-EL 上限 0.9628 → 裸推理 0.8530 → 变调后 **0.6739**（损失 62%）。机理：asetrate 把 F0 和
-**共振峰**一起搬，共振峰=说话人身份。剩余缺口在**引擎** → 下个大动作 = GS 微调
-（36 条 EL 案例当 SFT 集，`GS_AUTO_TRAIN=1` 北京凌晨 3 点跑）。同文案全篇 GS 0.908 > 现役 0.858。
-
-## GS 硬坑
-1. **参考音频必须 3~10 秒**（15s 的 `EL_female.wav` 走 /api/jobs 一律 500）。
-   ✅ 10s `prompt_sola_00b6a45a.wav`（×EL_female 0.7953 同人）。
-   ⚠️ `elara.wav` 0.3424 = 不同人，**绝不能当 SOLA 参考**。
-2. **产物目录会被加 `-N` 后缀** → 用 `find_out_dir()`。
-3. 🔴🔴 **参考音频与 ref_text 必须严格对齐、切在句边界**：
-   **GS 输出语速 ≈ 参考音频隐含语速（ref_text 字数 ÷ 音频时长）**。ref_text 比音频长 →
-   语速崩 + **把参考文本当正文反复念**（CER 0.66）= 员工报的「说话慢+乱说话」共同根因。
-   ✅ 男声定案 7.55s/51字/6.75；快版 `yohan_gs_f8` 6.20s/55字/8.87。🔴 epoch 必须 **≥40**。
-4. 🔴🔴 **换 GS 上线必须先过「15 秒参考音频」关**：默认 EL_female(15.08s)/EL_male(14.98s)
-   **都超限** → 一切到 gptsovits 就全员 500。
-   ✅ 已修：`TTS_GS_REF_MAP=EL_female=SOLA_gs10,EL_male=yohan_gs_f8`（值是**音色名**不是路径）。
-   验证 `tools/verify_gsref50.py`（女 CER 0.023 / 男 0.057）。
-5. 🔴 **训完的新权重默认不会被加载**：`pick_weight(spk, ep or EPOCH_DEFAULT)`，
-   `GS_EPOCH=40` → 只要有 `*_e40_s*.pth` 就永远返回 e40。对比写法 `spk="yohan@50"`。
-
-## CER 判读
-whisper-small 会把韩语数字规范化 → **念对了但 CER 高**。CER ≥ 0.15 **必须 dump ASR diff**：
-全是数字写法差异 = 通过；出现**大段 insert**（反复念参考文本）= 真乱说话。阈值 `TTS_ASR_CER=0.35`。
-- 真假错主力是 **영문약어（MLCC/AI/RD）和 전화번호**，补丁刻意不覆盖。
-- 不转：시/분/초、개/명/배（**固有数词**）、裸数字。
-- 10월 = **시월**（不是 십월，用户纠正过）。
-- 🔴 **历史基线（635 样本）**：中位 0.0924 / p90 0.1457。按音色：EL_female 0.043、
-  EL_male 0.097、**yohan_male 0.21（偏高，见下）**。
-
-## 🔴🔴 版本凭证（v1.4 起）
-- **版本号唯一写入口 = `tools/release_version.py`**，禁止手工改。真相源 `/mnt/tts/projects/qwen3-tts/VERSION`。
-- 题目标注 `id = v<版本>-<z批次>-<维度>`，`ver` 同值；`/api/version` 的 `consistent` 必须 true。
-- 真相源丢失时脚本**拒绝从 v0.0 推算**，要显式 `--from <基线>`。
-- 事故由来：`items_z17.json` 曾标 v1.1、素材却是 v1.2 产物。
-- 切批次前先查 `votes.jsonl` 该批是否已收完，别覆盖在收票的 items.json。
-
-## 反馈台出题铁律
-1. ❌ 兜底选项。2. ❌ 纯文字题。3. 🔴 每题先自问「拿到答案改什么」。
-4. A/B「有没有」题必须有「都有/都没有」。5. A 恒为我们的。6. 定位题必须当前线上原状。
-7. 🔴🔴 **普通人原则**：不许让普通人在多段不同内容里排名。
-8. 🔴🔴🔴 **盲听铁律**：选项**不许标身份**，身份只在服务端 `note` 记。
-9. 跨成品 A/B **必须先按文本对齐**（`tools/alignchk48.py`，相似度 ≥0.55）。
-10. 控制题：同一段放两次，选①或② → 本轮作废。
-11. 🔴🔴 **片段必须包含被测现象**（z27 女声 5 个「嗯」全在 214/351/387/389s，60~120s 片段
-    一个都没有 → 员工听不到差异白跑一轮）。出题前用 `gruntclean53.py --dry` 确认位置。
-- 自检链：动作闸→md5→LUFS 回读（`volume=%gdB` 不是 `%gdBB`）→完整性→`/api/fb/where` missing 空。
-- 🔴 `items.json` 必须是 `{"items":[...]}`，裸 list 会让 `/api/fb/where` 崩、**反馈台打不开**。
-
-## 工具索引（tools/）
-`tailclean53b.py` 句末粘连 / `tailclean53c.py` 句首紧贴 / `gruntiso53.py` 孤立碎片 /
-`tailgrunt53e.py` 句末粘连计数 / `lspeed53.py` 局部语速 / `verify_sametext.py` 同文本核对 /
-`asr_insert53.py` ASR insert / `asr_ab.py` ASR 相似度 / `measure53.py` 全量客观指标 /
-`eqfix53.py` 自动 EQ / `ltasmatch53.py` LTAS 对齐 / `hfscan53.py` `lpfscan53.py`（已证伪）/
-`pipeline53.py` 一键链 / `gruntprobe53.py` 位置探测 / `posspec53.py` 声谱图 /
-`alignchk48.py` 文本对齐 / `release_version.py` 版本号。
+## 🖥️ 服务器 / 队列
+- **GPU0 = 3060(12G) qwen**；GPU1 = 3090(24G) cosy/gs/vox/omni（两张卡都塞不下 qwen+omni）。
+- 🔴🔴 **队列串行**：一条卡住 → 后面全「排队中」。判真假挂：`systemctl show qwen-tts -p NRestarts`（0=没崩只是慢）。
+- 🔴 耗时放大链：OOM → 反复初始化 → 语速崩 → 重试 ×3 + CER ×3 ≈ **9 倍**（已关两个 retry 环境变量）。
+  ✅ 修复后基准 **4142 字 / 515.9s / RTF 0.493**。`expandable_segments` 会报假性 OOM，用
+  `PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.8`。
 
 ## 操作速查
-`ssh yuyin`（zheng，sudo 密码见用户级记忆）。代码 `/mnt/tts/projects/qwen3-tts`。
-- ⚠️ 时区 UTC；判活用根路径 200（`/health` 不存在返回 404 是正常的）。
-- 应用日志 `/mnt/tts/projects/qwen3-tts/service.log`（**不在 journal**）。
-- systemd drop-in 改后必须 daemon-reload + restart。
-- 🔴 `/etc/systemd/system/*.service.d/` 常**不存在**，要先 `mkdir -p` 再写（踩过一次）。
-- 🔴 **一次 ssh 里多个 sudo 只有第一个能吃到密码** → 合并成单个
-  `sudo -S -p '' bash -c 'a; b; c'`。
-- 🔴🔴 **app/ 下是扁平导入**（`WorkingDirectory=app`）：写 `from app import xxx`
-  会让服务启动即 ModuleNotFoundError、连崩 7 次。必须 `import xxx`。
-- zheng 可写：/mnt/tts/data、projects、fb、diag；**root 属主写不进**：
-  `/mnt/tts/data/tone-ab`、`/etc/systemd/system/*.service.d/`。
-- 🔴🔴 **永远不整目录 rsync**（本地是旧快照），只能按文件 scp。
-- 手写 ffmpeg asetrate 值必须匹配实际采样率（先 `-ar 16000`）；highpass poles≤2。
-- git push 间歇 502，重试 2~4 次。
+`ssh yuyin`（zheng，可 sudo；密码见用户级记忆）。代码 `/mnt/tts/projects/qwen3-tts`；
+venv `…/qwen3-tts/venv/bin/python`；cosy venv `/mnt/tts/projects/cosy/venv`。时区 UTC（+8=北京）；
+判活用根路径 200（`/health` 不存在，404 正常）。
+- 🔴 一次 ssh 里多个 sudo 只有第一个吃到密码 → `echo "$PW" | sudo -S -p '' bash -c 'a; b; c'`。
+- zheng 可写 /mnt/tts/{data,projects,fb,diag}；**root 属主写不进**：`data/tone-ab`、`/etc/systemd/system/*.service.d/`
+  （常不存在先 `mkdir -p`；改后 daemon-reload + restart）。git push 间歇 502，重试 2~4 次。
 
-## 🖥️ 服务器 / 队列（2026-10-18 故障处置，详见当日日志）
-- 卡位：**GPU0 = 3060(12G) 跑 qwen**；GPU1 = 3090(24G) 跑 cosy/gs/vox/**omni**。
-  qwen 峰值 ~8.65GiB，omni 常驻 2.1G —— **两张卡都塞不下 qwen+omni 同卡**，omni 必须留在 3090。
-- 🔴🔴 **队列串行**：一条任务卡住 → 后面全部「排队中」，员工会以为服务器挂了。
-  判断「真挂还是假挂」：`systemctl show qwen-tts -p NRestarts`（0 = 没崩，只是慢）。
-- 🔴🔴 **耗时放大链**：显存不足 → OOM → 模型反复重新初始化 → 段语速崩到 2.2~3.1 字/秒
-  → 触发「语速异常重试 ×3」+「CER 重掷 ×3」≈ **9 倍**。
-  ✅ 已关：`TTS_ASR_RETRY=0`、`TTS_ABNORMAL_MAX_RETRY=0`
-  （证据：同一段重试 3 次结果一致、块 CER 三次同为 0.3834 → 系统性偏差，重试纯属白跑）。
-  回滚：删除 `/etc/systemd/system/qwen-tts.service.d/10-retry-emergency.conf` 并重启。
-- 🔴 **expandable_segments 会报「memory mapping failed」假性 OOM**（重启后 43 秒即复现，
-  nvidia-smi 显示仍有空闲）→ 已摘掉，`PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.8`。
-- ✅ 修复后基准：**4142 字 / 515.9s / RTF 0.493**，与历史中位（494s）一致；OOM 85次/分 → 0。
-- 🔴 **yohan_male 音色 = 慢 + 高 CER**：基线 cps 仅 4.82（EL_male 8.37）、CER 中位 0.21。
-  本次 4142 字成品 CER 0.38~0.40。**正式测试请用默认 EL_male / EL_female。**
+## 工具索引
+**现役**：`clickfix53b`(click 插值) / `eqfix53b`(窄带 EQ) / `measure53`(全量指标) / `spkcmp53`(音色 campplus) /
+`asrseg53`(>3min 分段 ASR) / `alignchk48`(文本对齐) / `audit53`(服务端体检，含两条版本轴) /
+`release_version`(版本号唯一写入口) / `fbcheck53`(素材体检) / `tailclean53b2`+`53c2`(清理，**未上生产**)。
+**deploy**：`patch_clickfix53b`(v3.1) / `patch_mideq53b`(v3.2) / `patch_female53`+`patch_mideqlog53`(v3.3) /
+`patch_verround53` / `patch_audit53_round`。
+**diag**：`pipe_1019h`(clickfix 音色 vs 阈值七变体) / `pipe_f53`(女声 EQ+cf 同源) / `l3f53_verify`(女声 L3 验收) /
+`l1_female53`(L1 日志取证) / `gen_z33f`(补女声题+响度统一)。
