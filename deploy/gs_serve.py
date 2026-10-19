@@ -69,7 +69,15 @@ GPT_W = "GPT_SoVITS/pretrained_models/s1v3.ckpt"
 PRETRAINED_SOVITS = "GPT_SoVITS/pretrained_models/v2Pro/s2Gv2ProPlus.pth"
 SEG_DEFAULT = int(os.environ.get("GS_SEG", "50"))
 EPOCH_DEFAULT = os.environ.get("GS_EPOCH", "40")
-SEG_GAP_SEC = 0.30
+# 🔴 第51轮：段间强制静音改为可配置（原值是 0.30 秒写死的）。
+# 这是 z20「GS 男女声全 0 分、而常规客观指标全面占优」的最大嫌疑：
+# pauseforensics 实测（全篇）：停顿中位 GS 男 0.34s vs EL 0.18s（1.9×），
+# 停顿次数 GS 男 116 vs EL 403（少 71%）；z20 的 25s 片段里 GS 男声在
+# 0.6~0.7s 处出现 6 连尖峰 = 自然句末停顿 + 这 0.30s 强制插入的叠加。
+# 停顿结构不在 click / 音色 / 杂音 / CER 任何一项里，所以以前一直测不出来。
+# 设 GS_SEG_GAP=0 关掉强制插入（GS 自己的句末停顿保留）。
+# 默认仍是 0.30 —— 不设环境变量时行为与改动前完全一致。
+SEG_GAP_SEC = float(os.environ.get("GS_SEG_GAP", "0.30"))
 _END = "。！？.!?\n"
 
 app = FastAPI()
