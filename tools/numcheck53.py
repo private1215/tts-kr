@@ -79,6 +79,19 @@ def _glued_han(text, p0):
     return p0 > 0 and "가" <= text[p0 - 1] <= "힣"
 
 
+def _glued_in_word(text, p0):
+    """native 数词**嵌在词里**（前一种是韩字、无空白）= 它不是在数数。
+
+    🔴 真实误报（2026-10-21 男声标杆全文扫出来）：`외인 매도세만 잡힙니다`
+    ——「매도세」(抛售势头) + 「만」(助词，仅仅)，세 是名词成分不是数词 3，
+    만 也不是大单位。R2 把 `세`+`만` 读成了 native 数词 + Sino 大单位。
+
+    判据与 `_glued_han` 同构：前一个字符是韩字（不是空白/数字/标点）→ 数词属于
+    前一个词。真病态用例 `기업 가치가 세 억원이다` 的 세 前有空白，不受影响。
+    """
+    return p0 > 0 and "가" <= text[p0 - 1] <= "힣"
+
+
 # ---------------------------------------------------------------- 读数渲染（建议用）
 def _sino_int(n):
     """小整数 -> Sino 韩语读数（够改文案用）。q≥10 递归渲染（사십사만 的 q=44）。"""
@@ -220,6 +233,8 @@ def _rule_r2(text):
         nat, u, won, p0 = m.group(1), m.group(2), m.group(3) or "", m.start(1)
         if nat == "한" and _glued_han(text, p0):
             continue          # 冠形词尾（상승한 2,450선），不是数词
+        if _glued_in_word(text, p0):
+            continue          # 数词嵌在词里（매도세만：세 属「매도세」，만 是助词）
         expr = text[p0:m.end()]
         if nat == "한":
             out.append({"pos": p0, "expr": expr, "rule": "R2_han_big_unit",
