@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""L3v35 长篇**完整性**验收（12 项标准第 12 条 / P0）。
+"""L3z35 长篇**完整性**验收（12 项标准第 12 条 / P0）。
 
 只回答两件能证伪的事：
 1. **覆盖率**：文案里的字有没有被真的念出来（漏读 = 覆盖率掉）。
@@ -82,9 +82,9 @@ def main():
     a = ap.parse_args()
 
     JOBS = [
-        ("男声", "/mnt/tts/output/L3v35-male/L3v35-male-1.mp3",
+        ("男声", "/mnt/tts/output/L3z35-male/L3z35-male-1.mp3",
          "/mnt/tts/data/cases/1a6c20a60481"),
-        ("女声", "/mnt/tts/output/L3v35-female/L3v35-female-1.mp3",
+        ("女声", "/mnt/tts/output/L3z35-female/L3z35-female-1.mp3",
          "/mnt/tts/data/cases/00b6a45ad6aa"),
     ]
     from faster_whisper import WhisperModel

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""L3v35 vs 案例（EL）标杆：全量指标对比，输出「还剩哪些差距」。
+"""L3z35（z35 轮新取样）vs 案例（EL）标杆：全量指标对比，输出「还剩哪些差距」。
 
 口径统一（不统一就作废，见项目规范）：
 - 同一条案例的文案，我们走**生产 API** 全链路出片，EL 取 `cases/<id>/merged.wav`
@@ -21,9 +21,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from measure53 import measure  # noqa: E402
 
 PAIRS = [
-    ("男声", "/mnt/tts/output/L3v35-male/L3v35-male-1.mp3",
+    ("男声", "/mnt/tts/output/L3z35-male/L3z35-male-1.mp3",
      "/mnt/tts/data/cases/1a6c20a60481", "1a6c20a60481"),
-    ("女声", "/mnt/tts/output/L3v35-female/L3v35-female-1.mp3",
+    ("女声", "/mnt/tts/output/L3z35-female/L3z35-female-1.mp3",
      "/mnt/tts/data/cases/00b6a45ad6aa", "00b6a45ad6aa"),
 ]
 
@@ -106,8 +106,8 @@ def main():
         print()
     json.dump({k: {"ours": v["ours"], "el": v["el"], "chars": v["chars"]}
                for k, v in out.items()},
-              open("/mnt/tts/diag/cmp_l3v35.json", "w"), indent=1)
-    print("已存 /mnt/tts/diag/cmp_l3v35.json")
+              open("/mnt/tts/diag/cmp_z35.json", "w"), indent=1)
+    print("已存 /mnt/tts/diag/cmp_z35.json")
 
 
 if __name__ == "__main__":
