@@ -251,6 +251,85 @@ def lufs(p):
     return float(ms[-1]) if ms else -24.0
 
 
+
+def _headfix_cut(y, sr):
+    """v3.4 文件头孤立段切除（deploy/patch_headfix53.py）。
+
+    缺陷形态：起音即碎片（<350ms 的 >-30dB 段紧贴文件头）+ >=150ms 间隙
+    + 持续语音。ASR 对照证明碎片是幻觉级垃圾，切掉首词完整、音色 0.9994、
+    click 不变。词内断裂型由「碎片组恰好 1 组」排除。
+
+    🔴 任何异常/判据不满足一律原样返回，绝不让整单失败。
+    🔴 必须在 load16 之后、任何增益之前调用（阈值是原始 dBFS 口径）。
+    """
+    try:
+        hop = max(1, int(0.01 * sr))
+        n = len(y) // hop
+        if n < 100:
+            return y, {}
+        v = 20 * np.log10(np.sqrt(
+            (y[:n * hop].reshape(n, hop) ** 2).mean(1)) + 1e-12)
+        # 1) 持续语音起点：首个 >-25dB 且其后 300ms 均值 >-28dB
+        si = None
+        for i in range(len(v) - 30):
+            if v[i] > -25 and v[i:i + 30].mean() > -28:
+                si = i
+                break
+        if si is None:
+            return y, {}
+        # 2) 从 S 往前跳过 lead-in，找第一个 >=150ms 间隙（切点 = 间隙终点）
+        i = si - 1
+        while i >= 0:
+            if v[i] > -30:
+                j = i
+                while j >= 0 and v[j] > -30:
+                    j -= 1
+                i = j
+            else:
+                j = i
+                while j >= 0 and v[j] <= -30:
+                    j -= 1
+                if (i - j) * 0.01 >= 0.15:
+                    break
+                i = j
+        if i < 0:
+            return y, {}
+        cut = (i + 1) * 0.01
+        # 3) 头部区域 [0, 断口) 内 >-30dB 碎片组：恰好 1 组、<=350ms、起点 <0.30s
+        groups = []
+        k = 0
+        while k <= i:
+            if v[k] > -30:
+                m = k
+                while m <= i and v[m] > -30:
+                    m += 1
+                groups.append((k * 0.01, m * 0.01))
+                k = m
+            else:
+                m = k
+                while m <= i and v[m] <= -30:
+                    m += 1
+                k = m
+        if len(groups) != 1:
+            return y, {}
+        if groups[0][1] - groups[0][0] > 0.35 or groups[0][0] > 0.30:
+            return y, {}
+        # 4) 安全闸：切点后 400ms 内恢复持续正常语音
+        k_end = min(len(v), i + 1 + 40)
+        if not (i + 1 < len(v) and v[i + 1:k_end].max() > -25):
+            return y, {}
+        ncut = int(round(cut * sr))
+        if ncut <= 0 or ncut >= len(y) - int(0.5 * sr):
+            return y, {}
+        y2 = y[ncut:].copy()
+        fade = min(len(y2), max(1, int(0.005 * sr)))
+        y2[:fade] *= np.linspace(0.0, 1.0, fade)
+        return y2, {"cut": round(cut, 2), "frag": groups[0],
+                    "S": round(si * 0.01, 2)}
+    except Exception:                                          # noqa: BLE001
+        return y, {}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("raw")
@@ -289,6 +368,19 @@ def main():
     lufs_t = a.lufs if a.lufs is not None else DEFAULT_LUFS[g]
 
     y, sr = load16(a.raw)
+    # 🔴 v3.4 头部孤立段切除（deploy/patch_headfix53.py）：必须在任何增益之前
+    #    （阈值是原始 dBFS 口径）。切完把 a.raw 重指到切过的文件——否则下面
+    #    detect_gaps_wav(a.raw) 的时间轴会整体晚一个切长，60s 窗边界全偏。
+    if os.environ.get("TTS_HEADFIX", "1") != "0":
+        y, _hx = _headfix_cut(y, sr)
+        if _hx.get("cut"):
+            _hd = tempfile.mkdtemp(prefix="headfix_")
+            _hp = os.path.join(_hd, "cut.wav")
+            sf.write(_hp, y, sr)
+            a.raw = _hp
+            print("头部孤立段切除 %.2fs（碎片 %.2f-%.2f，持续语音 %.2fs 起）"
+                  % (_hx["cut"], _hx["frag"][0], _hx["frag"][1],
+                     _hx.get("S") or -1), flush=True)
     dur = len(y) / sr
     rc = syl_rates(y, sr)
 
