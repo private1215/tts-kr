@@ -39,6 +39,30 @@ for p in (HERE, os.path.join(HERE, "..", "..", "diag", "cross-20261013"),
         sys.path.insert(0, p)
 
 from pause_clean_v3 import clean_gaps, detect_gaps_wav, verify_pauses  # noqa: E402
+import declick  # noqa: E402  v3.6 数字零填充（见 main 末尾 ZEROFILL 段）
+
+# ---- v3.6 数字零填充（ZEROFILL）------------------------------------------
+# 2026-10-21 员工反馈 202610210738（男）/ 202610210939（女）：逐秒报
+#   「0 秒开头异声」「8 秒 0.1 秒没音」「14 秒 0.1 秒额音」「27/42/57…秒 嗯」
+#   「电磁音全程很多」「碰碰声全程个别地方有」。
+# 取证（tools/fback53d.py）：员工报的 26 个时间点里 **24 个**精确落在
+#   |y| < 1e-9 的数字零段上（±1.5s），男 52 处 / 女 44 处 ≥20ms 全零段，
+#   而 EL 标杆同口径 **0 处** —— 我们的停顿是模型输出的**数字真零**，不是安静。
+# 🔴 与第 7 节「已证伪：抬停顿底噪」不是一回事，别混：
+#    · 已证伪的是「把停顿抬到 -56/-50dB 做出房间感」→ z44 证明员工听不出；
+#    · 这里填的是 **-80dB**，只把 < -80dB 的深坑顶到 -80dB，
+#      目标是**消除硬切**（0 与 -24dB 之间 0.1 秒跳 130dB 的「咔/没音」），
+#      不是制造房间感。填完静音段中位数仍是 -60（EL -59），分布主体不变。
+# 开关：TTS_ZEROFILL=0 关闭（C 级变更的一键回退）。
+ZEROFILL_ON = os.environ.get("TTS_ZEROFILL", "1").strip().lower() not in (
+    "0", "false", "no", "off")
+# 填充电平 = 门限，同取 -80dB：低于 -80dB 的样本顶到 -80dB 的粉噪。
+# 网格实测（tools/zerofix53b.py，男女各 6 档）：
+#   男 零段 52->0 / 陡降 169->42（EL 28）/ p5 -138->-95（EL -91）/ 语音样本改动 0
+#   女 零段 44->0 / 陡降  45-> 5（EL  0）/ p5  -83->-81（EL -76）/ 语音样本改动 0
+#   时长零变化，p25/med 不变（男 -76/-60 vs EL -70/-59；女 -62/-54 vs EL -61/-54）
+# ⚠️ -80dB 比自身静音中位（-60/-54）低 20~26dB，不会盖住真实停顿起伏。
+ZEROFILL_DB = float(os.environ.get("TTS_ZEROFILL_DB", "-80"))
 
 WIN = 60.0
 # EL 典型速率（音节核/秒，实测均值）：女 8.51 / 男 8.93
@@ -253,9 +277,11 @@ def lufs(p):
 
 
 def _headfix_cut(y, sr):
-    """v3.4 文件头孤立段切除（deploy/patch_headfix53.py）。
+    """v3.5 文件头孤立段切除（deploy/patch_headfix53.py + patch_headfix53b.py）。
 
-    缺陷形态：起音即碎片（<350ms 的 >-30dB 段紧贴文件头）+ >=150ms 间隙
+    缺陷形态：起音即碎片（<200ms 的 >-30dB 段紧贴文件头）+ >=250ms 间隙
+    🔴 v3.5：间隙阈值 150->250ms（v3.4 会把「한 퍼센트」的实词「한」
+      170ms+150ms 当碎片切掉，实测吃掉首词；13 样本上 250ms 是干净分界）
     + 持续语音。ASR 对照证明碎片是幻觉级垃圾，切掉首词完整、音色 0.9994、
     click 不变。词内断裂型由「碎片组恰好 1 组」排除。
 
@@ -289,7 +315,7 @@ def _headfix_cut(y, sr):
                 j = i
                 while j >= 0 and v[j] <= -30:
                     j -= 1
-                if (i - j) * 0.01 >= 0.15:
+                if (i - j) * 0.01 >= 0.25:
                     break
                 i = j
         if i < 0:
@@ -312,7 +338,7 @@ def _headfix_cut(y, sr):
                 k = m
         if len(groups) != 1:
             return y, {}
-        if groups[0][1] - groups[0][0] > 0.35 or groups[0][0] > 0.30:
+        if groups[0][1] - groups[0][0] > 0.20 or groups[0][0] > 0.30:
             return y, {}
         # 4) 安全闸：切点后 400ms 内恢复持续正常语音
         k_end = min(len(v), i + 1 + 40)
@@ -645,6 +671,25 @@ def main():
         subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", t5, "-af",
                         "volume=%gdB" % delta, a.out], check=True)
         print("响度二次校正 %+.2fdB（EQ 改变了响度）" % delta, flush=True)
+
+    # ---- ⑤ 数字零填充（v3.6，见文件头 ZEROFILL 段）----------------------
+    # 🔴 位置两个都不能错：
+    #   · 在响度校正**之后**：填充不改响度，但先填会让上面的二次校正白算一遍；
+    #   · 在 libmp3lame **之前**（陷阱 #18：链尾 mp3 会重新定电平，真零段在
+    #     mp3 里比特分配极少，解码后就是员工说的「滋滋电磁音」）。
+    # 🔴 必须用 FLOAT 写回：ffmpeg 默认输出 pcm_s16le，16bit 下 -80dB 只剩约
+    #    1.6 LSB，会被量化成方波状杂散，等于白填。下游 server.py 用
+    #    sf.read(dtype="float32") 读，尾段 tmp_wav 也是 float，全链路无损。
+    if ZEROFILL_ON:
+        _zy, _zsr = load16(a.out)
+        _z0 = int((np.abs(_zy) < 1e-9).sum())
+        _zy2 = declick.apply(_zy, _zsr, fill_db=ZEROFILL_DB, enabled=True,
+                             mode="floor", quiet_db=ZEROFILL_DB)
+        sf.write(a.out, _zy2, _zsr, subtype="FLOAT")
+        _z1 = int((np.abs(_zy2) < 1e-9).sum())
+        print("数字零填充 %.0fdB（真零样本 %d -> %d，时长 %.3fs 不变）"
+              % (ZEROFILL_DB, _z0, _z1, len(_zy2) / _zsr), flush=True)
+
     yv, srv = load16(a.out)
     fc = syl_rates(yv, srv)
     gs2, _ = detect_gaps_wav(a.out)
