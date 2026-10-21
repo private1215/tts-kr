@@ -228,10 +228,30 @@ def f0_median(y, sr, win=60.0):
         return None
 
 
+# ---- v3.7 链路采样率（FIX_SR）------------------------------------------
+# 🔴 现役链路全靠 load16() 把音频降到 16 kHz，于是**有效带宽只有 8 kHz**：
+#    omni 原生输出是 24 kHz（`omni_server.py:44 SR = 24000`），一进链就被砍掉
+#    8 kHz 以上，成品贴着 44.1 kHz 的标签却只有 8 kHz 的内容。
+#    实测（docs/r53-16k带宽瓶颈根因-2026-10-21.md，同文案 109.1s）：
+#      8-10k  原始 1.32e-3 -> 16k 链路 1.96e-5（÷67）
+#      10-12k 原始 2.28e-4 -> 16k 链路 1.04e-8（数字地板，全丢）
+#      音色余弦 vs EL：0.9354（16k） -> **0.9534（24k）**，EL 上限 0.9628
+#    ⚠️ 已排除 mp3 的嫌疑：192k CBR 编码前后 8-12k 完全一致，libmp3lame 无辜。
+#    ⚠️ 已确认其余模块不硬编码 16k：mideq53b / clickfix53b 都「保采样率」
+#       （clickfix53b 检测在 16k 域、改样本映射回原生 sr）；pause_clean_v3 用
+#       ffmpeg silencedetect（电平阈值，与采样率无关）。唯一入口就是 load16。
+#    默认 16000 = 保持现状可随时回退；确认后改 24000。
+#    ✅ 2026-10-21 已确认（docs/r53）：端到端双路对照（同文案 109.1s 男 / 120.1s 女）
+#       高频 8-10k 1.96e-5 -> 1.32e-3、10-12k 地板 -> 2.28e-4（与 omni 原始一致）；
+#       音色余弦 vs EL 男 0.9429 -> **0.9523**、女 0.9307 -> 0.9313；
+#       时长 / LUFS / 停顿数 / cps 全部不变。→ 默认切 24000（v3.7）。
+FIX_SR = int(os.environ.get("TTS_FIX_SR", "24000"))
+
+
 def load16(path):
     t = tempfile.mktemp(suffix=".wav")
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", path,
-                    "-ar", "16000", "-ac", "1", t], check=True)
+                    "-ar", str(FIX_SR), "-ac", "1", t], check=True)
     y, sr = sf.read(t, dtype="float32")
     os.unlink(t)
     return y, sr
