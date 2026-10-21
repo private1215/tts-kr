@@ -56,6 +56,31 @@
   → 差距在**模型·声码器固有的自然度**，**后处理已到天花板**。下一步走**逐秒定位法**
   （z36 前那次用这个方法一击命中数字零）：让员工报「哪几秒最假」，别再靠客观指标猜。
 
+## 🔴 模型层突破（r54，2026-10-21）：声码器**换不了**
+🔴🔴 **omni 是 codec LM，不是 mel+声码器**：`config.json` 有
+`audio_codebook_weights:[8,8,6,6,4,4,2,2]`（8层RVQ）+ Qwen3ForCausalLM + `audio_tokenizer/`。
+输出是 **codec token**，波形由内置 codec decoder 还原 →
+BigVGAN/Vocos/BemaGANv2 **吃 mel，接不上**。换声码器 = 重训半个模型。**此路封死。**
+
+可行方案（见 `docs/r54-模型层突破方案-2026-10-21.md`）：
+- **A 多引擎横向盲听**（omni / Qwen3-TTS / EL，「像不像真人」单段评分）← 已启动 z38
+  🔴 现役 omni 是 10-13 第三轮盲听**横向择优**选的，**从未在「像不像真人」绝对口径下比过**。
+  可能它在旧引擎里最好、但绝对水平仍是「机器」。
+- **B Qwen3-TTS LoRA**：`Qwen3-TTS-12Hz-1.7B-Base` **已下载**（`/mnt/tts/models/`）；
+  `lora/yohan/ckpt/best` **已训**（621步、峰值显存仅 **7.72 GiB**、VAL 6.667），**但评估跑到一半断了、没上线**。
+  官方入口已核实：`forward(labels=)` + `forward_sub_talker_finetune()`；
+  🔴 训练/保存**必须保持 `tts_model_type="base"`**（改 custom_voice 会删 speaker_encoder = 克隆能力没了）。
+  数据：男声 **~33 分钟**（1a6c20/ba24c0/6cdd25/8197，campplus 0.924~0.943 可合并）、女声仅 **7.6 分钟要补**。
+- **C 拒绝采样挑种子**：零训练，同案例两次生成差 **0.95 分**（`CosyVoice3-SFT` 文档实测）。
+- ❌ CosyVoice3 SFT **已否决**（10-08 A/B 比 Qwen 低 **1.65 分**）。
+- 🔴🔴 **Qwen3-TTS LoRA 必看坑**（instavar 24GB 实测）：官方 `sft_12hz.py` 有
+  **缺 text_projection** + **double label-shift 导致语速渐进加快**两个 bug；
+  LR 1.7B 用 **2e-6**（默认 2e-5 太高）；**LoRA scale 1.0 过冲出噪声**，扫 0.2/0.3/0.35/0.5；
+  数据**必须 24kHz**（否则训练深处 `AssertionError: Only support 24kHz`）。
+  🔴 **「No-prompt 生成自然度最好，有 prompt 会把参考音频的房间噪声复制进输出」**
+  → 我们现役正是用 prompt 的，**必须做无 prompt 对照实验**。
+引擎可用：`yohan_male`/`SOLA_female` = qwen 引擎（24k）；`EL_*` = omnivoice。
+
 ## z36 轮（2026-10-21 发布，反馈已回收）
 6 题：男/女 × 杂音/卡顿（v3.6 vs v3.5 对照）+ 对 EL + 控制题。
 结果：`m_noise C / m_gap C / f_noise C / f_gap C / m_el B / ctrl C`；
