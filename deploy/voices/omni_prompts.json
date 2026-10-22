@@ -1,0 +1,18 @@
+{
+ "male": {
+  "wav": "/mnt/tts/projects/gpt-sovits/out/prompt_yohan_1a6c20a6.wav",
+  "txt": "/mnt/tts/projects/gpt-sovits/out/prompt_yohan_1a6c20a6.txt"
+ },
+ "female": {
+  "wav": "/mnt/tts/projects/gpt-sovits/out/prompt_sola_00b6a45a.wav",
+  "txt": "/mnt/tts/projects/gpt-sovits/out/prompt_sola_00b6a45a.txt"
+ },
+ "EL_male": {
+  "wav": "/mnt/tts/data/voices/EL_male.wav",
+  "txt": "/mnt/tts/data/voices/omni_ref/EL_male.txt"
+ },
+ "EL_female": {
+  "wav": "/mnt/tts/data/voices/EL_female.wav",
+  "txt": "/mnt/tts/data/voices/omni_ref/EL_female.txt"
+ }
+}
