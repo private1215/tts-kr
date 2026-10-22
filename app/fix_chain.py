@@ -387,6 +387,11 @@ def main():
                     help="按「字/秒」锚定（跨文案可比，推荐）。需配合 --chars")
     ap.add_argument("--chars", type=int, default=0,
                     help="raw 对应的正文字数，--target-cps 模式下必填")
+    ap.add_argument("--rate-gain", type=float, default=0.0,
+                    help="逐窗速率起伏放大倍数（0=现役行为；2=起伏翻倍）。"
+                         "EL 真人逐窗 CV 4.2%，现役只有 2.1%")
+    ap.add_argument("--min-fs", type=float, default=1.0,
+                    help="窗口变速系数下限。默认 1.0 = 只放慢不加快")
     ap.add_argument("--lufs", type=float, default=None)
     ap.add_argument("--pitch", type=float, default=0.0,
                     help="手动频率比（不是半音）：>1 升调。留空则按 --target-f0 自动算")
@@ -446,9 +451,11 @@ def main():
         our_cps = a.chars / dur
         f = our_cps / a.target_cps
         mean_r = sum(rc) / len(rc) if rc else 1.0
-        fs = [min(max(f * (r / mean_r) if r > 0 else f, 1.0), 1.35) for r in rc]
+        _g = a.rate_gain
+        fs = [min(max(f * (r / mean_r) ** (1.0 - _g) if r > 0 else f,
+                      a.min_fs), 1.35) for r in rc]
         mode = (f"字/秒锚 {a.target_cps}（当前 {our_cps:.2f} 字/秒，"
-                f"全局需慢 {f:.3f}×）")
+                f"全局需慢 {f:.3f}×，起伏放大 {_g:.1f}，下限 {a.min_fs}）")
     else:
         fs = [min(max(r / target if target > 0 else 1.0, 1.0), 1.30) for r in rc]
         mode = f"目标速率 {target}"

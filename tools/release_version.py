@@ -50,6 +50,7 @@ LOCAL_VER = "/Users/mac/Desktop/oulian-js/tts-kr/VERSION"
 API = "http://127.0.0.1:8000/api/version"
 
 RE_VER = re.compile(r"^v(\d+)\.(\d+)$")
+RE_ROUND = re.compile(r"^z\d+$")
 ON_SERVER = os.path.isdir(SERVER_PROJ)
 
 
@@ -90,11 +91,14 @@ def bump(ver, kind):
     return "v%d.%d" % (a, b + 1)
 
 
-def rewrite_items(paths, new_ver, dry=False):
-    """把题库里的 id 前缀和 ver 统一到 new_ver。
+def rewrite_items(paths, new_ver, dry=False, new_round=""):
+    """把题库的 id 前缀 + z 批次段 + ver 统一到 new_ver / new_round。
 
-    🔴 id 形如 `v1.1-z17-spd`：只换第一段（版本号），保留 `-z17-spd`，
-       这样历史回溯时看 id 就知道「第几轮、问的什么」。
+    🔴 id 形如 `v1.1-z17-spd`：**第一段是项目版本，第二段是反馈批次**，
+       两条独立的轴 —— 版本由 --bump 决定，批次由 --round 决定。
+       旧实现只换版本、不换批次，升到 v3.3 后题库会变成 `v3.3-z32-*`，
+       版本与批次脱节（2026-10-19 实测踩过，且 consistent 当时不报警）。
+       现在两段一起同步。
     """
     for p in paths:
         if not os.path.exists(p):
@@ -109,7 +113,11 @@ def rewrite_items(paths, new_ver, dry=False):
             old = str(it.get("id") or "")
             parts = old.split("-")
             if len(parts) >= 2 and RE_VER.match(parts[0]):
-                new = "-".join([new_ver] + parts[1:])
+                rest = list(parts[1:])
+                # 🔴 批次段只在形如 z32 时才替换，别把 `m_v4` 之类的维度当批次改掉
+                if new_round and rest and RE_ROUND.match(rest[0]):
+                    rest[0] = new_round
+                new = "-".join([new_ver] + rest)
                 if new != old:
                     it["id"] = new
                     changed += 1
@@ -154,6 +162,11 @@ def check():
              r.get("fb", {}).get("n_items")))
     miss = r.get("fb", {}).get("missing") or []
     print("缺音频         : %s" % (miss or "无"))
+    if r.get("round_consistent") is False:
+        print("🔴 反馈批次落后：服务端 round=%s，题库 id 里是 %s"
+              % (r.get("round"), r.get("fb", {}).get("round")))
+        print("   修：release_version.py --set <当前版本> --round <服务端 round>"
+              " --items <题库文件>")
     if r.get("mixed_versions"):
         print("❌ 题库里混了多个版本：%s" % r.get("fb", {}).get("vers_found"))
     if r.get("consistent"):
@@ -199,8 +212,8 @@ def main():
     print("  %s  ->  %s   (%s)" % (old, new, a.bump or "指定"))
 
     if a.items:
-        print("  统一题库版本：")
-        rewrite_items(a.items, new, a.dry)
+        print("  统一题库版本（版本 %s / 批次 %s）：" % (new, a.round or "不变"))
+        rewrite_items(a.items, new, a.dry, a.round)
 
     if ON_SERVER:
         body = (

@@ -58,7 +58,10 @@ GPU_UUID = "GPU-b67eee2c-c672-6915-910d-617c62abebee"   # 3090
 MIN_FREE_GIB = 8.0        # 低于此值排队等（Cosy 常驻 2.2G，训练峰值 ~10G）
 WAIT_TIMEOUT = 3600.0     # 等显存最多 1 小时，超时就放弃本次
 MIN_CASES = 3             # 少于这么多样例不值得训
-MAX_MINUTES = 160.0       # 训练音频上限（分钟），防训练过久
+MAX_MINUTES = 180.0       # 训练音频上限（分钟），防训练过久
+#   🔴 160 -> 180（第48轮体检）：160 分钟装不下 SOLA 组 21 条
+#   （实际需要 174.4 min），末尾 ea3154b3 整条 8.5 min 被 break 丢掉，
+#   ce1a3fda 还被硬切成 2.9/8.8 min。180 分钟可全量纳入。       # 训练音频上限（分钟），防训练过久
 CER_GATE = 0.35           # segment CER 超此值的案例整条剔除（与 app/asr_check.py
                           # 的 TTS_ASR_CER 默认值一致）。案例上传时已算好 CER，
                           # 零成本；实测全库除 ba24c0925311（.728）外都 ≤0.154，

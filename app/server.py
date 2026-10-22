@@ -975,6 +975,84 @@ def save_voices(v):
 voices = load_voices()
 
 
+# ============================ voices.json 热重载 / 单点写入 ============================
+# 🔴 背景：voices 启动时只读一次进内存，而每单跑完的 cps 自校准会
+#   save_voices(voices) 整表写回 —— 管理员/外部脚本在磁盘上改的 engine 字段、
+#   新加的音色，等服务跑完下一单就被冲掉（以前只能靠重启规避）。
+#   2026-10-20 起：① 测量型字段走 patch_voice（重读磁盘只改一个音色）
+#                  ② 每单开始前自动热重载外部改动
+_VOICES_MTIME = [0.0]
+
+
+def _voices_mtime():
+    try:
+        return os.path.getmtime(VOICES_FILE)
+    except OSError:
+        return 0.0
+
+
+_VOICES_MTIME[0] = _voices_mtime()
+
+
+def refresh_voices_if_changed():
+    """磁盘 voices.json 被外部改过就原地重新读进内存（不改 dict 引用）。
+
+    🔴 必须 clear()+update()：voices 是模块级 dict，别处拿的是同一个引用，
+       写成 `voices = load_voices()` 只会换掉这个局部名字。
+    """
+    m = _voices_mtime()
+    if m <= _VOICES_MTIME[0]:
+        return False
+    try:
+        fresh = load_voices()
+    except Exception as _e:                                    # noqa: BLE001
+        log.warning("voices.json 读取失败，保持内存版本: %s", _e)
+        return False
+    if not isinstance(fresh, dict) or not fresh:
+        log.warning("voices.json 为空或格式不对，保持内存版本")
+        return False
+    voices.clear()
+    voices.update(fresh)
+    _VOICES_MTIME[0] = m
+    log.info("检测到 voices.json 被外部修改，已自动重载：%d 个音色", len(voices))
+    return True
+
+
+def patch_voice(name, patch):
+    """只改一个音色的若干字段：**先重读磁盘**再改再原子写回。
+
+    测量型字段（cps / cps_lock）必须走这里 —— 磁盘为底只改目标音色，
+    别的音色完全不动，同一音色里外部手改的 engine/path/label 也保住。
+    """
+    try:
+        d = load_voices()
+    except Exception as _e:                                    # noqa: BLE001
+        log.warning("patch_voice 读取失败，退回内存版本: %s", _e)
+        d = dict(voices)
+    e = dict(d.get(name) or voices.get(name) or {})
+    e.update(patch)
+    d[name] = e
+    tmp = VOICES_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as _f:
+        json.dump(d, _f, ensure_ascii=False, indent=2)
+    # 🔴 原子替换会把 tmp（服务以 root 跑 -> 属主 root）的 inode 换成正式文件。
+    #    必须把原文件的属主/权限搬过来，否则 voices.json 变成 root:root，
+    #    外部脚本（zheng）就改不动了 —— 那正好是本补丁要保护的东西。
+    try:
+        _st = os.stat(VOICES_FILE)
+        os.chown(tmp, _st.st_uid, _st.st_gid)
+        os.chmod(tmp, _st.st_mode & 0o7777)
+    except Exception as _e:                                    # noqa: BLE001
+        log.warning("patch_voice 继承属主失败（不影响写入）: %s", _e)
+    os.replace(tmp, VOICES_FILE)
+    _VOICES_MTIME[0] = _voices_mtime()
+    if name in voices:
+        voices[name].update(patch)
+    else:
+        voices[name] = e
+    return e
+
+
 def load_cases():
     return load_json(CASES_FILE, {})
 
@@ -1112,8 +1190,31 @@ def _gender_of(job):
     return "m" if g == "male" else "f"
 
 
+def _omni_voice_of(job):
+    """发给 omni 的音色名（P0，2026-10-21）。
+
+    背景：omni 服务端长期只认 `male` / `female` 两个**写死的 10s prompt**，
+          voices.json 里配的参考音频对它完全无效（改了也没反应）。
+          现在 omni_server 支持按音色名取参考（TTS_OMNI_PROMPTS，
+          默认 /mnt/tts/data/voices/omni_prompts.json），这里负责把音色名透传下去；
+          omni 端查不到该名会自己退回 male/female，所以传错也不会 400。
+
+    🔴 默认关闭（TTS_OMNI_PERVOICE 未设 = 0）：换参考音频就是换音色，
+       没经过员工盲听之前不能默认上线（z44 教训：物理差 ≠ 可闻差）。
+       =1 时按音色名发，供 A/B 与后续 per-voice 调参使用。
+    """
+    g = "male" if _gender_of(job) == "m" else "female"
+    if os.environ.get("TTS_OMNI_PERVOICE", "0").strip().lower() not in (
+            "1", "true", "yes", "on"):
+        return g
+    return (job.get("voice") or "").strip() or g
+
+
 async def run_job(job):
     loop = asyncio.get_running_loop()
+    # 🔴 每单开始前先看 voices.json 有没有被外部改过：改过就原地重载，
+    #    这样外部改动不用重启也能生效，本单跑完的 cps 写回也不会冲掉它。
+    refresh_voices_if_changed()
     job["status"] = "running"
     job["started_at"] = time.time()
     job["stage"] = "preparing"
@@ -1221,6 +1322,27 @@ async def run_job(job):
                 log.warning("音色「%s」找不到可用的原声素材，本次不做保真增强",
                             job["voice"])
 
+    # ---- v3.5 病态数字标注（只提示：不改文案、不拦任务、不动音频）----
+    # 员工写「한 사쩜사퍼센트」这类 native+Sino 混排，韩语里组不成合法数值，
+    # TTS 忠实念出来就是错音/怪音。合成前标出来，改不改由人定。
+    # 判据见 app/numcheck53.py（40 用例 + 22 条写实句零误报）。
+    if os.environ.get("TTS_NUMCHECK", "1") != "0":
+        try:
+            import numcheck53
+            _nf = numcheck53.scan_text(job.get("text") or "")
+            job["num_warnings"] = [
+                {"pos": _f["pos"], "expr": _f["expr"], "rule": _f["rule"],
+                 "sev": _f["sev"], "why": _f["why"], "suggest": _f["suggest"]}
+                for _f in _nf]
+            if _nf:
+                log.warning(
+                    "任务 %s 文案检出病态数字 %d 处（INVALID %d / WARN %d）：%s",
+                    job["id"], len(_nf),
+                    sum(1 for _f in _nf if _f["sev"] == "INVALID"),
+                    sum(1 for _f in _nf if _f["sev"] == "WARN"),
+                    "；".join("%r %s" % (_f["expr"], _f["sev"]) for _f in _nf[:8]))
+        except Exception as _ne:                                 # noqa: BLE001
+            log.warning("病态数字扫描失败（不影响合成）: %s", _ne)
     # ---- 自动分块：整段文案按句子边界切成若干块，每块一个独立音频文件 ----
     # 员工不用手动分段（elevenlabs 时代是手动截成两半的），代码在这里代劳。
     # 块间不拼接，避免为了拼一个 769 秒的大文件白白多花时间。
@@ -1239,7 +1361,7 @@ async def run_job(job):
     _vcps_chunk, _need_lock = chunk_cps(_vmeta, _vcps)
     if _need_lock and job.get("voice") and _vmeta is not None:
         _vmeta["cps_lock"] = _vcps_chunk
-        save_voices(voices)
+        patch_voice(job["voice"], {"cps_lock": _vcps_chunk})
     _spd = float(job.get("speed") or 1.0)
     _limit = chunk_limit_chars(_vcps_chunk, _spd)
     chunks = split_by_seconds(job["text"], cps=_vcps_chunk, speed=_spd)
@@ -1601,7 +1723,7 @@ async def run_job(job):
             raise RuntimeError(f"omni_client 不可用: {_e}")
         audio, sr, meta = omni_client.synth(
             text=text_ci[1],
-            voice=("male" if _gender_of(job) == "m" else "female"),
+            voice=_omni_voice_of(job),
             on_progress=_mk_progress(text_ci[0]))
         if audio is None:
             raise RuntimeError(f"OmniVoice 生成失败: {meta.get('error')}")
@@ -2359,7 +2481,7 @@ async def run_job(job):
             if not _skip:
                 _v["cps"] = round(_new_cps if not _old
                                   else 0.8 * _old + 0.2 * _new_cps, 3)
-                save_voices(voices)
+                patch_voice(_vc, {"cps": _v["cps"]})
                 log.info("任务 %s 音色 %s 语速自校准 cps %.2f -> %.2f",
                          jid, _vc, _old or _new_cps, _v["cps"])
     # 兼容老前端/统计：mp3 指向第一个文件

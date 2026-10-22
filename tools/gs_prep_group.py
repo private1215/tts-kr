@@ -139,6 +139,7 @@ def main():
     print("留出测试区：%s（前 %.0fs），其余 %d 条进训练集"
           % (hold, HOLD_SEC, len(train_cids)), flush=True)
 
+    cmap = {}
     # ---- CER 质量门槛：文本与音频对不上的案例，整条剔除 --------------------
     # 为什么整条剔除而不是只剔坏 segment：merged.wav 是整条念的，
     # 坏 segment 说明这条案例的文字稿/音频本身有问题（对齐坏了），
@@ -167,6 +168,22 @@ def main():
             print("CER 过滤：%d -> %d 条" % (len(train_cids), len(kept)),
                   flush=True)
         train_cids = kept
+
+    # ---- 排序：质量好的先占预算 ------------------------------------------
+    # 🔴 下面的预算循环是 `for cid in train_cids: if got >= budget: break`，
+    #    预算不足时**丢掉排序末尾的案例**。原顺序是 sorted(cid)，等于随机，
+    #    可能把最准的素材丢掉（第48轮实测：SOLA 组就这么丢了 ea3154b3 整条）。
+    #    改成按「该案例最差 segment 的 CER」升序：对得越准越先占预算，
+    #    万一还不够，被丢的自然是最脏的那条。
+    def _worst_cer(_cid):
+        _c = cmap.get(_cid) or {}
+        _cs = [s.get("cer") or 0.0 for s in (_c.get("segments") or [])]
+        return max(_cs) if _cs else 0.0
+    if cmap:
+        train_cids = sorted(train_cids, key=lambda c: (_worst_cer(c), c))
+        print("按质量排序（最差 segment CER 升序），前 3 条 CER：%s"
+              % ", ".join("%s=%.3f" % (c[:8], _worst_cer(c))
+                          for c in train_cids[:3]), flush=True)
 
     out = os.path.join(GS_DIR, "dataset_" + args.spk)
     os.makedirs(os.path.join(out, "train"), exist_ok=True)

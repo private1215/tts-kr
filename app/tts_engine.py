@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Qwen3-TTS 引擎封装：单实例、按需热切换模型、支持批量分段生成。"""
+import hashlib
 import os
 import re
 import time
@@ -448,12 +449,33 @@ class TTSEngine:
 
     def _get_clone_prompt(self, ref_audio: Tuple[np.ndarray, int], ref_text: Optional[str],
                           cache_key: str):
-        if cache_key in self._clone_prompt_cache:
-            return self._clone_prompt_cache[cache_key]
+        """取克隆 prompt（带缓存）。
+
+        🔴 2026-10-21（P2-b）：缓存 key 原来只有**音色名**，于是
+           「同一个音色名重录一次」还会命中旧 prompt —— 员工听到的一直是
+           重录前的音色，看起来像「重录没生效」。改成把**参考音频+文本的指纹**
+           也算进 key，重录立刻生效，同名同内容仍命中缓存。
+           ndarray 全量做哈希太贵（15s@24k=36 万点），按 ≤4096 点等距抽样再哈希：
+           重录必然换波形，抽样指纹碰撞概率可忽略。
+        """
+        sig = cache_key
+        try:
+            y = np.asarray(ref_audio[0], dtype=np.float32).reshape(-1)
+            if y.size:
+                step = max(1, y.size // 4096)
+                h = hashlib.md5()
+                h.update(y[::step].tobytes())
+                h.update(("%d|%d|" % (y.size, ref_audio[1])).encode())
+                h.update((ref_text or "").encode("utf-8"))
+                sig = "%s#%s" % (cache_key, h.hexdigest()[:12])
+        except Exception:
+            pass
+        if sig in self._clone_prompt_cache:
+            return self._clone_prompt_cache[sig]
         prompts = self.model.create_voice_clone_prompt(
             ref_audio=ref_audio, ref_text=ref_text, x_vector_only_mode=False)
         item = prompts[0] if isinstance(prompts, list) else prompts
-        self._clone_prompt_cache[cache_key] = item
+        self._clone_prompt_cache[sig] = item
         return item
 
     @staticmethod

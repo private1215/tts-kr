@@ -155,11 +155,12 @@ def apply(x, sr=24000, fill_db=DEFAULT_FILL_DB, enabled=True,
             env_r[-rl:] = np.sin(np.pi * np.linspace(1, 0, rl,
                                                       dtype=np.float32))
         tone = tone * env_r
-        if mode == "replace":
-            out[a:b] = tone
-        else:                            # floor：逐样本幅度下限
-            seg = out[a:b]
-            out[a:b] = np.where(np.abs(tone) > np.abs(seg), tone, seg)
+        # 🔴 第44轮修漏洞：原写法 where(|tone| > |seg|, tone, seg) 是「逐样本取较大」，
+        #    而 tone 中间会过零、两端又被 env_r 淡到 0 —— |tone| 掉到 |seg| 以下时
+        #    数字零就原样留下了（实测成品残留 32 帧 <−100dB，员工听成「断了一下」）。
+        #    门限已是 −100dB，段内本来就没有任何可听内容，整段替换才是正确做法。
+        #    淡入淡出也必须去掉：淡到 0 = 在段的两端又各补一个数字零。
+        out[a:b] = tone
     return out
 
 
