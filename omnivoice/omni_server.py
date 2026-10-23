@@ -181,7 +181,10 @@ NORM_DEFAULT = os.environ.get("TTS_OMNI_NORM", "0").strip().lower() in (
 # 此处提供环境级默认 + 请求级覆盖；**全部留空 = 行为与 v3.9 完全一致**。
 _GEN_KEYS = {"denoise", "guidance_scale", "class_temperature", "num_step",
              "t_shift", "position_temperature", "layer_penalty_factor",
-             "postprocess_output"}
+             "postprocess_output",
+             # r65 分块拼接：块间插纯零是「卡音」根因，见文件尾注释
+             "audio_chunk_duration", "audio_chunk_threshold",
+             "pad_duration", "fade_duration"}
 
 
 def _gen_env_default():
@@ -192,6 +195,11 @@ def _gen_env_default():
         "class_temperature": os.environ.get("TTS_OMNI_CLASS_T", "").strip(),
         "num_step": os.environ.get("TTS_OMNI_STEPS", "").strip(),
         "t_shift": os.environ.get("TTS_OMNI_TSHIFT", "").strip(),
+        # r65 分块拼接（空 = 用模型默认 15.0 / 30.0 / 0.1 / 0.1，行为不变）
+        "audio_chunk_duration": os.environ.get("TTS_OMNI_CHUNK", "").strip(),
+        "audio_chunk_threshold": os.environ.get("TTS_OMNI_CHUNK_TH", "").strip(),
+        "pad_duration": os.environ.get("TTS_OMNI_PAD", "").strip(),
+        "fade_duration": os.environ.get("TTS_OMNI_FADE", "").strip(),
     }
 
 

@@ -63,6 +63,13 @@ ZEROFILL_ON = os.environ.get("TTS_ZEROFILL", "1").strip().lower() not in (
 #   时长零变化，p25/med 不变（男 -76/-60 vs EL -70/-59；女 -62/-54 vs EL -61/-54）
 # ⚠️ -80dB 比自身静音中位（-60/-54）低 20~26dB，不会盖住真实停顿起伏。
 ZEROFILL_DB = float(os.environ.get("TTS_ZEROFILL_DB", "-80"))
+# r65：按性别可配（未设 = 回落上面的全局值 = 行为与 v4.1 完全一致）。
+# 依据见文件头「r65 填充电平分性别」段：女声案例静音底部 -62.6dB、
+# 男声案例 -90.5dB，同一个值必然有一边错。
+ZEROFILL_DB_FEMALE = float(os.environ.get(
+    "TTS_ZEROFILL_DB_FEMALE", os.environ.get("TTS_ZEROFILL_DB", "-80")))
+ZEROFILL_DB_MALE = float(os.environ.get(
+    "TTS_ZEROFILL_DB_MALE", os.environ.get("TTS_ZEROFILL_DB", "-80")))
 
 WIN = 60.0
 # EL 典型速率（音节核/秒，实测均值）：女 8.51 / 男 8.93
@@ -710,12 +717,14 @@ def main():
     if ZEROFILL_ON:
         _zy, _zsr = load16(a.out)
         _z0 = int((np.abs(_zy) < 1e-9).sum())
-        _zy2 = declick.apply(_zy, _zsr, fill_db=ZEROFILL_DB, enabled=True,
-                             mode="floor", quiet_db=ZEROFILL_DB)
+        # r65：填充电平按性别取（女 -65 / 男 回落全局 -80，见文件头）
+        _zdb = ZEROFILL_DB_FEMALE if g == "f" else ZEROFILL_DB_MALE
+        _zy2 = declick.apply(_zy, _zsr, fill_db=_zdb, enabled=True,
+                             mode="floor", quiet_db=_zdb)
         sf.write(a.out, _zy2, _zsr, subtype="FLOAT")
         _z1 = int((np.abs(_zy2) < 1e-9).sum())
-        print("数字零填充 %.0fdB（真零样本 %d -> %d，时长 %.3fs 不变）"
-              % (ZEROFILL_DB, _z0, _z1, len(_zy2) / _zsr), flush=True)
+        print("数字零填充 %.0fdB（性别 %s，真零样本 %d -> %d，时长 %.3fs 不变）"
+              % (_zdb, g, _z0, _z1, len(_zy2) / _zsr), flush=True)
 
     yv, srv = load16(a.out)
     fc = syl_rates(yv, srv)
