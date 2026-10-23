@@ -106,3 +106,17 @@ L3 ASR 相似度跑间波动 ≈0.12 → <0.12 不算证据。cps 含空格；EL
 
 ## 产品铁律：员工零调参
 输标题+文案+选男女 → 等结果。emotion 恒 standard。TTS_SLOWDYN/BREATH_SYN/PEAK_FIT=1、LOUD_TOL=0.15、PROSO=0。
+
+## 🔑 认证 / 账号掉线（2026-10-23 定位）
+员工账号授权"过段时间就掉"的根因（非 bug，是设计）：
+- **登录态存进程内存，不落盘**：`SESSIONS = {}`（`server.py:787`），`new_session` 写
+  `SESSIONS[tok]={user, exp:now+SESSION_TTL}`（`:955-957`）；全代码只有读写和过期 pop，
+  **无 save/load** → **服务一重启，全员立即掉线**（cookie 还在但服务端查不到 → 401）。
+  本项目 qwen-tts 本就易重启（OOM/部署）→ 这是"突然掉"的主因。
+- **SESSION_TTL = 7 天**（`server.py:96`）= 即使不重启，一周也自动过期（"定期掉"的原因）。
+- 已排除多 worker 随机掉线：`ExecStart = python -u server.py`，**单进程单 worker**，SESSIONS 唯一。
+- 校验：`require_auth`（`server.py:914-944`）取 cookie `tts_session` 或 `Authorization: Bearer`，
+  命中 `SESSIONS` 且未过期方放行；过期项访问时才 pop（无后台定时清理，无害）。
+- 修复方向（C 级）：A) session 落盘 `data/sessions.json`（启动 load / 登录存）；
+  B) 改 secret 签名长效 token（JWT/安全 cookie，无状态）。临时缓解可把 SESSION_TTL 调长
+  （但 96 行硬编码，改需动代码）。
