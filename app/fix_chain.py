@@ -71,6 +71,144 @@ ZEROFILL_DB_FEMALE = float(os.environ.get(
 ZEROFILL_DB_MALE = float(os.environ.get(
     "TTS_ZEROFILL_DB_MALE", os.environ.get("TTS_ZEROFILL_DB", "-80")))
 
+# ---- r66 块边界伪声抑制（EDGEFIX）----------------------------------------
+# 2026-10-23 员工反馈「啊额音 卡音」（z46 五题全部中招，报点间隔 12~14s）。
+# 取证：omni 分块推理在每个块边界（pad 插入的 0.1s 精确零之后）直出一段
+#   0.12~0.9s 的**带限中频起振**（260-3200Hz 能量占比 >0.45、>3.2k <0.15、
+#   电平 -38dB 缓爬到 -12dB 以下）——员工听感是停顿里冒出「啊/呃」一声
+#   再卡一下。raw 里该段峰值可达 -15dB（接近语音），成品经响度归一后约 -30dB。
+# 🔴 这不是新问题：10-21 员工就报过「14 秒 0.1 秒额音」「27/42/57 秒嗯」
+#   （见文件头 ZEROFILL 段），当时 24/26 报点落在零段附近，被归因成
+#   「零段硬切」→ r65 修填充电平，没触及这段**有声**伪声本体。
+# 🔴 模型层无解：fade 0.1→0.5、pad→0 的 A/B 均无效（伪声在 fade 之后的
+#   块主体；上游 k2-fsa/OmniVoice#256/#30 确认首尾起振瞬态是已知弱项，
+#   维护者明言「无 straightforward fix」）。chunk 加大只能减半边界数。
+# 本段以零段为锚点，把 [起振, 语音起振) 的平台衰减 -16dB（乘 0.15）。
+#   安全边界：段内最大不超过 -12dB（真语音起振必突破 -12dB，那是段终点），
+#   所以动的全部是语音以下的伪声；语音段（>-12dB）字节级零改动。
+# 开关：TTS_EDGEFIX=0 一键回退。
+EDGEFIX_ON = os.environ.get("TTS_EDGEFIX", "1").strip().lower() not in (
+    "0", "false", "no", "off")
+
+
+def _edgefix(y, sr):
+    """抑制 omni 分块边界伪声（员工「啊额音」）。返回 (y2, 命中数)。
+
+    🔴🔴 r67 结构化重写 —— 为什么 r66 的写法修不好：
+    r66 用频谱分类判断「零段后这一撮是不是伪声」（mid>=0.45 且 hi<=0.15），
+    实测 38 个边界**只命中 13 个**。原因：段终点是靠「第一个 >-14dB 帧」找的，
+    那个位置已经切进真实语音的起振斜坡，斜坡自带高频谐波，hi 涨到 0.16~0.34
+    → 判据拒掉。命中与否取决于段尾切进去多少，等于靠运气。
+    且 r66 只乘 0.15（-16dB），-17dB 的伪声压完还有 -33dB，员工听成
+    「闷声的嗯音特别短」—— 衰减不够，残响本身就是新的毛病。
+
+    r67 的两个改动：
+    1) **不再分类，改结构化**：pad 数字零段是块边界的唯一可靠锚点（真实语音
+       不可能出现 100ms 的精确数字零）。零段之后到「持续语音起点」之间，
+       整段都是伪声或静音，一律处理 —— 覆盖率不再靠频谱运气。
+    2) **压到 -100dB 而不是乘 0.15**：后面的 declick（quiet_db=-65）会把所有
+       低于阈值的样本**整段替换成房间声**，伪声因此被彻底换掉、不留残响，
+       而不是留一个压低了的「嗯」。
+
+    持续语音起点判据（两条同时满足才算，防止把伪声的短强平台当成语音）：
+      · 后 0.2s 电平中位数 > -26dB（语音是持续的，伪声的平台只有几帧）
+      · 后 0.2s 内低于 -30dB 的帧 ≤ 4 帧（伪声平台后面紧跟回落，语音后面是音节串）
+
+    外加一条**独立的低频隆隆扫描**（r67 补）：文件头实测有 -22.7dB、**97% 能量
+    压在 260Hz 以下**的模型启动瞬态，电平判据会把它当成语音放过 —— 员工说的
+    「开头啊额音 / 闷声的嗯音」就是它。这个隆隆是局部的、谱形极端（低频 >85%
+    且中频 <15%），正常语音实测低频最高只到 81%，所以单独按谱形扫掉最安全，
+    不去动上面的语音起点判据（动它会让起点后移，有吃字风险）。
+    """
+    n = int(0.01 * sr)
+    k = len(y) // n
+    if k < 30:
+        return y, 0
+    db = 20 * np.log10(np.sqrt((y[:k * n].reshape(k, n) ** 2).mean(1)) + 1e-12)
+    z = np.abs(y) < 1e-4
+    mask = np.zeros(k, dtype=bool)
+    _dbg = os.environ.get("TTS_EDGEFIX_DEBUG")
+
+    def _rumble(f, w1):
+        """扫描 [f, w1) 内的低频隆隆，把命中的 0.1s 窗标记进 mask。"""
+        while f + 10 <= w1:
+            a = f * n
+            seg = y[a:a + int(0.1 * sr)]
+            if len(seg) < int(0.1 * sr):
+                break
+            lvl = 20 * np.log10(np.sqrt((seg ** 2).mean()) + 1e-12)
+            if lvl > -40:
+                S = np.abs(np.fft.rfft(seg * np.hanning(len(seg)))) ** 2
+                fr = np.fft.rfftfreq(len(seg), 1.0 / sr)
+                tot = S.sum() + 1e-20
+                lo = S[fr < 260].sum() / tot
+                mid = S[(fr >= 260) & (fr < 3200)].sum() / tot
+                if lo > 0.85 and mid < 0.15:
+                    mask[f:f + 10] = True
+                    if _dbg:
+                        print("  [edgefix-rumble] %.2fs~%.2fs 电平%.1f 低频%.0f%%"
+                              % (f * n / sr, (f + 10) * n / sr, lvl, lo * 100),
+                              flush=True)
+                    f += 10
+                    continue
+            f += 5
+
+    i = 0
+    while i < len(z):
+        if z[i]:
+            j = i
+            while j + 1 < len(z) and z[j + 1]:
+                j += 1
+            # pad 插入的精确零段（>=50ms）= 块边界标记
+            if (j - i + 1) / sr >= 0.05 and j < len(y) - int(0.4 * sr):
+                w0 = j // n + 1                 # 零段后第一帧
+                w1 = min(w0 + 120, k)           # 至多往后找 1.2s
+                onset = None
+                for f in range(w0, w1):
+                    seg = db[f:f + 20]
+                    if len(seg) < 20:
+                        break
+                    if np.median(seg) > -26 and int((seg < -30).sum()) <= 4:
+                        onset = f
+                        break
+                end = onset if onset is not None else w1
+                # 安全阀：区段内出现连续 6 帧 > -16dB = 已经进语音了，
+                # 无条件把终点收到这之前（onset 判据失效时的兜底，宁可少压不吃字）
+                run = 0
+                for f in range(w0, end):
+                    if db[f] > -16:
+                        run += 1
+                        if run >= 6:
+                            end = max(w0, f - 5)
+                            break
+                    else:
+                        run = 0
+                if end - w0 >= 3:               # 至少 30ms 才值得动
+                    mask[w0:end] = True
+                    if _dbg:
+                        print("  [edgefix] %.2fs~%.2fs (%.2fs) 峰值%.1f %s"
+                              % (w0 * n / sr, end * n / sr, (end - w0) * n / sr,
+                                 db[w0:end].max(),
+                                 "语音起点" if onset is not None else "窗满"),
+                              flush=True)
+                # 低频隆隆：独立于语音起点判据，在整窗内按谱形扫
+                _rumble(w0, w1)
+            i = j + 1
+        else:
+            i += 1
+    if not mask.any():
+        return y, 0
+    # 统一压制：帧级 mask 展开到样本级，压到 -100dB 交给 declick 整段换房间声
+    sm = np.repeat(mask, n)
+    y2 = y.copy()
+    # 🔴 len(y) 不一定被 n 整除，sm 只有 k*n 长；必须按样本下标赋值，
+    #    不能用布尔掩码（长度差 len(y)%n 会直接 IndexError）
+    _m = min(len(sm), len(y2))
+    y2[np.flatnonzero(sm[:_m])] *= 1e-5
+    _d = np.diff(np.concatenate(([0], mask.astype(np.int8))))
+    hits = int((_d == 1).sum()) or 1
+    return y2, hits
+
 WIN = 60.0
 # EL 典型速率（音节核/秒，实测均值）：女 8.51 / 男 8.93
 DEFAULT_RATE = {"f": 8.5, "m": 8.9}
@@ -714,17 +852,26 @@ def main():
     # 🔴 必须用 FLOAT 写回：ffmpeg 默认输出 pcm_s16le，16bit 下 -80dB 只剩约
     #    1.6 LSB，会被量化成方波状杂散，等于白填。下游 server.py 用
     #    sf.read(dtype="float32") 读，尾段 tmp_wav 也是 float，全链路无损。
-    if ZEROFILL_ON:
+    if EDGEFIX_ON or ZEROFILL_ON:
         _zy, _zsr = load16(a.out)
         _z0 = int((np.abs(_zy) < 1e-9).sum())
+        # r66：先抑制块边界伪声（员工「啊额音」），再填数字零
+        if EDGEFIX_ON:
+            _zy, _eh = _edgefix(_zy, _zsr)
+            if _eh:
+                print("边界伪声抑制 %d 处（压至 -100dB，随后由填充整段换成房间声）"
+                      % _eh, flush=True)
         # r65：填充电平按性别取（女 -65 / 男 回落全局 -80，见文件头）
-        _zdb = ZEROFILL_DB_FEMALE if g == "f" else ZEROFILL_DB_MALE
-        _zy2 = declick.apply(_zy, _zsr, fill_db=_zdb, enabled=True,
-                             mode="floor", quiet_db=_zdb)
-        sf.write(a.out, _zy2, _zsr, subtype="FLOAT")
-        _z1 = int((np.abs(_zy2) < 1e-9).sum())
-        print("数字零填充 %.0fdB（性别 %s，真零样本 %d -> %d，时长 %.3fs 不变）"
-              % (_zdb, g, _z0, _z1, len(_zy2) / _zsr), flush=True)
+        if ZEROFILL_ON:
+            _zdb = ZEROFILL_DB_FEMALE if g == "f" else ZEROFILL_DB_MALE
+            _zy2 = declick.apply(_zy, _zsr, fill_db=_zdb, enabled=True,
+                                 mode="floor", quiet_db=_zdb)
+            sf.write(a.out, _zy2, _zsr, subtype="FLOAT")
+            _z1 = int((np.abs(_zy2) < 1e-9).sum())
+            print("数字零填充 %.0fdB（性别 %s，真零样本 %d -> %d，时长 %.3fs 不变）"
+                  % (_zdb, g, _z0, _z1, len(_zy2) / _zsr), flush=True)
+        else:
+            sf.write(a.out, _zy, _zsr, subtype="FLOAT")
 
     yv, srv = load16(a.out)
     fc = syl_rates(yv, srv)

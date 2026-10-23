@@ -83,17 +83,34 @@ DEFAULT_MODE = os.environ.get("TTS_DECLICK_MODE", "floor").strip().lower()
 # → 典型「远处环境声」，不是白噪声。
 
 
-def _pink(n, rng):
-    """1/f 粉噪：真实环境噪声的频谱形状，比白噪声自然。"""
+# 🔴🔴 r67 修 bug：原 _pink 用的是 np.fft.rfftfreq(m, 1.0) —— 那是**归一化频率**
+#   （0~0.5），而下面 lo/hi 的阈值是按 **Hz** 写的（100 / 3000）。结果：
+#   `lo = f < 100.0` 恒为真、`hi = f > 3000.0` 恒为假，整条曲线退化成
+#   amp ≈ 0.5*(1-cos(π f/100)) ≈ (π f/100)²/2，即 **+12dB/oct 的高通**。
+#   实测填充噪声 87% 的能量堆在 8-12kHz（尖锐嘶声），而 EL 房间声只有 ~1.5%。
+#   电平口径（-65dB RMS）看着是对的，所以 r30~r66 都没发现；直到 r65 把电平
+#   抬到 -65dB，员工才听到 —— 这就是「电子音重了」的来源。
+#
+# EL 静音实测谱形（两个案例一致，24k 口径）：
+#     0-100Hz 47% | 100-300 14% | 300-1k 18% | 1-3k 16% | 3-8k 3.5% | 8-12k ~1.5%
+# → 真实房间声是**低频隆隆为主**，高频极少。下面按此整形。
+# 节点取各频带的**中点**（r67 第一版误配到频带边界上，曲线整体偏移），
+# 幅度 = sqrt(EL 每 Hz 能量密度，相对 1-3kHz=1)：
+#     50Hz:√(47/100÷(16/2000))  200Hz:√(14/200÷…)   650Hz:√(18/700÷…)
+#     2kHz: 1.00                 5.5kHz:√(3.5/5k÷…)  10kHz:√(1.5/4k÷…)
+_F_EDGES_HZ = [20.0, 50.0, 200.0, 650.0, 2000.0, 5500.0, 10000.0, 12000.0]
+_F_AMP = [7.67, 7.67, 2.96, 1.79, 1.00, 0.296, 0.217, 0.180]
+
+
+def _pink(n, sr, rng):
+    """环境声底噪：整形粉噪，谱形对齐 EL 实测房间声（低频为主、高频极少）。"""
     m = 1 << int(np.ceil(np.log2(max(n, 2))))
     w = np.fft.rfft(rng.standard_normal(m))
-    f = np.fft.rfftfreq(m, 1.0)
-    amp = np.ones_like(f)
-    lo = f < 100.0
-    amp[lo] = 0.5 * (1.0 - np.cos(np.pi * f[lo] / 100.0))
-    hi = f > 3000.0
-    amp[hi] = 0.35 * (1.0 - 0.5 * (1.0 + np.cos(
-        np.pi * np.clip((f[hi] - 3000.0) / 3000.0, 0, 1))))
+    f = np.fft.rfftfreq(m, 1.0 / sr)          # 🔴 必须用 1/sr，单位是 Hz
+    # 在对数频率域插值，避免分段常数造成的频带阶跃
+    lf = np.log10(np.clip(f, _F_EDGES_HZ[0], _F_EDGES_HZ[-1]))
+    amp = np.interp(lf, np.log10(_F_EDGES_HZ), _F_AMP)
+    amp[0] = amp[1]                            # DC 无意义，避免除零/爆炸
     y = np.fft.irfft(w * amp, n=m)
     return y[:n]
 
@@ -105,7 +122,7 @@ def _room_tone(n, sr, rng, fill_db):
        EL 的 σ 来自**帧与帧之间电平随机跳动**（11325 帧总分布宽度 43dB），
        不是段内慢漂移。宽带噪声天然就是这个统计特性。
     """
-    base = _pink(n, rng)
+    base = _pink(n, sr, rng)
     base /= (np.abs(base).max() + 1e-20)
     rms0 = np.sqrt((base ** 2).mean()) + 1e-20
     return (base * (10 ** (fill_db / 20.0) / rms0)).astype(np.float32)
